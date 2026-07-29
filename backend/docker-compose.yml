@@ -1,0 +1,20 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: claimtrace-db
+    environment:
+      POSTGRES_DB: claimtrace
+      POSTGRES_USER: claimtrace
+      POSTGRES_PASSWORD: claimtrace
+    ports:
+      - "5432:5432"
+    volumes:
+      - claimtrace_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claimtrace -d claimtrace"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  claimtrace_pgdata:
