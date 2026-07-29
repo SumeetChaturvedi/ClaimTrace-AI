@@ -1,28 +1,55 @@
 """Orchestration entry point for the Investigation Engine.
 
-InvestigationService is the intended seam between the API layer and future
-retrieval/LLM integrations. It performs real semantic retrieval (via
-app/agent/tools.py) but no reasoning yet — no LLM calls, no summarization, no
-document reading — so that the API can be wired against a stable interface
-while the rest of the agent loop is built out incrementally.
+InvestigationService is the seam between the API layer and future
+retrieval/LLM integrations. It orchestrates the pipeline — validate, search,
+build evidence, reason, respond — but contains no reasoning logic itself;
+that lives entirely in ReasoningEngine (app/agent/reasoning.py), including
+what to do when no evidence is found. This keeps the two concerns separable:
+tools.py/this module know how to gather evidence, reasoning.py knows what it
+means.
+
+Evidence construction: Citation carries the actual matched chunk text
+(citation.chunk_text, populated by search_documents() straight from the
+semantic search result), so excerpt/surrounding_context are built from that
+real retrieved passage, not reconstructed from the full document. Reading
+the full document via read_document() is only a fallback for the rare case
+where chunk_text is unavailable on a citation, and is otherwise reserved for
+future context-expansion (e.g. reading beyond a chunk's boundaries) that
+isn't implemented yet.
 """
 
 from app.agent import tools
-from app.agent.models import InvestigationRequest, InvestigationResponse
+from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse
+from app.agent.reasoning import ReasoningEngine
+
+# Excerpt length within a matched chunk (or, in the read_document() fallback,
+# within the truncated full-document prefix). Picked as a reasonable default
+# for short letter-style documents, not tuned against any evaluation.
+EXCERPT_CHARS = 280
+# Used only in the read_document() fallback path — chunk_text itself is
+# already a bounded unit from chunking.py and isn't truncated further.
+CONTEXT_CHARS = 800
 
 
 class InvestigationService:
-    """Coordinates an investigation. Today: validates the request, retrieves
-    relevant chunks via search_documents(), and returns them as citations
-    with a placeholder answer — no reasoning over them yet. Later: will drive
-    the full agent loop (plan -> search -> read -> follow references ->
-    verify citations -> answer) described in PROJECT_PLAN.md Part C step 7
-    and Part D."""
+    """Orchestrates an investigation: validate -> search -> build evidence ->
+    delegate to ReasoningEngine -> respond. Contains no reasoning logic of
+    its own — not even the "no evidence found" case, which ReasoningEngine
+    decides. Later: will drive the full agent loop (plan -> search -> read ->
+    follow references -> verify citations -> answer) described in
+    PROJECT_PLAN.md Part C step 7 and Part D, likely by ReasoningEngine
+    growing rather than this class."""
+
+    def __init__(self, reasoning_engine: ReasoningEngine | None = None) -> None:
+        self._reasoning_engine = reasoning_engine or ReasoningEngine()
 
     async def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
-        """Run an investigation for `request`. Retrieves supporting evidence
-        via semantic search and returns it as citations; does not read
-        documents, verify citations, or call an LLM yet."""
+        """Run an investigation for `request`: retrieve supporting evidence
+        via semantic search, build an Evidence object per result, hand the
+        question and evidence to ReasoningEngine, and map its
+        ReasoningResult onto InvestigationResponse. Does not verify
+        citations or call an LLM yet — see ReasoningEngine for what
+        "reasoning" currently means."""
         self._validate(request)
 
         citations = tools.search_documents(
@@ -30,22 +57,74 @@ class InvestigationService:
             query=request.query,
             top_k=request.top_k,
         )
+        evidence = self._build_evidence(citations)
 
-        if not citations:
-            return InvestigationResponse(
-                answer="No relevant evidence was found for this investigation question.",
-                citations=[],
-                reasoning_steps=[],
-            )
+        result = self._reasoning_engine.reason(request.query, evidence)
 
         return InvestigationResponse(
-            answer="Relevant evidence was found. Investigation reasoning is not yet implemented.",
-            citations=citations,
-            reasoning_steps=[],
+            answer=result.answer,
+            citations=result.supporting_evidence,
+            reasoning_steps=result.reasoning_steps,
         )
+
+    def _build_evidence(self, citations: list[Citation]) -> list[Evidence]:
+        """Build one Evidence object per citation. Prefers the citation's own
+        matched chunk_text; falls back to reading the full source document
+        only if chunk_text is genuinely unavailable. Filename lookups (and,
+        in the fallback case, document reads) are cached per document_id
+        within this call, since multiple citations commonly point at the
+        same (multi-chunk) document."""
+        filename_cache: dict[int, str] = {}
+        full_text_cache: dict[int, str] = {}
+        evidence: list[Evidence] = []
+
+        for citation in citations:
+            document_id = citation.document_id
+            if document_id not in filename_cache:
+                filename_cache[document_id] = tools.get_document_filename(document_id)
+
+            if citation.chunk_text:
+                surrounding_context = citation.chunk_text.strip()
+                excerpt = _truncate(surrounding_context, EXCERPT_CHARS)
+            else:
+                if document_id not in full_text_cache:
+                    full_text_cache[document_id] = tools.read_document(document_id)
+                surrounding_context = _truncate(full_text_cache[document_id], CONTEXT_CHARS)
+                excerpt = _truncate(surrounding_context, EXCERPT_CHARS)
+
+            evidence.append(
+                Evidence(
+                    citation=citation,
+                    document_id=document_id,
+                    document_name=filename_cache[document_id],
+                    excerpt=excerpt,
+                    surrounding_context=surrounding_context,
+                    confidence=_clamp_confidence(citation.relevance_score),
+                    metadata={},
+                )
+            )
+
+        return evidence
 
     def _validate(self, request: InvestigationRequest) -> None:
         """Defense-in-depth beyond pydantic's own field constraints on
         InvestigationRequest."""
         if not request.query.strip():
             raise ValueError("query must not be empty")
+
+
+def _truncate(text: str, max_chars: int) -> str:
+    """Return `text` capped at max_chars, marked with a trailing "..." if it
+    was actually cut short."""
+    stripped = text.strip()
+    if len(stripped) <= max_chars:
+        return stripped
+    return stripped[:max_chars].rstrip() + "..."
+
+
+def _clamp_confidence(relevance_score: float) -> float:
+    """Evidence.confidence is bounded to [0.0, 1.0], but cosine similarity
+    (Citation.relevance_score) is mathematically bounded to [-1.0, 1.0] —
+    clamp rather than let an edge-case negative score fail Evidence's own
+    validation."""
+    return max(0.0, min(1.0, relevance_score))
