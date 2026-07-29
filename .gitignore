@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Claude Code metadata
+.stubs/
+.vfsmeta/
+.work-folder-info
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Environment
+.env
+.env.*
+
+# Python cache
+.pytest_cache/
+.mypy_cache/
+
+# Storage
+storage/
+
+# Node
+node_modules/
+.next/

@@ -1,0 +1,17 @@
+# Core backend (Milestone 0A)
+fastapi
+uvicorn[standard]
+python-multipart
+sqlalchemy
+psycopg2-binary
+pgvector
+pydantic-settings
+
+# Document ingestion (Milestone 0B)
+pymupdf
+
+# Chunking & embeddings (Milestone 0C)
+sentence-transformers
+
+# Deferred
+# tiktoken
