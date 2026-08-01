@@ -13,5 +13,10 @@ pymupdf
 # Chunking & embeddings (Milestone 0C)
 sentence-transformers
 
+# LLM-backed reasoning (Sprint 1 Task 07/07.1) — provider-independent via
+# app/llm/ (see LLMProvider); google-genai backs the current GeminiProvider,
+# the only provider implementation today.
+google-genai
+
 # Deferred
 # tiktoken
