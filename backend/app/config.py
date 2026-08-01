@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     default_project_name: str = "Delhi Metro Viaduct Package DMV-7 (fictional)"
 
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-flash-lite-latest"
 
 
 @lru_cache
