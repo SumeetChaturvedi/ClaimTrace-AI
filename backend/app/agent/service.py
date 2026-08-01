@@ -1,11 +1,12 @@
 """Orchestration entry point for the Investigation Engine.
 
 InvestigationService is the seam between the API layer and future
-retrieval/LLM integrations. It orchestrates the pipeline — validate, search,
-build evidence, package, reason, respond — but contains no reasoning logic
-itself; that lives entirely in ReasoningEngine (app/agent/reasoning.py),
+retrieval/LLM integrations. It orchestrates the pipeline — validate, plan,
+search, build evidence, package, reason, respond — but contains no reasoning
+logic itself; that lives entirely in ReasoningEngine (app/agent/reasoning.py),
 including what to do when no evidence is found. This keeps the concerns
-separable: tools.py/this module know how to gather evidence,
+separable: app/investigation/ knows how an investigation should be
+approached, tools.py/this module know how to gather evidence,
 investigation_package.py packages it up model-agnostically, reasoning.py
 knows what it means.
 
@@ -17,12 +18,18 @@ the full document via read_document() is only a fallback for the rare case
 where chunk_text is unavailable on a citation, and is otherwise reserved for
 future context-expansion (e.g. reading beyond a chunk's boundaries) that
 isn't implemented yet.
+
+Investigation planning: create_plan() now runs before search, but its
+result isn't consumed yet — not used to shape the query, retrieval, ranking,
+or the response. This is deliberately just establishing the plan's place in
+the pipeline; a future task will have search/reasoning actually use it.
 """
 
 from app.agent import tools
 from app.agent.investigation_package import InvestigationPackageBuilder
 from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse
 from app.agent.reasoning import ReasoningEngine
+from app.investigation import InvestigationPlanner
 
 # Excerpt length within a matched chunk (or, in the read_document() fallback,
 # within the truncated full-document prefix). Picked as a reasonable default
@@ -46,18 +53,27 @@ class InvestigationService:
         self,
         reasoning_engine: ReasoningEngine | None = None,
         package_builder: InvestigationPackageBuilder | None = None,
+        planner: InvestigationPlanner | None = None,
     ) -> None:
         self._reasoning_engine = reasoning_engine or ReasoningEngine()
         self._package_builder = package_builder or InvestigationPackageBuilder()
+        self._planner = planner or InvestigationPlanner()
 
     async def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
-        """Run an investigation for `request`: retrieve supporting evidence
-        via semantic search, build an Evidence object per result, assemble
-        an InvestigationPackage from the question and evidence, hand it to
-        ReasoningEngine, and map its ReasoningResult onto
-        InvestigationResponse. Does not verify citations or call an LLM yet —
-        see ReasoningEngine for what "reasoning" currently means."""
+        """Run an investigation for `request`: create an InvestigationPlan,
+        retrieve supporting evidence via semantic search, build an Evidence
+        object per result, assemble an InvestigationPackage from the
+        question and evidence, hand it to ReasoningEngine, and map its
+        ReasoningResult onto InvestigationResponse. Does not verify
+        citations or call an LLM yet — see ReasoningEngine for what
+        "reasoning" currently means.
+
+        The InvestigationPlan is created but not yet consumed — kept as a
+        local variable only, not passed to search or reasoning, and never
+        exposed on InvestigationResponse."""
         self._validate(request)
+
+        plan = self._planner.create_plan(request.query)  # noqa: F841 — not yet consumed, see module docstring
 
         citations = tools.search_documents(
             project_id=request.project_id,

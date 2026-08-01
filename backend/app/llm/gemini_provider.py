@@ -36,13 +36,14 @@ class GeminiProvider(LLMProvider):
         response verbatim. Raises LLMProviderError if no API key is
         configured, or if the call fails."""
         settings = get_settings()
-        if not settings.gemini_api_key:
+        api_key = (settings.gemini_api_key or "").strip()
+        if not api_key:
             raise LLMProviderError(
                 "No LLM is configured — set GEMINI_API_KEY in backend/.env "
                 "to enable LLM-backed reasoning."
             )
 
-        client = self._get_client(settings.gemini_api_key)
+        client = self._get_client(api_key)
 
         try:
             response = client.models.generate_content(
