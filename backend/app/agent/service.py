@@ -2,11 +2,12 @@
 
 InvestigationService is the seam between the API layer and future
 retrieval/LLM integrations. It orchestrates the pipeline — validate, search,
-build evidence, reason, respond — but contains no reasoning logic itself;
-that lives entirely in ReasoningEngine (app/agent/reasoning.py), including
-what to do when no evidence is found. This keeps the two concerns separable:
-tools.py/this module know how to gather evidence, reasoning.py knows what it
-means.
+build evidence, package, reason, respond — but contains no reasoning logic
+itself; that lives entirely in ReasoningEngine (app/agent/reasoning.py),
+including what to do when no evidence is found. This keeps the concerns
+separable: tools.py/this module know how to gather evidence,
+investigation_package.py packages it up model-agnostically, reasoning.py
+knows what it means.
 
 Evidence construction: Citation carries the actual matched chunk text
 (citation.chunk_text, populated by search_documents() straight from the
@@ -19,6 +20,7 @@ isn't implemented yet.
 """
 
 from app.agent import tools
+from app.agent.investigation_package import InvestigationPackageBuilder
 from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse
 from app.agent.reasoning import ReasoningEngine
 
@@ -33,23 +35,28 @@ CONTEXT_CHARS = 800
 
 class InvestigationService:
     """Orchestrates an investigation: validate -> search -> build evidence ->
-    delegate to ReasoningEngine -> respond. Contains no reasoning logic of
-    its own — not even the "no evidence found" case, which ReasoningEngine
-    decides. Later: will drive the full agent loop (plan -> search -> read ->
-    follow references -> verify citations -> answer) described in
-    PROJECT_PLAN.md Part C step 7 and Part D, likely by ReasoningEngine
-    growing rather than this class."""
+    package -> delegate to ReasoningEngine -> respond. Contains no reasoning
+    logic of its own — not even the "no evidence found" case, which
+    ReasoningEngine decides. Later: will drive the full agent loop (plan ->
+    search -> read -> follow references -> verify citations -> answer)
+    described in PROJECT_PLAN.md Part C step 7 and Part D, likely by
+    ReasoningEngine growing rather than this class."""
 
-    def __init__(self, reasoning_engine: ReasoningEngine | None = None) -> None:
+    def __init__(
+        self,
+        reasoning_engine: ReasoningEngine | None = None,
+        package_builder: InvestigationPackageBuilder | None = None,
+    ) -> None:
         self._reasoning_engine = reasoning_engine or ReasoningEngine()
+        self._package_builder = package_builder or InvestigationPackageBuilder()
 
     async def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
         """Run an investigation for `request`: retrieve supporting evidence
-        via semantic search, build an Evidence object per result, hand the
-        question and evidence to ReasoningEngine, and map its
-        ReasoningResult onto InvestigationResponse. Does not verify
-        citations or call an LLM yet — see ReasoningEngine for what
-        "reasoning" currently means."""
+        via semantic search, build an Evidence object per result, assemble
+        an InvestigationPackage from the question and evidence, hand it to
+        ReasoningEngine, and map its ReasoningResult onto
+        InvestigationResponse. Does not verify citations or call an LLM yet —
+        see ReasoningEngine for what "reasoning" currently means."""
         self._validate(request)
 
         citations = tools.search_documents(
@@ -58,8 +65,9 @@ class InvestigationService:
             top_k=request.top_k,
         )
         evidence = self._build_evidence(citations)
+        package = self._package_builder.build(request.query, evidence)
 
-        result = self._reasoning_engine.reason(request.query, evidence)
+        result = self._reasoning_engine.reason(package)
 
         return InvestigationResponse(
             answer=result.answer,

@@ -1,29 +1,65 @@
 """The Reasoning Engine — the component that decides what an investigation's
 evidence means. Kept fully independent of InvestigationService
-(app/agent/service.py): it takes a question and evidence in, returns a
-ReasoningResult out, and knows nothing about search, tools, or the DB.
-InvestigationService orchestrates the pipeline but never reasons itself.
+(app/agent/service.py) AND of any specific LLM provider: it depends only on
+the LLMProvider interface (app/llm/provider.py), never on a provider's SDK,
+request format, or response format.
 
-This first implementation is deliberately not AI-powered — no LLM calls, no
-prompt templates, no summarization, no contract interpretation, no fabricated
-conclusions. It exists to establish the architecture and data flow that a
-future LLM-backed engine will slot into behind the same reason() signature.
+Swapping providers (Gemini -> OpenAI, Anthropic, Ollama, Azure OpenAI, ...)
+means creating one new app/llm/<provider>_provider.py module implementing
+LLMProvider, then changing the one default-construction line below (or
+simply injecting a different provider via the constructor) — nothing else in
+this file, or anywhere upstream of it, needs to change. That default import
+is the only place this module references a concrete provider; reason()
+itself calls only LLMProvider.generate(), never anything Gemini-specific.
+
+Prompt text lives entirely in PromptBuilder (app/agent/prompt_builder.py) —
+this module never constructs prompt strings itself, only calls
+build_reasoning_prompt() and passes the resulting Prompt to the provider.
+
+Safety invariant: the LLM only ever generates the natural-language `answer`
+string. Citations/supporting_evidence always come from the
+InvestigationPackage that was built deterministically upstream — the
+provider's response is never parsed for citations, evidence, or facts beyond
+that one string, so it cannot fabricate or select evidence.
 """
 
-from app.agent.models import Evidence, ReasoningResult
+from app.agent.investigation_package import InvestigationPackage
+from app.agent.models import ReasoningResult
+from app.agent.prompt_builder import PromptBuilder
+from app.llm.gemini_provider import GeminiProvider
+from app.llm.provider import LLMProvider, LLMProviderError
+
+
+class ReasoningError(Exception):
+    """Raised when reasoning can't complete: no provider configured, or the
+    generation call itself failed. Wraps LLMProviderError so callers outside
+    this module never need to know a provider-specific exception type
+    exists — this is the one exception type ReasoningEngine has ever raised,
+    unchanged since before providers were pluggable."""
 
 
 class ReasoningEngine:
-    """Turns a question and its supporting Evidence into a ReasoningResult.
-    Stateless — safe to reuse across calls, testable in isolation from
-    InvestigationService."""
+    """Turns an InvestigationPackage into a ReasoningResult by ranking its
+    evidence, building a provider-agnostic Prompt (via PromptBuilder), and
+    asking the configured LLMProvider to generate an answer grounded in that
+    evidence. Depends only on the LLMProvider interface — never imports or
+    references any provider's SDK, request shape, or exception types."""
 
-    def reason(self, question: str, evidence: list[Evidence]) -> ReasoningResult:
-        """Deterministic baseline: rank evidence by confidence and report
-        that AI-based reasoning hasn't been implemented yet. Never fabricates
-        a conclusion, summarizes documents, or infers contractual meaning —
-        only describes what evidence exists and how it was ranked."""
-        if not evidence:
+    def __init__(
+        self,
+        provider: LLMProvider | None = None,
+        prompt_builder: PromptBuilder | None = None,
+    ) -> None:
+        self._provider = provider or GeminiProvider()
+        self._prompt_builder = prompt_builder or PromptBuilder()
+
+    def reason(self, package: InvestigationPackage) -> ReasoningResult:
+        """Rank package.evidence by confidence and, if there is any, ask the
+        configured provider to answer package.question grounded in that
+        evidence. With no evidence, returns the same deterministic "no
+        evidence" result as before and makes no provider call at all —
+        there would be nothing for the model to ground an answer in."""
+        if not package.evidence:
             return ReasoningResult(
                 answer="No relevant evidence was found for this investigation question.",
                 reasoning_steps=[
@@ -33,13 +69,15 @@ class ReasoningEngine:
                 supporting_evidence=[],
             )
 
-        ranked = sorted(evidence, key=lambda item: item.confidence, reverse=True)
+        ranked_evidence = sorted(package.evidence, key=lambda item: item.confidence, reverse=True)
+        ranked_package = package.model_copy(update={"evidence": ranked_evidence})
 
-        answer = (
-            f"Found {len(ranked)} supporting evidence item(s) for the question: "
-            f"'{question}'. This is a deterministic placeholder answer, ranked by "
-            "confidence — AI-based reasoning has not yet been implemented."
-        )
+        prompt = self._prompt_builder.build_reasoning_prompt(ranked_package)
+
+        try:
+            answer = self._provider.generate(prompt)
+        except LLMProviderError as exc:
+            raise ReasoningError(str(exc)) from exc
 
         return ReasoningResult(
             answer=answer,
@@ -47,6 +85,7 @@ class ReasoningEngine:
                 "Retrieved relevant evidence.",
                 "Ranked evidence by confidence.",
                 "Selected the highest-confidence supporting evidence.",
+                "Generated an answer using the configured language model, grounded in that evidence.",
             ],
-            supporting_evidence=[item.citation for item in ranked],
+            supporting_evidence=[item.citation for item in ranked_evidence],
         )
