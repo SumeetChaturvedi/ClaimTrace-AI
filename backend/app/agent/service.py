@@ -19,10 +19,13 @@ where chunk_text is unavailable on a citation, and is otherwise reserved for
 future context-expansion (e.g. reading beyond a chunk's boundaries) that
 isn't implemented yet.
 
-Investigation planning: create_plan() now runs before search, but its
-result isn't consumed yet — not used to shape the query, retrieval, ranking,
-or the response. This is deliberately just establishing the plan's place in
-the pipeline; a future task will have search/reasoning actually use it.
+Investigation planning: create_plan() runs before search, and the resulting
+InvestigationPlan is passed into search_documents() (see app/agent/tools.py),
+which converts it to a RetrievalContext and forwards it into retrieval —
+this is now live: the plan's primary_entities feed a deterministic
+entity-match scoring bonus (app/retrieval/scoring.py) during real searches.
+It still doesn't shape the query text itself, evidence construction,
+packaging, or reasoning, and is never exposed on InvestigationResponse.
 """
 
 from app.agent import tools
@@ -68,17 +71,22 @@ class InvestigationService:
         citations or call an LLM yet — see ReasoningEngine for what
         "reasoning" currently means.
 
-        The InvestigationPlan is created but not yet consumed — kept as a
-        local variable only, not passed to search or reasoning, and never
-        exposed on InvestigationResponse."""
+        The InvestigationPlan is created and passed through to
+        search_documents(), which now converts it to a RetrievalContext and
+        forwards it into retrieval — its primary_entities feed a
+        deterministic entity-match scoring bonus there (see
+        app/retrieval/scoring.py). It doesn't otherwise shape the query,
+        evidence, packaging, or reasoning, and is never exposed on
+        InvestigationResponse."""
         self._validate(request)
 
-        plan = self._planner.create_plan(request.query)  # noqa: F841 — not yet consumed, see module docstring
+        plan = self._planner.create_plan(request.query)
 
         citations = tools.search_documents(
             project_id=request.project_id,
             query=request.query,
             top_k=request.top_k,
+            investigation_plan=plan,
         )
         evidence = self._build_evidence(citations)
         package = self._package_builder.build(request.query, evidence)

@@ -16,9 +16,13 @@ populate Evidence.document_name — see its docstring for why it exists.
 
 from pathlib import Path
 
+from sqlalchemy import select
+
 from app.agent.models import Citation
 from app.db.models import Document
 from app.db.session import get_session_factory
+from app.investigation.models import InvestigationPlan
+from app.retrieval.context_builder import RetrievalContextBuilder
 from app.retrieval.service import search_chunks
 
 
@@ -27,7 +31,12 @@ class DocumentNotFoundError(Exception):
     or its extracted text can't be found on disk."""
 
 
-def search_documents(project_id: int, query: str, top_k: int = 5) -> list[Citation]:
+def search_documents(
+    project_id: int,
+    query: str,
+    top_k: int = 5,
+    investigation_plan: InvestigationPlan | None = None,
+) -> list[Citation]:
     """Return the top_k chunks most relevant to `query`, ranked by similarity,
     as Citation objects — the agent's primary evidence-gathering tool.
 
@@ -38,14 +47,27 @@ def search_documents(project_id: int, query: str, top_k: int = 5) -> list[Citati
     there is nothing to scope against without changing the retrieval module,
     which is out of scope for this task.
 
+    `investigation_plan`, when supplied, is converted to a RetrievalContext
+    via RetrievalContextBuilder (reused as-is — no mapping logic duplicated
+    here) and forwarded into search_chunks(), which forwards it to
+    RetrievalScorer (app/retrieval/scoring.py). This is what makes the
+    deterministic entity-match bonus actually active during real
+    investigations: the plan's primary_entities become search_terms, and
+    any chunk whose text contains one gets a small score bump. Without a
+    plan, retrieval behaves exactly as before (semantic ranking only).
+
     Each Citation carries the matched chunk's own text (chunk_text), taken
     directly from the search result — ChunkSearchResult already includes it,
     so no separate lookup is needed. This is what lets Evidence be built from
     the actual retrieved passage instead of reconstructed from the full
     document (see InvestigationService._build_evidence).
     """
+    retrieval_context = (
+        RetrievalContextBuilder().build(investigation_plan) if investigation_plan is not None else None
+    )
+
     with get_session_factory()() as session:
-        results = search_chunks(session, query, top_k=top_k)
+        results = search_chunks(session, query, top_k=top_k, retrieval_context=retrieval_context)
 
     return [
         Citation(
@@ -103,14 +125,61 @@ def get_document_filename(document_id: int) -> str:
     return document.filename
 
 
-def find_related_documents(document_id: int) -> list[int]:
-    """Return the ids of documents that share referenced IDs or entities with
-    `document_id`, for following cross-references during an investigation.
+def find_related_documents(document_ids: list[int]) -> list[int]:
+    """Given a set of already-retrieved document ids, return the ids of
+    additional documents (not already in `document_ids`) that share at
+    least one identifier with any of them, via Document.referenced_ids —
+    the deterministic metadata join described in PROJECT_PLAN.md Part D
+    §18, not an LLM call, not embeddings.
 
-    Will be a deterministic metadata join on Document.referenced_ids, not an
-    LLM call.
+    Widened from the originally-stubbed single-document signature
+    (`find_related_documents(document_id) -> list[int]`) to take a
+    collection: excluding documents "already retrieved" only makes sense
+    against the full retrieved set, not one document at a time. Nothing in
+    the codebase called this stub before this change, so there's no
+    existing caller to break.
+
+    One expansion hop only: matches are found directly against
+    `document_ids`' referenced_ids, never against the referenced_ids of the
+    documents this call itself returns — no recursion. No ranking, no
+    scoring: the result is an unordered set of ids.
+
+    Note on precision: Document.referenced_ids mixes a document's own
+    self-declared identifier together with everything else it mentions,
+    including generic location tags (e.g. "P-42") that appear in most
+    documents about the same subject — this join will connect documents
+    through those shared generic tags too, not only through precise IDs
+    like "SI-088". That's inherent to using the existing extracted data
+    as-is (no new filtering heuristic was added, since filtering would
+    itself be a scoring judgment this task excludes).
     """
-    raise NotImplementedError
+    if not document_ids:
+        return []
+
+    with get_session_factory()() as session:
+        retrieved_documents = session.scalars(
+            select(Document).where(Document.id.in_(document_ids))
+        ).all()
+
+        collected_ids: set[str] = set()
+        for document in retrieved_documents:
+            if document.referenced_ids:
+                collected_ids.update(document.referenced_ids)
+
+        if not collected_ids:
+            return []
+
+        related_ids = session.scalars(
+            select(Document.id)
+            .where(Document.id.notin_(document_ids))
+            # Postgres array-overlap ("&&"): Document.referenced_ids is
+            # mapped via the generic sqlalchemy.ARRAY, whose comparator
+            # doesn't expose .overlap() — .op("&&") applies the same
+            # operator directly, no column/model change needed.
+            .where(Document.referenced_ids.op("&&")(list(collected_ids)))
+        ).all()
+
+    return list(related_ids)
 
 
 def verify_citation(citation: Citation, quote: str) -> bool:
