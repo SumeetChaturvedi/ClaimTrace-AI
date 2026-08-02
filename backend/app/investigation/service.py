@@ -10,20 +10,56 @@ likely_contract_areas, and investigation_steps remain fixed placeholders.
 Not yet integrated with InvestigationService.
 """
 
+from app.domain.document_types import DocumentType
 from app.investigation.classifier import classify_investigation_type
 from app.investigation.extractor import ConstructionEntityExtractor
 from app.investigation.models import InvestigationPlan
 
-# Which document types are typically relevant for each investigation type.
-# Static domain knowledge, not retrieval — no documents are looked up here.
-_EVIDENCE_SOURCES_BY_TYPE: dict[str, list[str]] = {
-    "approval": ["Approval Letters", "Engineer Correspondence", "Meeting Minutes", "Site Instructions"],
-    "delay": ["Progress Reports", "Programmes", "Delay Notices", "Meeting Minutes"],
-    "variation": ["Site Instructions", "Variation Orders", "Drawings", "Engineer Correspondence"],
-    "entitlement": ["Contract", "Notices", "Site Instructions", "Correspondence"],
-    "payment": ["Payment Certificates", "Invoices", "Correspondence"],
-    "evidence": ["All Document Types"],
-    "compliance": ["Contract", "Notices", "Correspondence"],
+# Which canonical document types are typically relevant for each
+# investigation type. Static domain knowledge, not retrieval — no documents
+# are looked up here. Values are DocumentType members (Sprint 3 Task 08),
+# not free text, so this speaks the same vocabulary the database now
+# persists (app/ingestion/pipeline.py) and RetrievalContext expects.
+#
+# "evidence" previously used a wildcard-ish "All Document Types" placeholder
+# that isn't a real DocumentType — per Sprint 3 Task 10, replaced with an
+# empty list rather than inventing a category or adding wildcard behavior.
+_EVIDENCE_SOURCES_BY_TYPE: dict[str, list[DocumentType]] = {
+    "approval": [
+        DocumentType.APPROVAL,
+        DocumentType.CORRESPONDENCE,
+        DocumentType.MEETING_MINUTES,
+        DocumentType.SITE_INSTRUCTION,
+    ],
+    "delay": [
+        DocumentType.PROGRESS_REPORT,
+        DocumentType.PROGRAMME,
+        DocumentType.NOTICE,
+        DocumentType.MEETING_MINUTES,
+    ],
+    "variation": [
+        DocumentType.SITE_INSTRUCTION,
+        DocumentType.VARIATION,
+        DocumentType.DRAWING,
+        DocumentType.CORRESPONDENCE,
+    ],
+    "entitlement": [
+        DocumentType.CONTRACT,
+        DocumentType.NOTICE,
+        DocumentType.SITE_INSTRUCTION,
+        DocumentType.CORRESPONDENCE,
+    ],
+    "payment": [
+        DocumentType.PAYMENT,
+        DocumentType.INVOICE,
+        DocumentType.CORRESPONDENCE,
+    ],
+    "evidence": [],
+    "compliance": [
+        DocumentType.CONTRACT,
+        DocumentType.NOTICE,
+        DocumentType.CORRESPONDENCE,
+    ],
     "unknown": [],
 }
 
