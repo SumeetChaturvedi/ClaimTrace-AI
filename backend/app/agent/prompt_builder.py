@@ -8,10 +8,19 @@ already gathered deterministically upstream.
 
 Produces a provider-agnostic Prompt (app/llm/provider.py) rather than one
 flat string: system_prompt carries the fixed behavioral instructions,
-user_prompt carries the question/statistics/evidence that varies per
-investigation. This is the natural system/user split every major LLM API
+user_prompt carries the question/statistics/evidence/timeline that varies
+per investigation. This is the natural system/user split every major LLM API
 already expects — no provider-specific formatting happens here, that's each
 LLMProvider's job.
+
+Timeline section (Sprint 5 Task 05): package.timeline_context is already a
+fully-formatted, already-chronological block of text (TimelineFormatter's
+output, built upstream in InvestigationService from TimelineBuilder) — this
+class only wraps it in a clearly separated header/footer and appends it to
+the user prompt if non-empty. No instruction telling the model to build or
+reorder a chronology is added anywhere: _instructions_section() is entirely
+unchanged from before this task, since the timeline already exists and
+doesn't need to be reconstructed, only read.
 """
 
 from app.agent.investigation_package import InvestigationPackage
@@ -20,19 +29,22 @@ from app.llm.provider import Prompt
 
 class PromptBuilder:
     """Converts an InvestigationPackage into a provider-agnostic Prompt: the
-    question, investigation statistics, and every piece of supporting
-    evidence as the user prompt; instructions constraining the model to that
-    evidence alone as the system prompt."""
+    question, investigation statistics, every piece of supporting evidence,
+    and (if built) a pre-formatted timeline as the user prompt; instructions
+    constraining the model to that evidence alone as the system prompt."""
 
     def build_reasoning_prompt(self, package: InvestigationPackage) -> Prompt:
         """Build the full reasoning Prompt for `package`."""
-        user_prompt = "\n\n".join(
-            [
-                self._question_section(package),
-                self._statistics_section(package),
-                self._evidence_section(package),
-            ]
-        )
+        sections = [
+            self._question_section(package),
+            self._statistics_section(package),
+            self._evidence_section(package),
+        ]
+        timeline_section = self._timeline_section(package)
+        if timeline_section:
+            sections.append(timeline_section)
+
+        user_prompt = "\n\n".join(sections)
         return Prompt(system_prompt=self._instructions_section(), user_prompt=user_prompt)
 
     def _question_section(self, package: InvestigationPackage) -> str:
@@ -59,6 +71,14 @@ class PromptBuilder:
             blocks.append("\n".join(lines))
 
         return "# Supporting Evidence\n\n" + "\n\n".join(blocks)
+
+    def _timeline_section(self, package: InvestigationPackage) -> str:
+        """Return the timeline block wrapped in a clearly separated
+        header/footer, or "" if no timeline was built (build_reasoning_prompt
+        then omits the section entirely rather than appending an empty one)."""
+        if not package.timeline_context:
+            return ""
+        return "----------------------\nPROJECT TIMELINE\n\n" f"{package.timeline_context}\n" "----------------------"
 
     def _instructions_section(self) -> str:
         return (

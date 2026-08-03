@@ -26,6 +26,16 @@ this is now live: the plan's primary_entities feed a deterministic
 entity-match scoring bonus (app/retrieval/scoring.py) during real searches.
 It still doesn't shape the query text itself, evidence construction,
 packaging, or reasoning, and is never exposed on InvestigationResponse.
+
+Timeline context (Sprint 5 Task 05): after evidence is built, this module
+also fetches the Document rows for this investigation's retrieved document
+ids (tools.get_documents() — not a new retrieval step, just looking up
+documents search_documents() already surfaced), builds a chronology from
+them via TimelineBuilder, and formats it via TimelineFormatter. The
+resulting text is carried into InvestigationPackage.timeline_context, which
+PromptBuilder appends to the reasoning prompt as a clearly separated
+section. No timeline logic lives here — this only calls the existing
+app/investigation/timeline.py components in sequence.
 """
 
 from app.agent import tools
@@ -33,6 +43,7 @@ from app.agent.investigation_package import InvestigationPackageBuilder
 from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse
 from app.agent.reasoning import ReasoningEngine
 from app.investigation import InvestigationPlanner
+from app.investigation.timeline import TimelineBuilder, TimelineFormatter
 
 # Excerpt length within a matched chunk (or, in the read_document() fallback,
 # within the truncated full-document prefix). Picked as a reasonable default
@@ -57,10 +68,14 @@ class InvestigationService:
         reasoning_engine: ReasoningEngine | None = None,
         package_builder: InvestigationPackageBuilder | None = None,
         planner: InvestigationPlanner | None = None,
+        timeline_builder: TimelineBuilder | None = None,
+        timeline_formatter: TimelineFormatter | None = None,
     ) -> None:
         self._reasoning_engine = reasoning_engine or ReasoningEngine()
         self._package_builder = package_builder or InvestigationPackageBuilder()
         self._planner = planner or InvestigationPlanner()
+        self._timeline_builder = timeline_builder or TimelineBuilder()
+        self._timeline_formatter = timeline_formatter or TimelineFormatter()
 
     async def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
         """Run an investigation for `request`: create an InvestigationPlan,
@@ -89,7 +104,8 @@ class InvestigationService:
             investigation_plan=plan,
         )
         evidence = self._build_evidence(citations)
-        package = self._package_builder.build(request.query, evidence)
+        timeline_context = self._build_timeline_context(citations)
+        package = self._package_builder.build(request.query, evidence, timeline_context=timeline_context)
 
         result = self._reasoning_engine.reason(package)
 
@@ -137,6 +153,19 @@ class InvestigationService:
             )
 
         return evidence
+
+    def _build_timeline_context(self, citations: list[Citation]) -> str:
+        """Build a formatted chronology from the documents behind
+        `citations` only — never the whole corpus. Fetches the (deduplicated)
+        Document rows for citations' document ids, hands them to
+        TimelineBuilder (which sorts by document_date, unchanged from
+        Sprint 5 Task 01), then TimelineFormatter (unchanged from Sprint 5
+        Task 04). Returns "" if there are no citations, same as
+        TimelineFormatter already does for an empty timeline."""
+        document_ids = sorted({citation.document_id for citation in citations})
+        documents = tools.get_documents(document_ids)
+        timeline = self._timeline_builder.build(documents)
+        return self._timeline_formatter.format(timeline)
 
     def _validate(self, request: InvestigationRequest) -> None:
         """Defense-in-depth beyond pydantic's own field constraints on

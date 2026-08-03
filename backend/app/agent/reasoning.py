@@ -21,8 +21,18 @@ string. Citations/supporting_evidence always come from the
 InvestigationPackage that was built deterministically upstream — the
 provider's response is never parsed for citations, evidence, or facts beyond
 that one string, so it cannot fabricate or select evidence.
+
+Citation verification (Sprint 4 Task 03): before supporting_evidence is
+returned, it's passed through verify_citations()
+(app/agent/citation_verification.py) — a deterministic, LLM-free check that
+each citation is well-formed and really backed by a database row, dropping
+any that aren't. Citations here always originate from package.evidence
+anyway (per the safety invariant above), so this is defense-in-depth against
+that invariant ever being violated, not a response to a known way it
+currently is.
 """
 
+from app.agent.citation_verification import verify_citations
 from app.agent.investigation_package import InvestigationPackage
 from app.agent.models import ReasoningResult
 from app.agent.prompt_builder import PromptBuilder
@@ -79,6 +89,9 @@ class ReasoningEngine:
         except LLMProviderError as exc:
             raise ReasoningError(str(exc)) from exc
 
+        candidate_citations = [item.citation for item in ranked_evidence]
+        verified_citations = verify_citations(candidate_citations, retrieved_evidence=candidate_citations)
+
         return ReasoningResult(
             answer=answer,
             reasoning_steps=[
@@ -86,6 +99,7 @@ class ReasoningEngine:
                 "Ranked evidence by confidence.",
                 "Selected the highest-confidence supporting evidence.",
                 "Generated an answer using the configured language model, grounded in that evidence.",
+                "Verified each citation against the database before returning it.",
             ],
-            supporting_evidence=[item.citation for item in ranked_evidence],
+            supporting_evidence=verified_citations,
         )

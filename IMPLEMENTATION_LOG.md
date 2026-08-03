@@ -396,6 +396,377 @@ Architecture, design decisions, and milestones are documented in `PROJECT_PLAN.m
   data, no new filtering heuristic was added since filtering would itself
   be a scoring judgment this task excluded. /health, /search, /investigate
   re-verified with a real Gemini call.
+- Sprint 3.5 Research Task — Retrieval Evaluation (no code changes). Compared
+  4 retrieval configurations (semantic only / +entity bonus / +doctype bonus /
+  +reference expansion) across 5 questions, using the real dataset and real
+  Gemini calls. Key finding: entity/doctype scoring is applied strictly after
+  search_chunks()'s SQL `ORDER BY distance LIMIT top_k`, so those bonuses can
+  only re-rank an already-fixed candidate set, never rescue a document that
+  fell just outside the top_k — confirmed empirically (Configs A/B/C returned
+  the identical document set in all 5 questions, only scores differed).
+  Reference expansion, not being SQL-limited, was the only signal shown to
+  change a real Gemini answer from wrong to right (Q4: "no mention of which
+  drawings were revised" under Config C vs. the correct Rev-1-drawing answer
+  under Config D). Recommended Sprint 4 widen the candidate pool before
+  scoring so entity/doctype bonuses can affect recall, not just ranking —
+  weights (0.05/0.05) left unchanged, evaluation only.
+- Sprint 4 Task 01 — Widen Candidate Pool Before Scoring. Acted on the
+  Sprint 3.5 recommendation: search_chunks() (app/retrieval/service.py, the
+  only file touched) now queries a widened candidate pool
+  (`candidate_k = max(top_k * 3, 15)`) instead of exactly top_k, scores every
+  candidate with the existing RetrievalScorer unchanged, then sorts by final
+  score and truncates to top_k — moving the LIMIT from before scoring to
+  after it. RetrievalScorer, entity/doctype bonus logic, InvestigationPlanner,
+  InvestigationService, RetrievalContextBuilder, ReasoningEngine,
+  PromptBuilder, and the API routes were not touched. Verified against the
+  same 5 Sprint 3.5 questions (old limit-then-score vs. new
+  widen-then-score-then-limit, both run as library calls against the live
+  dataset): Q2 ("Which documents reference Site Instruction SI-088?") changed
+  — doc04 (the SI-088 document itself, raw semantic rank #6 at 0.2876, just
+  outside the old top-5) now enters the top-5 at 0.3376 once its
+  document-type bonus is applied, displacing doc10. This is the exact gap
+  Sprint 3.5 flagged: doc04 had never appeared in top-5 for this question
+  under any prior configuration. Confirmed live end-to-end via POST
+  /investigate: the real (unmocked) Gemini answer now explicitly cites
+  "04_site_instruction_si088.pdf (Site Instruction SI-088 itself)", which it
+  did not in any Sprint 3.5 config. Q1, Q3, Q4, and Q5 were unchanged
+  (identical old/new top-5 sets and scores) — for Q1/Q3 because the already-
+  top-ranked documents' bonuses weren't large enough to admit a new document
+  ahead of the existing set's margins; for Q4/Q5 because the classifier
+  produced empty search_terms and, for Q4, empty preferred_document_types
+  too, so no bonus was available to apply regardless of pool width (the
+  classifier substring-collision bugs flagged in Sprint 3.5, e.g. "unknown"
+  for Q4, are unrelated to and unaffected by this change). /health, /search,
+  and /investigate re-verified working; dataset confirmed unchanged
+  (17 documents, 18 chunks) after testing.
+- Sprint 4 Task 02 — Robust Keyword Matching. Fixed the substring-collision
+  bugs Sprint 3.5 found (e.g. "relate" ⊂ "late" → wrongly classified as
+  "delay"): backend/app/investigation/classifier.py (the only file touched)
+  now compiles each keyword/phrase into a `\b`-bounded regex at import time
+  and matches on that instead of plain `in` substring containment. Same
+  keyword lists, same priority order (dict insertion order, unchanged), same
+  public API (`classify_investigation_type(question) -> str`) — only the
+  match test itself changed. Verified: "Which documents relate to
+  Measurement Book MB-DMV7-P42-06?" no longer classifies as "delay" (now
+  falls through correctly to "evidence" via its "which documents" keyword);
+  "What evidence supports the contractor's delay claim?" still classifies as
+  "delay"; "Which documents reference Site Instruction SI-088?" still
+  classifies as "variation" — unchanged and correct, since "instruction" is a
+  genuine whole word there, not a substring collision, and "variation" is
+  checked before "evidence" in the (preserved) priority order. Also swept
+  several keyword-list categories for legitimate whole-word usage (all still
+  fire) and additional un-requested substring collisions the same fix
+  resolves for free ("claim" ⊂ "disclaimer"/"reclaimed", "paid" ⊂ "unpaid",
+  "late" ⊂ "plate") — none now misfire. Confirmed the fix changes real
+  end-to-end behavior via a live POST /investigate call: the Measurement Book
+  question no longer gets the "delay" investigation type's (wrong)
+  preferred_document_types bonus applied, and now returns
+  10_measurement_record.pdf as the top, correctly-scored result with a clean
+  answer. /health, /search, /investigate re-verified working; dataset
+  confirmed unchanged (17 documents, 18 chunks) after testing.
+- Sprint 4 Task 03 — Citation Verification. Implemented the missing
+  integrity control flagged in every audit so far: new
+  app/agent/citation_verification.py (verify_citations()) checks each
+  citation ReasoningEngine is about to return against the database —
+  DocumentChunk row exists, its document_id matches the citation's, its
+  chunk_text is non-empty, any claimed page matches the chunk's own recorded
+  page_number, and the citation is present in the evidence actually
+  retrieved for this investigation — dropping any that fail, deduplicating
+  by (document_id, chunk_id), never repairing or fabricating a replacement.
+  No LLM call, no new retrieval, no answer rewriting. Wired into
+  app/agent/reasoning.py's reason() (not app/agent/service.py, which this
+  task's guardrails placed off-limits) — the exact point supporting_evidence
+  is assembled — since reasoning.py's own documented safety invariant
+  already guarantees citations are never parsed out of the LLM's answer text
+  (they come straight from InvestigationPackage.evidence), this check is
+  real defense-in-depth against that invariant ever being violated, not a
+  response to a known way it currently is. Verified all required edge cases
+  directly against real DocumentChunk rows: valid citations pass unchanged
+  and in order; duplicates collapse to the first occurrence; a nonexistent
+  chunk_id is rejected; a chunk_id/document_id pair that doesn't actually
+  belong together is rejected; a wrong claimed page is rejected; a
+  well-formed citation absent from the retrieved-evidence set is rejected;
+  an empty input list returns empty; an all-invalid input list returns empty
+  (no fabrication); a mixed valid/invalid list keeps only the valid ones, in
+  order. Confirmed live via a real POST /investigate call: all 5 real
+  citations for the Pier P-42 approval question passed verification
+  unchanged, and reasoning_steps now includes "Verified each citation
+  against the database before returning it." /health and /search re-verified
+  unaffected (this task's change is entirely inside ReasoningEngine, off the
+  retrieval path). Dataset confirmed unchanged (17 documents) after testing.
+- Sprint 4 Task 04 — Separate Document References from Construction
+  References. Fixed the "generic identifiers create excessive expansion"
+  problem flagged in Sprint 3.5 and re-confirmed in the Sprint 4 Contract
+  Clause Audit: app/ingestion/metadata.py's single extract_referenced_ids()
+  mixed genuine document identifiers (SI-088, drawing IDs, DPR/MB/GEO codes)
+  with bare location tags (P-42, P-15, P-38) that appear in nearly every
+  document about the same subject. Split into extract_document_references()
+  and extract_location_references() (same underlying _ID_CODE_RE/_REV_RE
+  patterns, partitioned by a new _LOCATION_PATTERN = \b P-\d{1,4}\b for Pier
+  identifiers specifically, per the task's scope), plus is_location_reference()
+  for classifying an already-stored id. extract_referenced_ids() is kept,
+  redefined as the union of both — verified byte-identical output against
+  every one of the 18 stored documents' actual raw text, and confirmed
+  Document.referenced_ids in the live DB still matches recomputed output
+  exactly, i.e. ingestion behavior and stored data are completely unchanged
+  (this task did not touch app/ingestion/pipeline.py or the DB schema).
+  app/agent/tools.py's find_related_documents() (the only other file
+  touched) now filters out is_location_reference() ids from the join key
+  before the array-overlap query, so expansion is driven only by document
+  identifiers; location tags remain stored in Document.referenced_ids as
+  before, just excluded at the point of use. Measured the expansion graph
+  for every document individually, old vs. new: mean expansion size dropped
+  from 10.71 to 4.24 (of 16 possible other documents), max from 13 to 10;
+  most strikingly, docs 8 (DPR day 1) and 11 (photo log) — whose only prior
+  connection to anything was the shared "P-42" tag — now correctly expand to
+  0 related documents instead of 13, since they cite no other document by an
+  actual identifier. Verified SI-088 expansion still succeeds (doc4 alone
+  now expands to the direct SI-088-citing set {5,6,7,10,17} plus other
+  document-identifier-linked docs, correctly excluding the DPRs/photo log
+  that only shared P-42) and drawing-reference expansion still succeeds
+  (doc3 alone correctly reaches doc4/doc10/doc17 via shared drawing/geotech
+  IDs). RetrievalScorer, InvestigationPlanner, InvestigationService,
+  ReasoningEngine, PromptBuilder, API routes, and the database schema were
+  not touched. /health, /search, /investigate re-verified working (neither
+  /search nor /investigate currently calls find_related_documents(), so
+  their behavior is unaffected by construction); dataset confirmed unchanged
+  (17 documents) after testing.
+- Sprint 5 Research Task — Timeline Reconstruction Audit (no code changes).
+  Read all 17 documents' extracted text and metadata directly. Found: 17/17
+  documents have an explicit date that survives extraction and is correctly
+  stored in Document.doc_date; sorting by that field alone produces a single
+  coherent chronology with zero ordering inconsistencies against every
+  cross-document reference actually present; the dataset's one deliberate
+  contradiction (doc 13's internal email predating doc 2's "official"
+  geotech trigger) is itself temporally consistent — the tension is
+  narrative, not a date error. One precision gap noted: doc 11 has a
+  "DATE RANGE" header and extract_doc_date() only captures the range's
+  start, silently dropping the end date and three finer-grained in-body
+  photo dates. No timeline model, chronology utility, or event model exists
+  anywhere in the codebase — only aspirational docstring mentions of a
+  future "Timeline Engine." Recommended the smallest addition: a
+  TimelineBuilder that sorts already-gathered documents by their existing
+  doc_date, needing no new extraction, schema change, or LLM call.
+- Sprint 5 Task 01 — Timeline Builder. Implemented the recommendation above:
+  new backend/app/investigation/timeline.py (the only file created) —
+  TimelineEvent (Pydantic model: document_id, document_date, document_type,
+  event_label) and TimelineBuilder.build(documents) -> list[TimelineEvent].
+  One TimelineEvent per input Document, event_label set deterministically to
+  the filename's stem (no LLM, no summarization, no inference), sorted
+  ascending by document_date using Python's stable sort so same-date ties
+  keep their input order rather than being reordered arbitrarily; a missing
+  document_date sorts last instead of raising. Not integrated into
+  InvestigationService, not exposed via any API route, and doesn't touch
+  retrieval, RetrievalScorer, InvestigationPlanner, ReasoningEngine,
+  PromptBuilder, GeminiProvider, or the database schema — infrastructure
+  only, per this task's scope. Verified against all 17 real documents: 17
+  documents in, 17 events out; the resulting order matches the chronology
+  already hand-verified in the Sprint 5 Research Task above exactly (drawing
+  Rev0 -> contradictory email -> geotech report -> ... -> approval letter);
+  every event's document_date/document_type/event_label matches its source
+  Document row exactly; stability explicitly confirmed by reversing the
+  input list and observing the one same-date tie (docs 8 and 11, both
+  2019-07-02) flip its relative order accordingly rather than staying fixed
+  by some other key; a synthetic None-date document was confirmed to sort
+  last without crashing. /health, /search, /investigate re-verified working
+  (nothing calls the new module yet, so behavior is unaffected by
+  construction); dataset confirmed unchanged (17 documents) after testing.
+- Sprint 5 Task 02 — Deterministic Timeline Event Labels. Replaced
+  TimelineEvent.event_label's filename-derived placeholder (Task 01) with a
+  static, exhaustive DocumentType -> label mapping
+  (_EVENT_LABEL_BY_TYPE in app/investigation/timeline.py, the only file
+  touched): DRAWING->"Drawing Issued", SITE_INSTRUCTION->"Site Instruction
+  Issued", NOTICE->"Contractor Notice Submitted",
+  MEETING_MINUTES->"Meeting Held", CORRESPONDENCE->"Correspondence Sent",
+  PROGRESS_REPORT->"Progress Report Recorded",
+  MEASUREMENT->"Measurement Recorded", PHOTO_RECORD->"Site Photo Recorded",
+  PROCUREMENT->"Material Delivery Recorded",
+  TECHNICAL_REPORT->"Technical Report Issued", APPROVAL->"Approval Granted",
+  INVOICE->"Invoice Issued", plus sensible labels for the types the current
+  dataset doesn't use (CONTRACT->"Contract Executed",
+  VARIATION->"Variation Issued", PROGRAMME->"Programme Issued",
+  PAYMENT->"Payment Recorded", CLAIM->"Claim Submitted") so the mapping is
+  exhaustive over all 17 DocumentType values, confirmed programmatically.
+  None or an unrecognized raw doc_type string falls back to "Project Event"
+  rather than raising, mirroring RetrievalScorer's existing
+  _as_document_type() reconstruction pattern. No document text, filename, or
+  LLM call is involved in the label anymore. Verified against all 17 real
+  documents: every event_label matches the mapping exactly; every other
+  field (document_id/document_date/document_type) still matches its source
+  Document row; the sorted order is byte-identical to Sprint 5 Task 01's
+  already-verified output. /health, /search, /investigate re-verified
+  working; dataset confirmed unchanged (17 documents) after testing.
+- Sprint 5 Task 03 — Timeline Query Service. Added TimelineQueryService to
+  app/investigation/timeline.py (the only file touched): events_before(),
+  events_after(), and events_between() — pure, position-based list
+  operations over an already-sorted timeline, no database access, no
+  re-sorting, no date comparison (position in the list, which
+  TimelineBuilder already sorted by date, is the only signal used).
+  events_between() is order-agnostic in which id is passed first (the
+  earlier-positioned id is always treated as the slice start). Any id with
+  no matching event (including an empty timeline) returns [] rather than
+  raising, per the task's rules. Verified against the real 17-document
+  timeline: events_before(17) (Approval Granted, last in the timeline)
+  returns all 16 preceding events, the full investigation history;
+  events_before(1) (Drawing Issued, first in the timeline) returns [];
+  events_after(4) (Site Instruction Issued) returns 11 events including
+  doc 6 (notice), doc 7 (meeting), and doc 17 (approval), exactly as the
+  task's example expected; events_between(4, 7) returns exactly [4, 5, 6, 7]
+  and events_between(7, 4) returns the identical subsequence, confirming
+  order-agnostic behavior; nonexistent document_ids and an empty timeline
+  both return [] in all three methods with no exceptions raised. Not
+  integrated into InvestigationService or exposed via any API route, and
+  doesn't touch InvestigationPlanner, retrieval, RetrievalScorer,
+  ReasoningEngine, PromptBuilder, GeminiProvider, or the database schema —
+  query infrastructure only, per this task's scope. /health, /search,
+  /investigate re-verified working; dataset confirmed unchanged
+  (17 documents) after testing.
+- Sprint 5 Task 04 — Timeline Formatter. Added TimelineFormatter to
+  app/investigation/timeline.py (the only file touched): format(events)
+  renders one "YYYY-MM-DD — Event Label" line per event, in exactly the
+  order given (never re-sorted), joined with newlines — formatting only, no
+  summarization, no merging, no date inference, no document text, no AI, no
+  database access. A missing document_date renders as "Unknown Date" rather
+  than being inferred or omitted; an empty list returns "". Verified against
+  the real 17-event timeline: 17 lines out, each matching its event exactly
+  in the given order, first line "2019-03-10 — Drawing Issued" and last line
+  "2019-07-20 — Approval Granted"; a synthetic None-date event renders as
+  "Unknown Date — Drawing Issued"; an empty timeline returns "". Not wired
+  into ReasoningEngine, PromptBuilder, or any other reasoning/investigation
+  flow yet, and doesn't touch InvestigationService, InvestigationPlanner,
+  retrieval, RetrievalScorer, GeminiProvider, API routes, or the database
+  schema — formatting infrastructure only, per this task's scope. /health,
+  /search, /investigate re-verified working; dataset confirmed unchanged
+  (17 documents) after testing.
+- Sprint 5 Task 05 (final task of Sprint 5) — Timeline-Aware Investigation
+  Context. Wired the Sprint 5 timeline subsystem into the real reasoning
+  pipeline, reusing TimelineBuilder/TimelineFormatter as-is (no timeline
+  logic duplicated). New app/agent/tools.py function get_documents(ids)
+  fetches the Document rows for already-retrieved citations (not a new
+  retrieval step). InvestigationService (now permitted to touch, unlike
+  prior Sprint 5 tasks) gained a private _build_timeline_context(citations)
+  that dedupes citation document_ids, fetches those Document rows, builds a
+  chronology via TimelineBuilder, and formats it via TimelineFormatter —
+  scoped strictly to this investigation's retrieved documents, never the
+  whole corpus. InvestigationPackage gained a new timeline_context: str = ""
+  field, threaded through InvestigationPackageBuilder.build() unchanged
+  (just carried through, same pattern as `evidence`). PromptBuilder gained
+  _timeline_section(), which appends a "----------------------\nPROJECT
+  TIMELINE\n\n<formatted lines>\n----------------------" block to the user
+  prompt only when timeline_context is non-empty; _instructions_section()
+  (the system prompt) is verified byte-for-byte unchanged — no instruction
+  telling the model to build or reorder a chronology was added, since the
+  timeline already exists and only needs to be read. Verified: with no
+  timeline_context, no PROJECT TIMELINE section appears at all; with one,
+  it appears wrapped exactly as specified and the formatted lines match
+  TimelineFormatter's own output verbatim. Confirmed the timeline is scoped
+  to retrieved documents only (a 4-citation test produced exactly 4 timeline
+  lines, not 17). Inspected the real, full prompt built for a live
+  chronology question against the actual database — timeline appeared
+  correctly ordered and correctly scoped. Ran two real, unmocked Gemini
+  comparisons (same evidence, with vs. without the timeline section): for
+  both a general "sequence of events" question and the dataset's flagship
+  contradiction/ordering question (contractor's private soil observation vs.
+  the official geotech report), answers were already correct on both sides —
+  this dataset's evidence excerpts embed "DATE:" headers directly, so unlike
+  Sprint 4's reference-expansion fix there wasn't a stark wrong-to-right
+  flip to observe here; reported honestly rather than oversold. Ran a full,
+  real /investigate call through the actual HTTP API (not just library
+  calls) with both citation verification (Task 03) and timeline context
+  (this task) active simultaneously — correct, well-ordered chronology
+  returned. Retrieval, RetrievalScorer, InvestigationPlanner, GeminiProvider,
+  API routes, and the database schema were not touched. /health, /search,
+  /investigate re-verified working; dataset confirmed unchanged
+  (17 documents) after testing.
+- Sprint 6 Research Task 01 — Contract Intelligence Audit (no code changes).
+  Designed the architecture for future clause-aware retrieval. Recommended
+  FIDIC 1999 Red Book (matches the dataset's own scenario and its existing
+  "Contract Clause 20.1-equivalent" reference in doc 6), a minimum 10-clause
+  set (1.3, 3.3, 4.1, 8.4, 8.7, 13.1, 13.3, 14.3, 14.7, 20.1), sub-clause as
+  the retrieval unit, and only 3 metadata fields (clause_number/title/topic —
+  explicitly rejected parent_clause as derivable and keywords as redundant
+  with existing entity scoring). Confirmed DocumentType.CONTRACT and its
+  "entitlement"-category wiring already exist, dormant, in
+  InvestigationPlanner; confirmed EntityType.CONTRACT_REFERENCE is defined
+  but has no extraction heuristic. Recommended no database schema change —
+  fold clause_number/title into chunk_text itself, same pattern as Sprint 4
+  Task 04's zero-schema-change fix. Recommended implementation order
+  Research -> Models -> Parser -> Retrieval -> Planner -> Reasoning,
+  matching this project's own established sequencing on every prior
+  subsystem (RetrievalContext before RetrievalScorer; TimelineEvent before
+  TimelineBuilder).
+- ClaimTrace V2 Research Task 02 — Fictional Project Design (no code
+  changes, no documents generated). Designed the complete ground-truth
+  blueprint for Dataset V2: the Nandira River Bridge Project (fictional
+  country/river/district/all parties), FIDIC 1999 Red Book admeasurement
+  contract, 28 major events spanning contract award through the defects
+  period, all 6 of the task's requested contradiction types (internal email
+  vs. report, omitted instruction, late drawing revision, late notice,
+  measurement error, payment dispute) each independently evidence-resolvable,
+  and ground truth deliberately authored as mixed rather than one-sided
+  (some claims valid, some time-barred, some partially granted, ~3-4 weeks
+  of completion delay left genuinely unexplained). Estimated ~139 documents
+  across 28 categories, recommended phased generation (event-anchored core
+  first). Recommended a Project -> Ground Truth -> Timeline -> Documents ->
+  Evidence Graph -> Evaluation Scenarios architecture, with ground truth and
+  timeline fixed before any document text is written.
+- Sprint 6 Task 01 (first implementation task of Sprint 6) — Contract Clause
+  Domain Model. New backend/app/contracts/ package (models.py + __init__.py,
+  the only files created): ContractClause (BaseModel: clause_number, title,
+  topic, text — no validators, no methods, no extra fields, matching the
+  task's "pure data model" requirement exactly) and ClauseTopic (str Enum:
+  NOTICE, DELAY, EXTENSION_OF_TIME, VARIATION, PAYMENT, CLAIMS, ENGINEER,
+  CONTRACTOR, GENERAL), both re-exported through contracts/__init__.py
+  alongside a direct-import path via contracts/models.py, mirroring the
+  existing app/investigation/__init__.py and app/domain/document_types.py
+  patterns. Canonical representation only — no parser, no retrieval
+  integration, no planner integration; confirmed via grep that nothing else
+  in the codebase imports app.contracts yet. Verified: default construction
+  correctly raises ValidationError (no field has an implicit default, since
+  none was specified and none was asked for); explicit construction with
+  all 4 fields; topic accepts both a ClauseTopic member and its raw string
+  value; JSON serialization emits the enum as its plain string value and
+  round-trips back to an equal model; dict dump preserves the ClauseTopic
+  enum member; all 9 canonical topics present, no extras; package import
+  (`from app.contracts import ...`) and direct import
+  (`from app.contracts.models import ...`) resolve to the identical classes.
+  Retrieval, RetrievalScorer, InvestigationPlanner, InvestigationService,
+  ReasoningEngine, PromptBuilder, GeminiProvider, API routes, the database
+  schema, and the ingestion pipeline were not touched. /health, /search,
+  /investigate re-verified working; dataset confirmed unchanged
+  (17 documents) after testing.
+- Sprint 6 Task 02 — Clause Parser. New backend/app/contracts/parser.py (the
+  only file created; contracts/__init__.py deliberately left untouched,
+  since this task didn't ask for it to be exported and "do not integrate it
+  anywhere" argued against adding even an __init__ export): ClauseParser,
+  a deterministic text-splitter with no AI, database access, or
+  clause-hierarchy inference. Detects numbered heading lines (a line
+  containing only a clause number — bare "1"/"20" or dotted "1.1"/"8.4"/
+  "20.1") via one regex, and a clause spans from immediately after one
+  heading to immediately before the next (or end of text) — exactly the
+  literal "next numbered heading" rule, nothing inferred about hierarchy.
+  Title is the first non-blank line following the heading; everything after
+  that is ContractClause.text. Topic comes from a small private
+  prefix->ClauseTopic dict (1->GENERAL, 3->ENGINEER, 4->CONTRACTOR,
+  8->DELAY, 13->VARIATION, 14->PAYMENT, 20->CLAIMS — the task's own explicit
+  examples plus two additions directly named in ClauseTopic and covered by
+  the Sprint 6 Research Task 01 clause set); any other prefix falls back to
+  GENERAL. Verified against a representative 8-clause sample contract text
+  (spanning all 7 mapped prefixes): correct clause count, correct numbering,
+  correct titles, correct topic assignment, and correct text boundaries —
+  explicitly confirmed clause 1's text doesn't leak into clause 3.3's, and
+  clause 13.1's doesn't leak into clause 13.3's. Also verified: an unknown
+  prefix (99) falls back to GENERAL; a heading with nothing following it
+  (end of text) produces an empty title/text without crashing; text with no
+  headings at all returns an empty list; an inline number not on its own
+  line (e.g. "20.1 tonnes of material") is correctly not mistaken for a
+  heading; preamble text before the first heading is correctly excluded
+  from every clause. Confirmed via grep that nothing else in the codebase
+  imports ClauseParser yet. Retrieval, InvestigationService,
+  InvestigationPlanner, ReasoningEngine, PromptBuilder, GeminiProvider, API
+  routes, the database schema, and ingestion were not touched. /health,
+  /search, /investigate re-verified working; dataset confirmed unchanged
+  (17 documents) after testing.
 
 ---
 

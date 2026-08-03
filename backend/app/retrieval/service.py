@@ -6,10 +6,16 @@ an LLM and is not itself the tool; Deliverable 5 wraps this for the agent.
 Ranking is vector similarity only, no keyword fallback (deliberately deferred
 per Part D §18's "optional keyword fallback").
 
-RetrievalScorer (scoring.py) is now called per result, but only ever returns
-its semantic_score input unchanged today — so ranking order and similarity
-values are unaffected. It's a pass-through applied after the DB query has
-already ordered results by distance, not a re-ranking step.
+RetrievalScorer (scoring.py) is called per candidate and can change which
+documents are returned, not just their order: the DB query below retrieves a
+widened candidate pool (CANDIDATE_POOL_MULTIPLIER * top_k, floored at
+CANDIDATE_POOL_MINIMUM), every candidate is scored, and only then is the pool
+sorted by final score and truncated to top_k. A chunk that ranked outside the
+old top_k on semantic similarity alone can now survive if its entity/doctype
+bonus is enough to outscore chunks inside the original cutoff (Sprint 4 Task
+01). Semantic similarity itself, and RetrievalScorer's own logic, are
+unchanged — only the point in the pipeline where the LIMIT is applied moved
+from before scoring to after it.
 """
 
 from dataclasses import dataclass, replace
@@ -24,6 +30,14 @@ from app.retrieval.context import RetrievalContext
 from app.retrieval.scoring import RetrievalScorer
 
 DEFAULT_TOP_K = 5
+
+# How much wider than top_k the initial semantic candidate pool is, before
+# RetrievalScorer runs and the result is truncated back down to top_k
+# (Sprint 4 Task 01). CANDIDATE_POOL_MINIMUM is a floor for small top_k
+# values, so scoring always has a meaningfully wider pool to work with than
+# just top_k itself.
+CANDIDATE_POOL_MULTIPLIER = 3
+CANDIDATE_POOL_MINIMUM = 15
 
 
 @dataclass(frozen=True)
@@ -52,11 +66,9 @@ def search_chunks(
     match against — never raises for that case. Raises ValueError for an
     empty query string or a non-positive top_k.
 
-    `retrieval_context` is optional and, today, has no effect: each result's
-    similarity is passed through RetrievalScorer, which currently just
-    returns it unchanged. Ranking order is set by the DB query above and is
-    never re-sorted afterward, so this is a scoring pass, not a re-ranking
-    step.
+    `retrieval_context` is optional; when supplied, it's forwarded to
+    RetrievalScorer and can change which chunks end up in the returned
+    top_k, not just their order (Sprint 4 Task 01) — see candidate_k below.
     """
     if not query or not query.strip():
         raise ValueError("query must not be empty")
@@ -66,15 +78,21 @@ def search_chunks(
     query_vector = embed_texts([query.strip()])[0]
     distance = DocumentChunk.embedding.cosine_distance(query_vector).label("distance")
 
+    # Widen the semantic candidate pool before scoring, so RetrievalScorer's
+    # bonuses can promote a chunk that ranked outside the old top_k on
+    # semantic similarity alone, instead of only re-weighting a set the SQL
+    # LIMIT already fixed (Sprint 4 Task 01).
+    candidate_k = max(top_k * CANDIDATE_POOL_MULTIPLIER, CANDIDATE_POOL_MINIMUM)
+
     stmt = (
         select(DocumentChunk, Document, distance)
         .join(Document, DocumentChunk.document_id == Document.id)
         .where(DocumentChunk.embedding.is_not(None))
         .order_by(distance)
-        .limit(top_k)
+        .limit(candidate_k)
     )
 
-    results = [
+    candidates = [
         ChunkSearchResult(
             chunk_id=chunk.id,
             document_id=document.id,
@@ -90,10 +108,13 @@ def search_chunks(
 
     context = retrieval_context or RetrievalContext()
     scorer = RetrievalScorer()
-    return [
+    scored = [
         replace(
             result,
             similarity=scorer.score(semantic_score=result.similarity, retrieval_context=context, chunk=result),
         )
-        for result in results
+        for result in candidates
     ]
+
+    scored.sort(key=lambda result: result.similarity, reverse=True)
+    return scored[:top_k]
