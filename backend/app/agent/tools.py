@@ -21,6 +21,7 @@ from sqlalchemy import select
 from app.agent.models import Citation
 from app.db.models import Document
 from app.db.session import get_session_factory
+from app.ingestion.metadata import is_location_reference
 from app.investigation.models import InvestigationPlan
 from app.retrieval.context_builder import RetrievalContextBuilder
 from app.retrieval.service import search_chunks
@@ -108,6 +109,20 @@ def read_document(document_id: int) -> str:
         ) from exc
 
 
+def get_documents(document_ids: list[int]) -> list[Document]:
+    """Return the Document rows for `document_ids` — used to build a
+    timeline from evidence already retrieved for an investigation
+    (app/investigation/timeline.py, Sprint 5 Task 05), not a new retrieval
+    step: the ids passed in are always ones search_documents() already
+    surfaced for this same investigation. Returns [] for an empty input.
+    Result order is whatever the database returns it in; ordering it into a
+    chronology is TimelineBuilder's job, not this function's."""
+    if not document_ids:
+        return []
+    with get_session_factory()() as session:
+        return list(session.scalars(select(Document).where(Document.id.in_(document_ids))).all())
+
+
 def get_document_filename(document_id: int) -> str:
     """Look up a document's filename — needed to populate Evidence.document_name
     (app/agent/models.py), since Citation carries only document_id and
@@ -144,14 +159,17 @@ def find_related_documents(document_ids: list[int]) -> list[int]:
     documents this call itself returns — no recursion. No ranking, no
     scoring: the result is an unordered set of ids.
 
-    Note on precision: Document.referenced_ids mixes a document's own
-    self-declared identifier together with everything else it mentions,
-    including generic location tags (e.g. "P-42") that appear in most
-    documents about the same subject — this join will connect documents
-    through those shared generic tags too, not only through precise IDs
-    like "SI-088". That's inherent to using the existing extracted data
-    as-is (no new filtering heuristic was added, since filtering would
-    itself be a scoring judgment this task excludes).
+    Document references only (Sprint 4 Task 04): Document.referenced_ids
+    mixes a document's own identifiers (SI-088, drawing IDs, ...) together
+    with bare location tags (e.g. "P-42") that appear in most documents
+    about the same subject — joining on the full mixed set connected
+    documents through those shared generic tags too, expanding to nearly the
+    whole corpus (Sprint 3.5 finding). is_location_reference()
+    (app/ingestion/metadata.py) now filters location tags out of the join
+    key before the overlap query runs, so expansion is driven only by
+    genuine document identifiers. Location tags are still present in
+    Document.referenced_ids exactly as before — filtered here at the point
+    of use, not removed from storage.
     """
     if not document_ids:
         return []
@@ -164,7 +182,9 @@ def find_related_documents(document_ids: list[int]) -> list[int]:
         collected_ids: set[str] = set()
         for document in retrieved_documents:
             if document.referenced_ids:
-                collected_ids.update(document.referenced_ids)
+                collected_ids.update(
+                    reference for reference in document.referenced_ids if not is_location_reference(reference)
+                )
 
         if not collected_ids:
             return []
