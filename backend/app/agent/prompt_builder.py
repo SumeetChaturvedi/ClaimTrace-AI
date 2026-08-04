@@ -21,25 +21,42 @@ the user prompt if non-empty. No instruction telling the model to build or
 reorder a chronology is added anywhere: _instructions_section() is entirely
 unchanged from before this task, since the timeline already exists and
 doesn't need to be reconstructed, only read.
+
+Contract clause section (Sprint 6 Task 08): package.retrieved_clauses is
+already a fully-resolved, repository-ordered list of ContractClause objects
+(ClauseRetriever's output, built upstream in InvestigationService — see
+app/contracts/clause_retrieval.py) — this class only formats each clause's
+number, title, and full text verbatim (no summarizing, truncating,
+interpreting, renumbering, or rewording) and appends the section
+immediately after the question, before statistics/evidence/timeline.
+_instructions_section() is unchanged: the existing "Do not interpret
+contract clauses unless explicitly supported by evidence" instruction
+already covers this new section without needing a clause-specific addition.
 """
 
 from app.agent.investigation_package import InvestigationPackage
+from app.contracts.models import ContractClause
 from app.llm.provider import Prompt
 
 
 class PromptBuilder:
     """Converts an InvestigationPackage into a provider-agnostic Prompt: the
-    question, investigation statistics, every piece of supporting evidence,
-    and (if built) a pre-formatted timeline as the user prompt; instructions
-    constraining the model to that evidence alone as the system prompt."""
+    question, (if any) retrieved contract clauses, investigation statistics,
+    every piece of supporting evidence, and (if built) a pre-formatted
+    timeline as the user prompt; instructions constraining the model to
+    that evidence alone as the system prompt."""
 
     def build_reasoning_prompt(self, package: InvestigationPackage) -> Prompt:
         """Build the full reasoning Prompt for `package`."""
-        sections = [
-            self._question_section(package),
-            self._statistics_section(package),
-            self._evidence_section(package),
-        ]
+        sections = [self._question_section(package)]
+
+        contract_clause_section = self._contract_clause_section(package.retrieved_clauses)
+        if contract_clause_section:
+            sections.append(contract_clause_section)
+
+        sections.append(self._statistics_section(package))
+        sections.append(self._evidence_section(package))
+
         timeline_section = self._timeline_section(package)
         if timeline_section:
             sections.append(timeline_section)
@@ -49,6 +66,20 @@ class PromptBuilder:
 
     def _question_section(self, package: InvestigationPackage) -> str:
         return f"# Investigation Question\n{package.question}"
+
+    def _contract_clause_section(self, retrieved_clauses: list[ContractClause]) -> str:
+        """Return the retrieved-clauses block, in the same order given (the
+        repository order ClauseRetriever already established — never
+        re-sorted here), or "" if `retrieved_clauses` is empty
+        (build_reasoning_prompt then omits the section entirely). Each
+        clause's number, title, and full text are reproduced verbatim —
+        no summarizing, truncating, interpreting, renumbering, or
+        rewording."""
+        if not retrieved_clauses:
+            return ""
+
+        blocks = [f"Clause {clause.clause_number}\n{clause.title}\n{clause.text}" for clause in retrieved_clauses]
+        return "----------------------------------\nRELEVANT CONTRACT CLAUSES\n\n" + "\n\n".join(blocks)
 
     def _statistics_section(self, package: InvestigationPackage) -> str:
         return (

@@ -12,6 +12,14 @@ TimelineBuilder already built from this investigation's retrieved documents
 InvestigationService; this module just carries it through unchanged, the
 same way it carries `evidence` through unchanged — no timeline logic lives
 here.
+
+retrieved_clauses (Sprint 6 Task 07): ContractClause objects retrieved via
+ClauseRetriever (app/contracts/clause_retrieval.py) from this investigation's
+ContractContext, built entirely upstream in InvestigationService — this
+module just carries them through unchanged, the same way it carries
+`evidence` and `timeline_context` through unchanged. Not yet read by
+PromptBuilder or ReasoningEngine: retrieval only, no exposure to reasoning
+yet.
 """
 
 from datetime import datetime, timezone
@@ -19,14 +27,16 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 from app.agent.models import Evidence
+from app.contracts.models import ContractClause
 
 
 class InvestigationPackage(BaseModel):
     """A complete snapshot of an investigation's state at the point
     reasoning is about to happen. Carries no behavior — just the question,
     every piece of evidence gathered for it (unfiltered, unranked, in
-    whatever order it arrived), a few precomputed descriptive totals, and an
-    optional pre-built timeline context string."""
+    whatever order it arrived), a few precomputed descriptive totals, an
+    optional pre-built timeline context string, and any contract clauses
+    retrieved alongside the document evidence."""
 
     question: str
     evidence: list[Evidence]
@@ -44,6 +54,13 @@ class InvestigationPackage(BaseModel):
             "investigation's retrieved documents; empty string if no timeline was built."
         ),
     )
+    retrieved_clauses: list[ContractClause] = Field(
+        default_factory=list,
+        description=(
+            "Contract clauses retrieved via ClauseRetriever for this investigation's "
+            "ContractContext; not yet read by PromptBuilder or ReasoningEngine."
+        ),
+    )
 
 
 class InvestigationPackageBuilder:
@@ -51,12 +68,19 @@ class InvestigationPackageBuilder:
     bookkeeping over what InvestigationService already gathered — no
     reasoning, filtering, ranking, or summarization happens here."""
 
-    def build(self, question: str, evidence: list[Evidence], timeline_context: str = "") -> InvestigationPackage:
+    def build(
+        self,
+        question: str,
+        evidence: list[Evidence],
+        timeline_context: str = "",
+        retrieved_clauses: list[ContractClause] | None = None,
+    ) -> InvestigationPackage:
         """Preserve `question` and every item in `evidence` exactly as
         given (same objects, same order — no ranking or filtering), compute
         simple descriptive totals over them, and carry `timeline_context`
-        through unchanged (already built and formatted upstream — this
-        method doesn't touch timeline logic itself)."""
+        and `retrieved_clauses` through unchanged (both already built
+        upstream — this method doesn't touch timeline or clause-retrieval
+        logic itself)."""
         confidences = [item.confidence for item in evidence]
 
         return InvestigationPackage(
@@ -67,4 +91,5 @@ class InvestigationPackageBuilder:
             highest_confidence=max(confidences) if confidences else None,
             generated_at=datetime.now(timezone.utc),
             timeline_context=timeline_context,
+            retrieved_clauses=retrieved_clauses if retrieved_clauses is not None else [],
         )

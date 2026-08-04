@@ -767,6 +767,287 @@ Architecture, design decisions, and milestones are documented in `PROJECT_PLAN.m
   routes, the database schema, and ingestion were not touched. /health,
   /search, /investigate re-verified working; dataset confirmed unchanged
   (17 documents) after testing.
+- Sprint 6 Task 03 — Clause Repository. New backend/app/contracts/
+  repository.py (the only file created): ClauseRepository, a pure,
+  read-only, in-memory wrapper over a list[ContractClause] supplied at
+  construction — no database, no file loading, no parsing (doesn't call
+  ClauseParser), no AI, no retrieval, no mutation. Constructor copies the
+  given list into an internal tuple (immune to the caller later mutating
+  its own list) and builds a clause_number -> ContractClause dict for O(1)
+  lookup. get_all() returns every clause in construction order (a fresh
+  list each call, so mutating the return value can't corrupt internal
+  state); get_by_number(clause_number) returns the matching clause or None;
+  get_by_topic(topic) returns every matching clause, in construction order.
+  Verified against a representative 9-clause set (mirroring Sprint 6
+  Task 02's sample): get_all() returns all 9 in order; get_by_number("20.1")
+  finds "Contractor's Claims"; get_by_topic(DELAY) returns exactly
+  [8.4, 8.7] in order, get_by_topic(VARIATION) returns exactly
+  [13.1, 13.3], get_by_topic(NOTICE) returns [] (no clause in the sample
+  has that topic); get_by_number("99.9") returns None, no exception; the
+  read-only guarantee verified in both directions (mutating the list
+  returned by get_all(), and mutating the original list after construction)
+  neither affects the repository; an empty repository correctly returns
+  []/None/[] from all three methods with no exceptions. Confirmed via grep
+  that nothing else in the codebase imports ClauseRepository yet. Retrieval,
+  InvestigationService, InvestigationPlanner, ReasoningEngine, PromptBuilder,
+  GeminiProvider, API routes, the database schema, and ingestion were not
+  touched. /health, /search, /investigate re-verified working; dataset
+  confirmed unchanged (17 documents) after testing.
+- Dataset V2 Phase 1 Research — Contract Package Design (no code, no
+  documents generated). Designed the four-document Contract Package blueprint
+  for the Nandira River Bridge Project: General Conditions (extract of the
+  same 10 sub-clauses from Sprint 6 Research Task 01), Particular Conditions
+  (project-specific amendments — Monsoon Period restriction, delay damages
+  rate, VTD 500,000 Variation approval threshold, 56-day payment period,
+  retention/performance security), Contract Data (the numeric schedule), and
+  Employer's Requirements (technical scope). Defined cross-document
+  precedence (Particular Conditions prevail over General Conditions) and an
+  explicit events-to-governing-clauses ground-truth table tying every
+  load-bearing V2 dispute event to a specific drafted clause.
+- Dataset V2 Phase 1 — Generated the four Contract Package documents per
+  the approved blueprint (original fictional legal/technical drafting, not
+  reproduced FIDIC text): NRB4-GC-2020 (General Conditions, extract of
+  Sub-Clauses 1.3/3.3/4.1/8.4/8.7/13.1/13.3/14.3/14.7/20.1), NRB4-PC-2020
+  (Particular Conditions, amending/supplementing those same sub-clauses with
+  project-specific values and adding site-specific obligations — working
+  hours, utility coordination, river environmental protection, Hold Points,
+  key personnel, record keeping), NRB4-CD-2020 (Contract Data, the numeric
+  schedule — VTD 42,000,000 Contract Amount, 30-month Time for Completion,
+  5%/VTD 2,100,000 retention, 10%/VTD 4,200,000 performance security,
+  0.05%-per-day/10%-cap delay damages, 56-day payment period), and
+  NRB4-ER-2020 (Employer's Requirements — 640m/8-span/7-pier bridge
+  configuration, materials, foundations, the 7 Hold Points, testing/survey/
+  as-built requirements). These are dataset content, not application code —
+  no backend files were touched.
+- Sprint 6 Task 04 — Clause Search Service. New backend/app/contracts/
+  search.py (the only file created; models.py, parser.py, and
+  repository.py — all explicitly off-limits this task — were not touched):
+  ClauseSearchService, a read-only search layer sitting above
+  ClauseRepository. Constructor stores the given repository only, no
+  mutation. find_by_number()/find_by_topic() delegate straight to the
+  repository. find_by_keywords() performs deterministic, case-insensitive
+  substring matching (no regex) across clause_number/title/text combined —
+  a clause matches if any supplied keyword appears in any of those three
+  fields — with no scoring, ranking, or sorting; results are returned in
+  the repository's original order, and a clause matching multiple keywords
+  still appears exactly once (each clause visited once per repository
+  pass). Returns [] immediately for an empty keyword list. Verified against
+  a representative 10-clause set covering all 11 required checks: correct
+  lookup by number, None for an unknown number, correct topic lookup, []
+  for a topic with no matches, keyword matches against title/text/number
+  individually, a multi-keyword union with no duplicates, repository order
+  preserved under both single- and multi-keyword searches, [] for an empty
+  keyword list, and identical results across lowercase/uppercase/mixed-case
+  keywords. Additionally verified the repository and its clauses are
+  byte-identical before and after several search calls (read-only
+  guarantee). Confirmed via grep that nothing else in the codebase imports
+  ClauseSearchService yet. Retrieval, RetrievalScorer, InvestigationPlanner,
+  InvestigationService, ReasoningEngine, PromptBuilder, GeminiProvider, API
+  routes, the database schema, ingestion, ClauseParser, ContractClause, and
+  ClauseRepository were not touched. GET /health, GET /search, and
+  POST /investigate re-verified behaving identically; dataset confirmed
+  unchanged (17 documents) after testing. No planner integration begun,
+  per the task's explicit instruction.
+- Sprint 6 Task 05 — Contract Context Model. New backend/app/contracts/
+  context.py: ContractContext (BaseModel: clause_numbers: list[str],
+  clause_topics: list[ClauseTopic], keywords: list[str], all
+  default_factory=list, no validators, no methods, no computed properties)
+  — mirrors app/retrieval/context.py's RetrievalContext precedent exactly.
+  Exported through contracts/__init__.py alongside ContractClause and
+  ClauseTopic (the only other file touched). ClauseParser, ClauseRepository,
+  ClauseSearchService, and their own files were not touched. Verified:
+  default construction gives all three fields an empty list, and
+  default_factory=list gives each instance its own independent list rather
+  than a shared mutable default; explicit construction with all three
+  fields populated; JSON serialization emits plain lists and ClauseTopic
+  members as their string values; round-trip (model -> JSON -> model)
+  preserves equality for both the explicit and the default (empty)
+  instance; package import (`from app.contracts import ContractContext`)
+  and direct import (`from app.contracts.context import ContractContext`)
+  resolve to the identical class. Confirmed via grep that nothing else in
+  the codebase imports ContractContext yet. Retrieval, RetrievalScorer,
+  InvestigationPlanner, InvestigationService, ReasoningEngine, PromptBuilder,
+  GeminiProvider, API routes, the database schema, and ingestion were not
+  touched. GET /health, GET /search, and POST /investigate re-verified
+  behaving identically; dataset confirmed unchanged (17 documents) after
+  testing. No builder implementation begun, per the task's explicit
+  instruction.
+- Sprint 6 Task 06 — Contract Context Builder. New backend/app/contracts/
+  context_builder.py (the only file created — ClauseParser,
+  ClauseRepository, ClauseSearchService, and their files were not touched):
+  ContractContextBuilder.build(investigation_plan) -> ContractContext, a
+  pure mapping mirroring app/retrieval/context_builder.py's
+  RetrievalContextBuilder precedent. Maps
+  investigation_plan.primary_entities -> keywords verbatim, preserving
+  order (InvestigationPlan has no literal search_terms attribute;
+  primary_entities is the field that plays that role, the same source
+  field RetrievalContextBuilder already copies into RetrievalContext's own
+  search_terms — documented explicitly in the module docstring to avoid
+  ambiguity). Maps investigation_type -> clause_topics via a fixed 8-entry
+  dict matching the task's exact suggested mapping (approval->[GENERAL,
+  ENGINEER], delay->[DELAY, CLAIMS], variation->[VARIATION, ENGINEER],
+  payment->[PAYMENT, CLAIMS], entitlement->[CLAIMS, DELAY, VARIATION],
+  compliance->[GENERAL, CONTRACTOR], evidence->[], unknown->[]), with a
+  defensive (never-triggered by the real classifier) fallback to [] for
+  any other value. clause_numbers is always [] — clause-number extraction
+  is explicitly out of scope. Verified all 8 investigation_type mappings
+  exactly; keywords copied unchanged and order-preserved from
+  primary_entities, including the empty case; clause_numbers empty across
+  every investigation_type regardless of other fields; an unrecognized
+  investigation_type falls back to [] rather than raising. Sanity-checked
+  against three real InvestigationPlanner-produced plans (Sprint 3.5's
+  question set) to confirm the mapping behaves sensibly on live
+  classifier/extractor output, not just synthetic plans. Confirmed via
+  grep that nothing else in the codebase imports ContractContextBuilder
+  yet. InvestigationPlanner, InvestigationService, Retrieval,
+  RetrievalScorer, ReasoningEngine, PromptBuilder, GeminiProvider, API
+  routes, the database schema, ingestion, ClauseParser, ClauseRepository,
+  and ClauseSearchService were not touched. GET /health, GET /search, and
+  POST /investigate re-verified behaving identically; dataset confirmed
+  unchanged (17 documents) after testing. Builder not integrated anywhere,
+  per the task's explicit instruction.
+- Sprint 6 Task 07 — Contract Clause Retrieval. Wired ContractContextBuilder
+  and ClauseSearchService into InvestigationService.investigate(), right
+  after the InvestigationPlan is created. New backend/app/contracts/
+  clause_retrieval.py: ClauseRetriever(repository, search_service).retrieve
+  (context) unions find_by_number() (only if clause_numbers is non-empty),
+  find_by_topic() (once per topic), and find_by_keywords() into a
+  deduplicated, TRUE-repository-order result — collects matched
+  clause_numbers into a set, then filters ClauseRepository.get_all() by
+  that set, rather than naively concatenating the three (already
+  individually repository-ordered) result lists, which would NOT preserve
+  repository order across the union boundary (verified explicitly with a
+  case where naive concatenation and true repository order diverge).
+  InvestigationPackage gained a retrieved_clauses: list[ContractClause] = []
+  field (InvestigationPackageBuilder.build() threads it through unchanged,
+  same pattern as timeline_context); PromptBuilder and ReasoningEngine were
+  not touched, so retrieved_clauses is stored but never read — not yet
+  exposed to Gemini, exactly as required. InvestigationService gained
+  constructor-injectable clause_repository/contract_context_builder
+  parameters (same pattern as every other collaborator), defaulting to an
+  empty ClauseRepository([]) — no contract-clause ingestion pipeline exists
+  yet, so there is honestly no real clause data anywhere in the running
+  system today; the pipeline itself is fully wired, tested and correct,
+  ready for a populated repository via the same injection point once
+  ingestion exists. Verified: topic retrieval, keyword retrieval, a
+  three-way union with correct membership, duplicate removal (a clause
+  matching all three criteria appears exactly once), true repository order
+  preserved across a union that crosses step boundaries, a fully empty
+  context returning [], and a clause_numbers entry with no matching clause
+  being silently ignored rather than raising. Verified a real investigation
+  two ways: through the live (default, empty) repository, confirming
+  retrieved_clauses=[] with no crash; and with an injected, populated
+  ClauseRepository (constructor injection, same path production would use),
+  confirming correct end-to-end retrieval. Confirmed by spying on
+  ReasoningEngine.reason() during a full investigate() call that
+  retrieved_clauses flows correctly into the InvestigationPackage actually
+  handed to reasoning. InvestigationPlanner, Retrieval, RetrievalScorer,
+  ReasoningEngine, PromptBuilder, GeminiProvider, API routes, the database
+  schema, ingestion, and ClauseParser were confirmed untouched (zero diff).
+  GET /health, GET /search, and POST /investigate re-verified against the
+  real API — POST /investigate's answer for a repeat question matched the
+  same evidence/citations as prior runs, confirming clauses are not
+  leaking into the prompt; dataset confirmed unchanged (17 documents)
+  after testing.
+- Sprint 6 Task 08 — Contract Clause Prompt Integration. Modified
+  app/agent/prompt_builder.py only: new _contract_clause_section(
+  retrieved_clauses) formats each clause as "Clause <number>\n<title>\n
+  <full text>" (verbatim — no summarizing, truncating, interpreting,
+  renumbering, or rewording), blocks separated by a blank line, headed by
+  "----------------------------------\nRELEVANT CONTRACT CLAUSES", or ""
+  if retrieved_clauses is empty. build_reasoning_prompt()'s section
+  assembly now inserts this section immediately after the Question and
+  before Statistics/Evidence/Timeline; the section is simply omitted (not
+  appended empty) when there are no clauses. _evidence_section(),
+  _timeline_section(), and _instructions_section() (the system prompt) are
+  byte-for-byte unchanged — confirmed explicitly that the system prompt is
+  identical with and without clauses present. Verified: empty clause list
+  produces no section; a single clause renders with correct number/title/
+  text; multiple clauses render in the exact order given (never
+  independently re-sorted — proven by reversing the input and observing
+  the section's order reverse too, confirming ClauseRetriever's upstream
+  repository ordering, established in Sprint 6 Task 07, is what actually
+  determines final order); every clause's text preserved verbatim with no
+  truncation. Ran a real, unmocked Gemini call with an actual retrieved
+  Sub-Clause 20.1 (28-day notice bar) injected via a populated
+  ClauseRepository: Gemini's answer explicitly cited "[Clause 20.1]" as a
+  source distinct from the document citations, and correctly reasoned that
+  an 8-day notice fell within the clause's 28-day limit — real,
+  decisive proof the clause text is genuinely exposed to and usable by the
+  model, not just present in the package. InvestigationPlanner, Retrieval,
+  RetrievalScorer, InvestigationService, ReasoningEngine, GeminiProvider,
+  API routes, the database schema, and ingestion were not touched.
+  GET /health, GET /search, and POST /investigate re-verified against the
+  real, live (still clauseless) system — answer for a repeat question
+  matched prior runs; dataset confirmed unchanged (17 documents) after
+  testing.
+- Dataset V2 — Task 01 (Project Lifecycle Design), Task 02 (Investigation
+  Scenario Design), Task 03 (Ground Truth Catalogue) — research/design only,
+  no code. Mapped the Nandira River Bridge Project onto 7 lifecycle stages
+  (Contract Award through Defects Liability) with per-stage document types,
+  dependencies, and capability coverage (~121 documents recommended, 4
+  already generated); designed 13 investigation scenarios directly off the
+  28-event ground truth, each with a primary question, evidence chain,
+  ClauseTopic/DocumentType mapping, and difficulty rating; then produced a
+  full ground-truth catalogue (final outcome, claim outcome, critical
+  evidence/clauses, expected reasoning path, expected confidence) for all
+  13, plus a scenario dependency matrix, coverage analysis, and a
+  dependency-respecting generation order. Key findings carried into
+  implementation: the live ClauseRepository being empty (Sprint 6 Task 07)
+  blocks every scenario's Contract Clauses capability regardless of
+  document generation, identified as the top completeness gap to close
+  first — directly motivating the next task.
+- Dataset V2 Implementation — Task 01 — Automatic Contract Package
+  Ingestion. New backend/app/contracts/ingestion.py (ContractPackageLoader,
+  get_default_clause_repository()) plus a change to
+  InvestigationService.__init__ (app/agent/service.py) to default to it.
+  Also persisted the four already-approved Contract Package documents
+  (drafted and approved in the "Generate Document 01-04" tasks, never
+  previously written to disk) to new backend/storage/contracts/*.txt files
+  — not new content, but discovered along the way that the General
+  Conditions document's headings ("1.3 Notices" on one line) didn't match
+  ClauseParser's documented format (number alone, then title on the next
+  line) — reformatted only the 10 heading lines to two-line form, with
+  every word of every clause's substantive text preserved exactly; the
+  other three documents (Particular Conditions, Contract Data, Employer's
+  Requirements) use lettered Parts/plain sections, not FIDIC sub-clause
+  numbering, and correctly parse to 0 clauses each — an honest, expected
+  finding, not a defect, since ClauseParser was only ever built for
+  numbered FIDIC sub-clauses. ContractPackageLoader scans
+  settings.storage_root/"contracts" for .pdf/.txt files in sorted order,
+  reuses app/ingestion/extraction.py's extract_pages() unmodified for PDFs
+  (none exist yet — "no new PDFs" was honored), reads .txt files directly,
+  and parses each with the existing, unmodified ClauseParser — no parsing
+  logic duplicated. get_default_clause_repository() is
+  functools.lru_cache(maxsize=1)'d, so the scan+parse happens at most once
+  per process, never once per investigation request; InvestigationService
+  now defaults to it instead of an empty ClauseRepository, while an
+  explicitly injected clause_repository still fully overrides it (dependency
+  injection preserved). Verified: 10 real sub-clauses (1.3, 3.3, 4.1, 8.4,
+  8.7, 13.1, 13.3, 14.3, 14.7, 20.1) auto-loaded from disk in file order;
+  get_by_number()/get_by_topic() work against the auto-loaded repository
+  with no manual construction; a missing directory, an empty directory, a
+  directory with only irrelevant files, and a .txt with no parseable
+  headings all correctly yield an empty ClauseRepository with no exception;
+  repeated get_default_clause_repository() calls and multiple
+  InvestigationService() instances all share the exact same cached
+  repository object (construct-once confirmed); an explicitly injected
+  ClauseRepository still fully overrides the default. Ran a real
+  POST /investigate through the live HTTP server with zero manual
+  injection anywhere: Gemini correctly cited Sub-Clause 8.4 and 20.1 by
+  name and reproduced the 28-day and 42-day periods verbatim from the
+  auto-loaded contract package — the 42-day detail exists only in the new
+  General Conditions text, nowhere in the V1 document corpus, proving the
+  citation came from the auto-loaded clause, not the documents. Also
+  observed, honestly, that the generic keyword "Contractor" (from
+  primary_entities) matched 9 of the 10 real clauses in one test query — a
+  known precision characteristic of the existing keyword-matching/entity-
+  extraction machinery (Sprint 6 Tasks 04/06), not something this task
+  introduced or is in scope to fix. Retrieval, InvestigationPlanner,
+  RetrievalScorer, Timeline, PromptBuilder, ReasoningEngine, GeminiProvider,
+  and API routes were not touched. GET /health, GET /search, and
+  POST /investigate re-verified working; dataset confirmed unchanged
+  (17 documents) after testing.
 
 ---
 

@@ -36,12 +36,34 @@ resulting text is carried into InvestigationPackage.timeline_context, which
 PromptBuilder appends to the reasoning prompt as a clearly separated
 section. No timeline logic lives here — this only calls the existing
 app/investigation/timeline.py components in sequence.
+
+Contract clause retrieval (Sprint 6 Task 07; exposed to reasoning in Task
+08): right after the InvestigationPlan is created, this module builds a
+ContractContext from it (ContractContextBuilder) and retrieves matching
+ContractClause objects (ClauseRetriever, over a
+ClauseSearchService/ClauseRepository). The result is carried into
+InvestigationPackage.retrieved_clauses, which PromptBuilder now appends to
+the reasoning prompt (Sprint 6 Task 08).
+
+Contract package auto-ingestion (Dataset V2 Implementation Task 01): the
+ClauseRepository used by default (when none is injected) comes from
+app.contracts.ingestion.get_default_clause_repository() — a process-wide,
+memoized loader that scans storage/contracts/ once, parses every file found
+with the existing, unmodified ClauseParser, and caches the result. No
+contract-clause ingestion pipeline runs per request; the scan+parse happens
+at most once per process. Injecting a clause_repository explicitly (e.g. in
+tests) always overrides this default entirely.
 """
 
 from app.agent import tools
 from app.agent.investigation_package import InvestigationPackageBuilder
 from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse
 from app.agent.reasoning import ReasoningEngine
+from app.contracts.clause_retrieval import ClauseRetriever
+from app.contracts.context_builder import ContractContextBuilder
+from app.contracts.ingestion import get_default_clause_repository
+from app.contracts.repository import ClauseRepository
+from app.contracts.search import ClauseSearchService
 from app.investigation import InvestigationPlanner
 from app.investigation.timeline import TimelineBuilder, TimelineFormatter
 
@@ -70,12 +92,25 @@ class InvestigationService:
         planner: InvestigationPlanner | None = None,
         timeline_builder: TimelineBuilder | None = None,
         timeline_formatter: TimelineFormatter | None = None,
+        clause_repository: ClauseRepository | None = None,
+        contract_context_builder: ContractContextBuilder | None = None,
     ) -> None:
         self._reasoning_engine = reasoning_engine or ReasoningEngine()
         self._package_builder = package_builder or InvestigationPackageBuilder()
         self._planner = planner or InvestigationPlanner()
         self._timeline_builder = timeline_builder or TimelineBuilder()
         self._timeline_formatter = timeline_formatter or TimelineFormatter()
+        # Default to the process-wide, automatically-loaded contract package
+        # (Dataset V2 Implementation Task 01) — get_default_clause_repository()
+        # is memoized, so this costs a real scan+parse only on the very first
+        # call across the whole process, never once per investigation request.
+        # An explicitly injected clause_repository (e.g. in tests) always
+        # overrides this default entirely.
+        self._clause_repository = (
+            clause_repository if clause_repository is not None else get_default_clause_repository()
+        )
+        self._contract_context_builder = contract_context_builder or ContractContextBuilder()
+        self._clause_retriever = ClauseRetriever(self._clause_repository, ClauseSearchService(self._clause_repository))
 
     async def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
         """Run an investigation for `request`: create an InvestigationPlan,
@@ -97,6 +132,9 @@ class InvestigationService:
 
         plan = self._planner.create_plan(request.query)
 
+        contract_context = self._contract_context_builder.build(plan)
+        retrieved_clauses = self._clause_retriever.retrieve(contract_context)
+
         citations = tools.search_documents(
             project_id=request.project_id,
             query=request.query,
@@ -105,7 +143,9 @@ class InvestigationService:
         )
         evidence = self._build_evidence(citations)
         timeline_context = self._build_timeline_context(citations)
-        package = self._package_builder.build(request.query, evidence, timeline_context=timeline_context)
+        package = self._package_builder.build(
+            request.query, evidence, timeline_context=timeline_context, retrieved_clauses=retrieved_clauses
+        )
 
         result = self._reasoning_engine.reason(package)
 
