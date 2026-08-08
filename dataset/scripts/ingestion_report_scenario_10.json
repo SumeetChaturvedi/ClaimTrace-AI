@@ -1,0 +1,305 @@
+{
+  "summary": {
+    "project_id": 2,
+    "project_name": "Dataset V2 — Nandira River Bridge Project, Package NRB-4",
+    "scenario": 10,
+    "documents_before": 71,
+    "documents_after": 85,
+    "total_pdfs_this_run": 14,
+    "ingested_ok": 14,
+    "ingested_fail": 0,
+    "total_chunks_this_run": 33,
+    "null_doc_type_after_enrichment": 0,
+    "null_doc_date_after_enrichment": 0,
+    "elapsed_seconds": 13.1,
+    "failures": []
+  },
+  "documents": [
+    {
+      "doc_id": "DPR-1103-2022",
+      "status": "OK",
+      "document_pk": 90,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2022-11-03",
+      "referenced_ids": [
+        "2020-01",
+        "DPR-1103-2022",
+        "NRB-4",
+        "P4-N3",
+        "P4-N4",
+        "P4-N5",
+        "P4-N6",
+        "PR-2"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "EQR-NRB4-001",
+      "status": "OK",
+      "document_pk": 91,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-11-07",
+      "referenced_ids": [
+        "2020-01",
+        "EQR-NRB4-001",
+        "NRB-4",
+        "P4-N4",
+        "P4-N5",
+        "PR-2"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CTR-NRB4-0125",
+      "status": "OK",
+      "document_pk": 92,
+      "doc_type": "NOTICE",
+      "doc_date": "2022-11-09",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0125",
+        "DPR-1103-2022",
+        "NRB-4",
+        "P4-N4"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CTR-NRB4-0131",
+      "status": "OK",
+      "document_pk": 93,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2022-11-10",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0125",
+        "CTR-NRB4-0131",
+        "EQR-NRB4-001",
+        "NRB-4",
+        "P4-N5",
+        "PR-2"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "GEO-NRB4-004",
+      "status": "OK",
+      "document_pk": 94,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-11-16",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0125",
+        "GEO-NRB4-004",
+        "NRB-4",
+        "P4-N3",
+        "P4-N4",
+        "P4-N5",
+        "P4-N6"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "SI-NRB4-027",
+      "status": "OK",
+      "document_pk": 95,
+      "doc_type": "SITE_INSTRUCTION",
+      "doc_date": "2022-11-22",
+      "referenced_ids": [
+        "2020-01",
+        "GEO-NRB4-004",
+        "NRB-4",
+        "P4-N3",
+        "P4-N4",
+        "P4-N5",
+        "P4-N6",
+        "SI-NRB4-027"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "DPR-1130-2022",
+      "status": "OK",
+      "document_pk": 96,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2022-11-30",
+      "referenced_ids": [
+        "2020-01",
+        "DPR-1130-2022",
+        "EQR-NRB4-001",
+        "NRB-4",
+        "P4-N3",
+        "P4-N4",
+        "P4-N5",
+        "P4-N6",
+        "PR-1",
+        "PR-2",
+        "SI-NRB4-027"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "PGM-NRB4-Rev09",
+      "status": "OK",
+      "document_pk": 97,
+      "doc_type": "PROGRAMME",
+      "doc_date": "2022-12-05",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0125",
+        "CTR-NRB4-0131",
+        "NRB-4",
+        "P4-N3",
+        "P4-N4",
+        "P4-N5",
+        "P4-N6",
+        "PGM-NRB4",
+        "PR-1",
+        "PR-2",
+        "Rev. 09",
+        "Rev09",
+        "SI-NRB4-027"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "MOM-NRB4-030",
+      "status": "OK",
+      "document_pk": 98,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2022-12-08",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0125",
+        "CTR-NRB4-0131",
+        "GEO-NRB4-004",
+        "MOM-NRB4-030",
+        "NRB-4",
+        "P4-N3",
+        "P4-N4",
+        "P4-N5",
+        "P4-N6",
+        "PGM-NRB4",
+        "PR-2",
+        "Rev09",
+        "SI-NRB4-027"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CTR-NRB4-0142",
+      "status": "OK",
+      "document_pk": 99,
+      "doc_type": "CLAIM",
+      "doc_date": "2022-12-20",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0125",
+        "CTR-NRB4-0131",
+        "CTR-NRB4-0142",
+        "DPR-1103-2022",
+        "GEO-NRB4-004",
+        "NRB-4",
+        "P4-N4",
+        "PGM-NRB4",
+        "PR-2",
+        "Rev09",
+        "SI-NRB4-027"
+      ],
+      "chunk_count": 3,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "ENG-NRB4-0065",
+      "status": "OK",
+      "document_pk": 100,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2023-01-10",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0131",
+        "CTR-NRB4-0142",
+        "ENG-NRB4-0065",
+        "MOM-NRB4-030",
+        "NRB-4",
+        "P4-N4",
+        "PR-2"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CPA-NRB4-001",
+      "status": "OK",
+      "document_pk": 101,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2023-02-07",
+      "referenced_ids": [
+        "2020-01",
+        "CPA-NRB4-001",
+        "CTR-NRB4-0142",
+        "ENG-NRB4-0065",
+        "EQR-NRB4-001",
+        "GEO-NRB4-004",
+        "NRB-4",
+        "P4-N4",
+        "PR-2",
+        "SI-NRB4-027"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "ENG-NRB4-0072",
+      "status": "OK",
+      "document_pk": 102,
+      "doc_type": "APPROVAL",
+      "doc_date": "2023-03-10",
+      "referenced_ids": [
+        "2020-01",
+        "CPA-NRB4-001",
+        "CTR-NRB4-0125",
+        "CTR-NRB4-0131",
+        "CTR-NRB4-0142",
+        "ENG-NRB4-0072",
+        "EQR-NRB4-001",
+        "GEO-NRB4-004",
+        "NRB-4",
+        "P4-N4",
+        "PR-2",
+        "SI-NRB4-027"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CTR-NRB4-0155",
+      "status": "OK",
+      "document_pk": 103,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2023-03-24",
+      "referenced_ids": [
+        "2020-01",
+        "CPA-NRB4-001",
+        "CTR-NRB4-0142",
+        "CTR-NRB4-0155",
+        "ENG-NRB4-0072",
+        "NRB-4",
+        "P4-N4",
+        "PR-2",
+        "SI-NRB4-027"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    }
+  ]
+}

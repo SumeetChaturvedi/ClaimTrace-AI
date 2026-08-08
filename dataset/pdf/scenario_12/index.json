@@ -1,0 +1,100 @@
+[
+  {
+    "document_id": "EPA-KFI2-001",
+    "filename": "EPA-KFI2-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Engineer's Progress Assessment — Month 21",
+    "scenario": 12
+  },
+  {
+    "document_id": "EWN-KFI2-001",
+    "filename": "EWN-KFI2-001.pdf",
+    "document_type": "NOTICE",
+    "title": "Employer's Warning Notice — Inadequate Progress",
+    "scenario": 12
+  },
+  {
+    "document_id": "NTC-KFI2-001",
+    "filename": "NTC-KFI2-001.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice to Correct NTC-KFI2-001 — Failure to Proceed with Due Diligence",
+    "scenario": 12
+  },
+  {
+    "document_id": "CTR-KFI2-001",
+    "filename": "CTR-KFI2-001.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Response — Notice to Correct NTC-KFI2-001",
+    "scenario": 12
+  },
+  {
+    "document_id": "NOT-KFI2-001",
+    "filename": "NOT-KFI2-001.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice of Termination NOT-KFI2-001",
+    "scenario": 12
+  },
+  {
+    "document_id": "ETC-KFI2-001",
+    "filename": "ETC-KFI2-001.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Termination Certificate",
+    "scenario": 12
+  },
+  {
+    "document_id": "SHR-KFI2-001",
+    "filename": "SHR-KFI2-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Site Handover Record",
+    "scenario": 12
+  },
+  {
+    "document_id": "AIV-KFI2-001",
+    "filename": "AIV-KFI2-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Asset Inventory — Plant, Materials and Temporary Works at Handover",
+    "scenario": 12
+  },
+  {
+    "document_id": "CFC-KFI2-001",
+    "filename": "CFC-KFI2-001.pdf",
+    "document_type": "CLAIM",
+    "title": "Contractor's Financial Claim — Following Termination",
+    "scenario": 12
+  },
+  {
+    "document_id": "EFA-KFI2-001",
+    "filename": "EFA-KFI2-001.pdf",
+    "document_type": "APPROVAL",
+    "title": "Employer's Final Account — Valuation and Determination at Termination",
+    "scenario": 12
+  },
+  {
+    "document_id": "PST-KFI2-011",
+    "filename": "PST-KFI2-011.pdf",
+    "document_type": "PAYMENT",
+    "title": "Payment Statement — Reconciliation of Amounts Certified and Paid to Date",
+    "scenario": 12
+  },
+  {
+    "document_id": "RET-KFI2-001",
+    "filename": "RET-KFI2-001.pdf",
+    "document_type": "MEASUREMENT",
+    "title": "Retention Calculation — Sub-Clause 15.4",
+    "scenario": 12
+  },
+  {
+    "document_id": "LDA-KFI2-001",
+    "filename": "LDA-KFI2-001.pdf",
+    "document_type": "MEASUREMENT",
+    "title": "Liquidated Damages Assessment — Sub-Clause 15.4",
+    "scenario": 12
+  },
+  {
+    "document_id": "FCR-KFI2-001",
+    "filename": "FCR-KFI2-001.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Final Correspondence — Employer's Final Account EFA-KFI2-001",
+    "scenario": 12
+  }
+]

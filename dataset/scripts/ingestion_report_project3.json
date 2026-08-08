@@ -1,0 +1,314 @@
+{
+  "summary": {
+    "project_id": 3,
+    "project_name": "Kestrel Flyover Interchange Project — Package KFI-2",
+    "total_pdfs": 18,
+    "ingested_ok": 18,
+    "ingested_fail": 0,
+    "total_chunks": 52,
+    "null_doc_type_after_enrichment": 0,
+    "null_doc_date_after_enrichment": 0,
+    "elapsed_seconds": null,
+    "failures": []
+  },
+  "documents": [
+    {
+      "doc_id": "KFI2-GC-2019",
+      "status": "OK",
+      "document_pk": 118,
+      "doc_type": "CONTRACT",
+      "doc_date": "2019-05-20",
+      "referenced_ids": [
+        "2019-04",
+        "KFI-2",
+        "KFI2-GC-2019"
+      ],
+      "chunk_count": 6,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "KFI2-PC-2019",
+      "status": "OK",
+      "document_pk": 119,
+      "doc_type": "CONTRACT",
+      "doc_date": "2019-05-20",
+      "referenced_ids": [
+        "2019-04",
+        "KFI-2",
+        "KFI2-PC-2019"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "KFI2-CD-2019",
+      "status": "OK",
+      "document_pk": 120,
+      "doc_type": "CONTRACT",
+      "doc_date": "2019-05-20",
+      "referenced_ids": [
+        "2019-04",
+        "KFI-2",
+        "KFI2-CD-2019",
+        "N-7",
+        "R-2"
+      ],
+      "chunk_count": 5,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "KFI2-ER-2019",
+      "status": "OK",
+      "document_pk": 121,
+      "doc_type": "CONTRACT",
+      "doc_date": "2019-05-20",
+      "referenced_ids": [
+        "2019-04",
+        "KFI-2",
+        "KFI2-ER-2019",
+        "N-7",
+        "R-2"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "EPA-KFI2-001",
+      "status": "OK",
+      "document_pk": 122,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2021-03-08",
+      "referenced_ids": [
+        "2019-04",
+        "EPA-KFI2-001",
+        "KFI-2"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "EWN-KFI2-001",
+      "status": "OK",
+      "document_pk": 123,
+      "doc_type": "NOTICE",
+      "doc_date": "2021-03-19",
+      "referenced_ids": [
+        "2019-04",
+        "EPA-KFI2-001",
+        "EWN-KFI2-001",
+        "KFI-2"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "NTC-KFI2-001",
+      "status": "OK",
+      "document_pk": 124,
+      "doc_type": "NOTICE",
+      "doc_date": "2021-04-26",
+      "referenced_ids": [
+        "2019-04",
+        "EPA-KFI2-001",
+        "EWN-KFI2-001",
+        "KFI-2",
+        "NTC-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CTR-KFI2-001",
+      "status": "OK",
+      "document_pk": 125,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2021-05-10",
+      "referenced_ids": [
+        "2019-04",
+        "CTR-KFI2-001",
+        "KFI-2",
+        "NTC-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "NOT-KFI2-001",
+      "status": "OK",
+      "document_pk": 126,
+      "doc_type": "NOTICE",
+      "doc_date": "2021-06-14",
+      "referenced_ids": [
+        "2019-04",
+        "CTR-KFI2-001",
+        "EPA-KFI2-001",
+        "KFI-2",
+        "NOT-KFI2-001",
+        "NTC-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "ETC-KFI2-001",
+      "status": "OK",
+      "document_pk": 127,
+      "doc_type": "APPROVAL",
+      "doc_date": "2021-06-22",
+      "referenced_ids": [
+        "2019-04",
+        "ETC-KFI2-001",
+        "KFI-2",
+        "NOT-KFI2-001",
+        "NTC-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "SHR-KFI2-001",
+      "status": "OK",
+      "document_pk": 128,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2021-06-25",
+      "referenced_ids": [
+        "1-3",
+        "1-5",
+        "2019-04",
+        "AIV-KFI2-001",
+        "CTR-KFI2-001",
+        "ETC-KFI2-001",
+        "KFI-2",
+        "SHR-KFI2-001"
+      ],
+      "chunk_count": 3,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "AIV-KFI2-001",
+      "status": "OK",
+      "document_pk": 129,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2021-06-25",
+      "referenced_ids": [
+        "2019-04",
+        "AIV-KFI2-001",
+        "EFA-KFI2-001",
+        "KFI-2",
+        "SHR-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CFC-KFI2-001",
+      "status": "OK",
+      "document_pk": 130,
+      "doc_type": "CLAIM",
+      "doc_date": "2021-07-23",
+      "referenced_ids": [
+        "2019-04",
+        "CFC-KFI2-001",
+        "CTR-KFI2-001",
+        "ETC-KFI2-001",
+        "KFI-2",
+        "NTC-KFI2-001",
+        "SHR-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "EFA-KFI2-001",
+      "status": "OK",
+      "document_pk": 131,
+      "doc_type": "APPROVAL",
+      "doc_date": "2021-09-15",
+      "referenced_ids": [
+        "2019-04",
+        "AIV-KFI2-001",
+        "CFC-KFI2-001",
+        "EFA-KFI2-001",
+        "EPA-KFI2-001",
+        "ETC-KFI2-001",
+        "KFI-2",
+        "LDA-KFI2-001",
+        "NOT-KFI2-001",
+        "NTC-KFI2-001",
+        "PST-KFI2-011",
+        "RET-KFI2-001",
+        "SHR-KFI2-001"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "PST-KFI2-011",
+      "status": "OK",
+      "document_pk": 132,
+      "doc_type": "PAYMENT",
+      "doc_date": "2021-09-15",
+      "referenced_ids": [
+        "1-10",
+        "2019-04",
+        "CFC-KFI2-001",
+        "EFA-KFI2-001",
+        "KFI-2",
+        "LDA-KFI2-001",
+        "PST-KFI2-011",
+        "RET-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "RET-KFI2-001",
+      "status": "OK",
+      "document_pk": 133,
+      "doc_type": "MEASUREMENT",
+      "doc_date": "2021-09-15",
+      "referenced_ids": [
+        "2019-04",
+        "EFA-KFI2-001",
+        "KFI-2",
+        "PST-KFI2-011",
+        "RET-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "LDA-KFI2-001",
+      "status": "OK",
+      "document_pk": 134,
+      "doc_type": "MEASUREMENT",
+      "doc_date": "2021-09-15",
+      "referenced_ids": [
+        "2019-04",
+        "EFA-KFI2-001",
+        "EPA-KFI2-001",
+        "ETC-KFI2-001",
+        "KFI-2",
+        "LDA-KFI2-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "FCR-KFI2-001",
+      "status": "OK",
+      "document_pk": 135,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2021-09-29",
+      "referenced_ids": [
+        "2019-04",
+        "CFC-KFI2-001",
+        "EFA-KFI2-001",
+        "FCR-KFI2-001",
+        "KFI-2"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    }
+  ]
+}

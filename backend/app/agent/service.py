@@ -69,21 +69,35 @@ section. No timeline logic lives here — this only calls the existing
 app/investigation/timeline.py components in sequence.
 
 Contract clause retrieval (Sprint 6 Task 07; exposed to reasoning in Task
-08): right after the InvestigationPlan is created, this module builds a
-ContractContext from it (ContractContextBuilder) and retrieves matching
-ContractClause objects (ClauseRetriever, over a
-ClauseSearchService/ClauseRepository). The result is carried into
+08): right after the InvestigationPlan is created, InvestigationAgent (the
+only caller — see below) builds a ContractContext from it
+(ContractContextBuilder) and retrieves matching ContractClause objects via
+a ClauseRetriever scoped to that request's own project (Sprint 8 Task 03 —
+see _clause_retriever_for_project() below). The result is carried into
 InvestigationPackage.retrieved_clauses, which PromptBuilder now appends to
 the reasoning prompt (Sprint 6 Task 08).
 
-Contract package auto-ingestion (Dataset V2 Implementation Task 01): the
-ClauseRepository used by default (when none is injected) comes from
-app.contracts.ingestion.get_default_clause_repository() — a process-wide,
-memoized loader that scans storage/contracts/ once, parses every file found
-with the existing, unmodified ClauseParser, and caches the result. No
-contract-clause ingestion pipeline runs per request; the scan+parse happens
-at most once per process. Injecting a clause_repository explicitly (e.g. in
-tests) always overrides this default entirely.
+Contract package auto-ingestion (Dataset V2 Implementation Task 01) and
+project scoping (Sprint 8 Task 03, Backend Patch v1.0.1): each project's
+own ClauseRepository comes from
+app.contracts.ingestion.get_clause_repository(project_id) — memoized per
+project_id, so each project's contract package (storage/contracts/
+{project_id}/) is scanned and parsed at most once per process, never once
+per investigation request. This replaces the earlier, pre-v1.0.1
+process-wide get_default_clause_repository(), which built exactly one
+ClauseRepository from every contract package under storage/contracts/
+regardless of project — a genuine cross-project leakage bug found during
+Phase 4 Scenario 12 (a second, independent project's contract package made
+the leak observable for the first time). InvestigationService itself no
+longer resolves or holds a single fixed ClauseRepository/ClauseRetriever
+at construction time (it cannot: no project_id exists yet at
+__init__-time, and this service is constructed once and reused for the
+process lifetime — see app/api/routes/investigate.py); instead,
+_clause_retriever_for_project(project_id) resolves one per request, called
+from InvestigationAgent.run() with that request's own project_id.
+Explicitly injecting a clause_repository at construction (e.g. for a
+controlled test/validation run) still overrides this entirely, for every
+project, exactly as before.
 """
 
 from typing import TYPE_CHECKING
@@ -94,7 +108,7 @@ from app.agent.models import Citation, Evidence, InvestigationRequest, Investiga
 from app.agent.reasoning import ReasoningEngine
 from app.contracts.clause_retrieval import ClauseRetriever
 from app.contracts.context_builder import ContractContextBuilder
-from app.contracts.ingestion import get_default_clause_repository
+from app.contracts.ingestion import get_clause_repository
 from app.contracts.repository import ClauseRepository
 from app.contracts.search import ClauseSearchService
 from app.investigation import InvestigationPlanner
@@ -142,17 +156,20 @@ class InvestigationService:
         self._planner = planner or InvestigationPlanner()
         self._timeline_builder = timeline_builder or TimelineBuilder()
         self._timeline_formatter = timeline_formatter or TimelineFormatter()
-        # Default to the process-wide, automatically-loaded contract package
-        # (Dataset V2 Implementation Task 01) — get_default_clause_repository()
-        # is memoized, so this costs a real scan+parse only on the very first
-        # call across the whole process, never once per investigation request.
-        # An explicitly injected clause_repository (e.g. in tests) always
-        # overrides this default entirely.
-        self._clause_repository = (
-            clause_repository if clause_repository is not None else get_default_clause_repository()
-        )
+        # Sprint 8 Task 03 (Backend Patch v1.0.1): no single ClauseRepository
+        # is resolved here anymore -- no project_id is known at construction
+        # time, and this service is a process-wide singleton (constructed
+        # once, reused for every request; see
+        # app/api/routes/investigate.py's get_investigation_service()), so a
+        # repository fixed here would necessarily be shared, and therefore
+        # wrong, for every project except whichever's package happened to be
+        # resolved first. An explicitly injected clause_repository is still
+        # honored, but now applies uniformly across every project_id (the
+        # same override semantics it always had) rather than being the sole
+        # default; see _clause_retriever_for_project() below, which is
+        # called per-request, once request.project_id is actually known.
+        self._injected_clause_repository = clause_repository
         self._contract_context_builder = contract_context_builder or ContractContextBuilder()
-        self._clause_retriever = ClauseRetriever(self._clause_repository, ClauseSearchService(self._clause_repository))
 
         if investigation_loop is not None:
             self._investigation_loop = investigation_loop
@@ -183,6 +200,31 @@ class InvestigationService:
         from app.agent.evidence_narrowing import EvidenceNarrower
 
         self._evidence_narrower = evidence_narrower if evidence_narrower is not None else EvidenceNarrower()
+
+    def _clause_retriever_for_project(self, project_id: int) -> ClauseRetriever:
+        """Return a ClauseRetriever scoped to `project_id`'s own contract
+        package (Sprint 8 Task 03 / Backend Patch v1.0.1) — the project-aware
+        replacement for the single, fixed self._clause_retriever this method
+        removed from __init__. Called once per request, from
+        InvestigationAgent.run() (the sole call site of contract clause
+        retrieval — see the module docstring), with that request's own
+        request.project_id, so a request against project 2 can never see
+        project 3's clauses or vice versa.
+
+        If a clause_repository was explicitly injected at construction (the
+        same override this class has always supported, e.g. for a
+        controlled test/validation run), that fixed repository is used for
+        every project_id, exactly as it was before this task — project
+        scoping only applies to the default, disk-backed path. Otherwise,
+        get_clause_repository(project_id) resolves (and memoizes) that
+        project's own repository, built solely from
+        storage/contracts/{project_id}/."""
+        repository = (
+            self._injected_clause_repository
+            if self._injected_clause_repository is not None
+            else get_clause_repository(project_id)
+        )
+        return ClauseRetriever(repository, ClauseSearchService(repository))
 
     async def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
         """Run an investigation for `request`: create an InvestigationPlan,

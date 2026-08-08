@@ -95,7 +95,13 @@ class InvestigationAgent:
         state = InvestigationState(plan=plan)
 
         contract_context = self._service._contract_context_builder.build(plan)
-        initial_clauses = self._service._clause_retriever.retrieve(contract_context)
+        # Sprint 8 Task 03 (Backend Patch v1.0.1): the clause retriever is
+        # resolved per-request, scoped to this request's own project_id --
+        # see InvestigationService._clause_retriever_for_project()'s
+        # docstring for why this can't be a fixed attribute built once at
+        # InvestigationService construction time.
+        clause_retriever = self._service._clause_retriever_for_project(request.project_id)
+        initial_clauses = clause_retriever.retrieve(contract_context)
         state.add_clauses(initial_clauses)
 
         citations = tools.search_documents(

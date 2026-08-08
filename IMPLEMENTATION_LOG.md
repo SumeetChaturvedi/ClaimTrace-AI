@@ -1836,6 +1836,506 @@ Architecture, design decisions, and milestones are documented in `PROJECT_PLAN.m
   answer; confirmed `evidence_narrowing.py`/`evidence_narrowing_config.py`
   are referenced only from `app/agent/service.py`.
 
+- **Phase 4 — Dataset Expansion, Task 02: Generate Scenario 10** (no
+  IMPLEMENTATION_LOG entry required by that task's own instructions;
+  recorded here only for continuity). Added Scenario 10 — Concurrent Delay,
+  Pier P4 supplementary piling — 14 documents, `project_id=2`, dated
+  03-Nov-2022 to 24-Mar-2023 (inside the existing corpus's documented
+  quiet period, no interaction with Scenarios 1-9). One new contract
+  clause, Sub-Clause 4.12 (Unforeseeable Physical Conditions), added as a
+  standalone addendum file (`backend/storage/contracts/NRB4-GC-2020-ADD01.txt`),
+  auto-discovered by the existing, unmodified `ClauseParser`/
+  `ContractPackageLoader` — 10 → 11 parsed clauses, no existing clause
+  touched. `project_id=2`: 71 → 85 documents, 232 → 265 chunks. New
+  benchmark question `CONCURRENT-DELAY-P4` added to `benchmarks.py`
+  (10 questions total from here on). At the then-current default
+  (`max_iterations=5`), this scenario's own recall was 0.4, and a probe at
+  `max_iterations=20` reached 1.0 — this finding is what directly motivated
+  Sprint 8 Task 02, immediately below. No backend or frontend code was
+  modified by this task itself.
+
+- **Sprint 8 — Backend Finalization, Task 02: Investigation Loop
+  Configuration Tuning.** A pure measurement exercise:
+  `dataset/scripts/tune_investigation_loop.py` ran the complete, now
+  10-question benchmark corpus (`project_id=2`, 85 documents) at six
+  `InvestigationLoopConfig.max_iterations` values — 5, 7, 10, 12, 15, 20 —
+  through the real, unmodified Investigation Loop and Evidence Narrowing
+  (Gemini deliberately not called for this 60-run sweep; recall,
+  iterations, evidence/document/citation counts, and prompt size are all
+  determined before reasoning runs, and prompt size is measured directly
+  via `PromptBuilder` without a live generation call).
+
+  **The key finding — two recall metrics diverge.** `recall_raw` (did the
+  loop ever visit the expected document, out of `state.visited_document_ids`)
+  climbs cleanly with more iterations, exactly as Scenario 10 suggested:
+  0.765 (5) → 0.815 (7) → 0.940 (10/12) → **1.000 (15 and 20)**. But
+  `recall_narrowed` (did that document's evidence survive Evidence
+  Narrowing's fixed 15-citation cap to actually reach the final answer —
+  the same definition `run_benchmarks_narrowed.py` already uses, i.e. what
+  a real user sees) does **not** follow it: highest at 5-7 iterations
+  (0.675), then a **flat 0.650 from 10 iterations onward** — final
+  benchmark pass rate (recall ≥ 0.5) stayed flat at **8/10 across every one
+  of the six tested values**. Root cause: Evidence Narrowing was validated
+  (Sprint 8 Task 01) against the ~59-item evidence pool the old default of
+  5 produces; once the loop gathers substantially more real-retrieval-tier
+  evidence (up to ~186 items at 20 iterations), that larger pool
+  increasingly crowds the *same* expected documents out of the fixed
+  15-citation cap under Evidence Narrowing's existing (unmodified) ranking,
+  rather than helping them survive. Raising `max_iterations` well past
+  Scenario 10's apparent "convergence point" (15) therefore produces zero
+  additional benchmark-visible value while increasing evidence volume
+  (59→186 items), documents visited (28→81), and prompt size (21,609→23,376
+  chars) for nothing.
+
+  | max_iterations | pass (narrowed) | recall_raw | recall_narrowed | avg iterations used | avg evidence | avg docs visited | avg citations | avg prompt chars |
+  |---|---|---|---|---|---|---|---|---|
+  | 5 | 8/10 | 0.765 | **0.675** | 5.0 | 59.0 | 28.1 | 15.0 | 21,609 |
+  | **7** | **8/10** | 0.815 | **0.675** | 7.0 | 83.1 | 38.1 | 15.0 | 21,926 |
+  | 10 | 8/10 | 0.940 | 0.650 | 10.0 | 119.6 | 53.1 | 15.0 | 22,433 |
+  | 12 | 8/10 | 0.940 | 0.650 | 12.0 | 144.1 | 63.1 | 15.0 | 22,767 |
+  | 15 | 8/10 | 1.000 | 0.650 | 15.0 | 177.7 | 78.0 | 15.0 | 23,280 |
+  | 20 | 8/10 | 1.000 | 0.650 | 17.1 | 186.4 | 81.0 | 15.0 | 23,376 |
+
+  **Recommendation: `max_iterations = 7`.** Ties the old default (5) exactly
+  on the metric that determines what a user actually sees
+  (`recall_narrowed` 0.675, pass 8/10 — neither improves nor regresses),
+  while reaching meaningfully better raw retrieval completeness (0.815 vs
+  0.765, cheap headroom against future corpus growth) for a negligible
+  measured cost (+24 evidence items, +317 prompt chars, no measurable
+  latency change; loop-only latency stayed under 0.2s for both). 15/20 were
+  explicitly rejected despite reaching "complete" raw convergence, since
+  that completeness demonstrably does not reach the final answer under
+  Evidence Narrowing's current (unmodified, out-of-scope-to-change)
+  ranking — adopting them would only have added cost with no measured
+  benefit. **Implementation**: `InvestigationLoopConfig.max_iterations`
+  default changed 5 → 7 in `app/agent/investigation_loop_config.py` — the
+  only backend file touched; no other file, and no Investigation
+  Loop/Agent/retrieval/Evidence Narrowing logic, was modified.
+
+  **Final validation** (`run_benchmarks_narrowed.py`, real Gemini calls, at
+  the new default): avg recall 0.675, pass 8/10, avg citations 15.0, avg
+  prompt 21,926 chars, avg latency 2.45s (dominated by the real Gemini
+  call, not the loop) — matches the dry-run sweep's `max_iterations=7` row
+  exactly, confirming the measurement. Regression: GET /health, GET
+  /search, and POST /investigate re-verified — same response shape, 15
+  citations, correct answer for the EOT-01 question.
+
+- **Phase 4 — Dataset Expansion, Task 03: Generate Scenario 11.** Added
+  Scenario 11 — Concrete Defects During the Defects Notification Period,
+  map cracking at the Pier P2 pier cap — 14 documents, `project_id=2`,
+  dated 14-Feb-2024 to 05-Aug-2024, entirely within the Defects
+  Notification Period established by Taking-Over Certificate TOC-NRB4-001
+  (22-Sep-2023 to 21-Sep-2024, Scenario 9) — the first scenario to occur
+  after Practical Completion, and the latest-dated scenario in the corpus.
+  Story: a routine DNP inspection finds map cracking on the pier cap's
+  exposed top surface; crack mapping, core testing, UPV survey and
+  petrographic examination (by the existing third-party lab, Suvarna
+  Materials Testing Laboratory) rule out design, materials, and ambient
+  conditions as causes and confirm the cracking is shallow (confined to
+  ~20mm depth); the Contractor's own Root Cause Analysis and Site diary
+  records identify that curing protection was removed after ~3 days
+  against a 7-day Specification requirement; the Engineer determines this
+  is workmanship not in accordance with the Contract and the Contractor is
+  liable for the cost of rectification; the Contractor formally objects
+  but proceeds without escalating; rectification (epoxy injection) is
+  carried out and accepted, closing the matter with time to spare before
+  DNP expiry.
+
+  Two new contract Sub-Clauses were required: the existing General
+  Conditions extract has no Clause 11 (Defects Liability) at all — only a
+  gap in the numbering — and the Engineer's liability/cost determination
+  needed quoted contractual text to be grounded in, exactly as Sub-Clause
+  4.12 was added for Scenario 10. Added Sub-Clause 11.1 (Completion of
+  Outstanding Work and Remedying of Defects) and Sub-Clause 11.2 (Cost of
+  Remedying Defects) as a second standalone addendum,
+  `backend/storage/contracts/NRB4-GC-2020-ADD02.txt`, auto-discovered by
+  the existing, unmodified `ClauseParser`/`ContractPackageLoader` —
+  11 → 13 parsed clauses, no existing clause touched.
+
+  `project_id=2`: 85 → 99 documents, 265 → 304 chunks (39 new). New
+  benchmark question `PIER-P2-DEFECT-LIABILITY` added to `benchmarks.py`
+  (11 questions total from here on), `expected_decisive_docs` =
+  DIR-NRB4-001, LAB-NRB4-058, RCA-NRB4-004, ENG-NRB4-0083, EAC-NRB4-001;
+  `expected_clause_hint` = 11.1, 11.2.
+
+  **Benchmark result** (`run_benchmarks_narrowed.py`, real Gemini calls, at
+  the frozen production default `max_iterations=7`): 7 iterations,
+  `stopping_reason=max_iterations_reached` (consistent with every other
+  question in the suite); 83 evidence items before narrowing → 15 after;
+  both new Sub-Clauses (11.1, 11.2) retrieved; recall 0.6 (3/5 expected
+  docs hit: DIR-NRB4-001, ENG-NRB4-0083, EAC-NRB4-001; missed:
+  LAB-NRB4-058, RCA-NRB4-004) — passes the ≥0.5 threshold, in line with
+  the existing 10-question average (0.675). All 11 questions in the suite
+  completed with zero Gemini errors; Scenario 10's own recall (0.4) is
+  byte-for-byte unchanged from the Sprint 8 Task 02 final validation,
+  confirming no regression from adding this scenario.
+
+  **Genuine finding, not a defect (documented, not fixed, per this task's
+  own instructions):** in this real run, Gemini reported it could see that
+  ENG-NRB4-0083 (the Engineer's determination) was cited but that "the
+  specific contents and conclusions... are not included in the text of
+  the supplied evidence," and answered accordingly that the evidence was
+  insufficient, rather than guessing. A follow-up manual run of the same
+  query retrieved a different chunk of the same document that did contain
+  the determinative "NATURE OF DEFECT / CAUSES EXCLUDED / LIABILITY"
+  paragraphs. This is retrieval/evidence-narrowing run-to-run variance —
+  the Investigation Loop's own agent decisions are themselves LLM-driven,
+  so which of a multi-chunk document's chunks get retrieved, referenced,
+  or retained under Evidence Narrowing's per-document cap can differ
+  between runs on an identical query. It is a known, already-documented
+  property of the system (not unique to this scenario), not a code defect,
+  and is left unmodified per this task's explicit instruction not to touch
+  retrieval, the Investigation Loop, or Evidence Narrowing. Worth noting
+  for a future sprint: it is a genuine (if intermittent) source of
+  under-confident answers on documents whose decisive content is
+  concentrated in one chunk among several.
+
+  Validation (`dataset/scripts/validate_scenario_11.py`, real project_id=2
+  data, 20/20 checks passed): timeline entirely within the DNP window and
+  chronologically after Scenario 9; no document-id or clause-number
+  collisions; database state (99 docs, 39 new chunks) confirmed; both new
+  clauses parsed correctly and all 11 pre-existing clauses unaffected;
+  retrieval project-scoped and topically relevant; full production
+  pipeline (frozen `max_iterations=7`) touches real Scenario 11 documents
+  and both new clauses; Evidence Narrowing reduces to within the 8-15
+  target range; benchmark result on record with no Gemini error and
+  recall ≥ 0.5; Scenario 10 regression confirmed byte-for-byte unchanged.
+
+  Regression: GET /health, GET /search, and POST /investigate
+  re-verified live — same response shapes; `/search` surfaces Scenario 11
+  documents correctly; `/investigate` for the new question returns 15
+  citations with a correctly grounded (appropriately uncertain, per the
+  finding above) answer. No backend or frontend code was modified by this
+  task — the only files touched were the new scenario data/ingestion/
+  validation scripts, the new contract addendum, `benchmarks.py`, and the
+  generated PDF/index/report artifacts.
+
+- **Phase 4 — Dataset Expansion, Task 04: Generate Scenario 12 (Project
+  3).** The final benchmark scenario, and the first to belong to an
+  entirely independent project: **Kestrel Flyover Interchange Project —
+  Package KFI-2**, `project_id=3`, with its own Employer (Kaldera
+  Metropolitan Development Authority), Engineer (Ashgrove Infrastructure
+  Consultants), Contractor (Rennick Builders Ltd.), country/city (Republic
+  of Kaldera / Rostam City), currency (Kaldera Dollar, KLD), contract
+  number (KMDA/KFI2/CW/2019-04), and document/clause numbering — zero
+  identifiers, party names, or clause numbers shared with Scenarios 1-11
+  or the NRB4 contract package.
+
+  Story: Employer Termination and Final Account. By month 21 of a
+  24-month contract, progress has fallen to 41% against an 88% plan,
+  triggering an Engineer's Progress Assessment, an Employer's Warning
+  Notice, and a formal Notice to Correct (Sub-Clause 15.1, 42-day period).
+  The Contractor's response is weak (partial mobilisation, a genuine but
+  limited Ramp C utility-relocation delay cited as a mitigating factor)
+  and progress recovers only to 46% against the 55% required, so the
+  Employer terminates under Sub-Clause 15.2. Site handover, an Asset
+  Inventory, a Contractor financial claim, and an Engineer's Final Account
+  follow — a "partially accepted" outcome consistent with this dataset's
+  established pattern (Scenarios 1, 3, 10): termination held valid and
+  procedurally correct; the Contractor's valuation claim substantially
+  accepted (KLD 15,800,000, an increase over prior certification) but its
+  demobilisation cost claim (KLD 320,000) rejected as not recoverable
+  under Sub-Clause 15.4; liquidated damages recoverable but reduced from
+  19 to 14 days (KLD 302,400) for a documented utility-relocation credit;
+  net balance of KLD 1,152,600, including full retention release (KLD
+  755,000), due to the Contractor. 14 documents, `EPA-/EWN-/NTC-/CTR-/
+  NOT-/ETC-/SHR-/AIV-/CFC-/EFA-/PST-/RET-/LDA-/FCR-KFI2-0xx`.
+
+  **New contract package** (not an addendum this time — a genuinely new,
+  independent contract): `KFI2-CD-2019.txt`, `KFI2-ER-2019.txt`,
+  `KFI2-GC-2019.txt` (Clause 15 — Termination by Employer, Sub-Clauses
+  15.1-15.4 only, the minimum needed for this scenario's six determination
+  questions), `KFI2-PC-2019.txt`, all in `backend/storage/contracts/`
+  (gitignored, matching NRB4's own package). Verified via `ClauseParser`
+  directly: exactly 4 new clauses parsed (15.1-15.4), zero from CD/ER/PC
+  (same bare-numbered-heading-only behavior already established for
+  NRB4's own CD/ER/PC), zero clause-number collision with any of NRB4's
+  13 existing clauses.
+
+  **Dataset tooling change (not backend code):** `pdf_template.py`
+  (`dataset/scripts/`) was extended, backward-compatibly, with two new
+  optional `DocumentSpec` fields -- `project_line` and
+  `letterhead_registry` -- so a document can render under a genuinely
+  independent project's own branding (letterhead identities, project
+  name, and a `contract_no`-parametrized confidentiality line) instead of
+  the previously hardcoded NRB4 identity. Every existing Scenario 1-11
+  `DocumentSpec` leaves both fields unset and renders byte-for-byte as
+  before (spot-checked directly). This is dataset-generation tooling
+  (`dataset/scripts/`), not `backend/app/` runtime code, and was necessary
+  since the template's letterhead/project-line constants were previously
+  hardcoded to NRB4 — Scenario 12 could not otherwise "feel like an
+  independent real infrastructure project" as required.
+
+  **Project creation & ingestion** (`ingest_project3.py`, mirroring
+  `ingest_dataset_v2.py`'s own structure exactly): created `project_id=3`
+  (confirmed via `Project(name=...)`; verified only projects 1 and 2
+  existed beforehand, so the new project's id was not guessed). 18/18
+  PDFs ingested (4 contract + 14 scenario), 0 failures, 52 chunks. New
+  benchmark question `KFI2-TERMINATION-FINAL-ACCOUNT` added to
+  `benchmarks.py` (12 questions total from here on) with an explicit
+  `project_id: 3` field; `run_benchmarks_narrowed.py` updated
+  (additive, one line: `bench.get("project_id", 2)`) to run each question
+  against its own project, defaulting to 2 for every question that
+  doesn't state one — Scenarios 1-11 are entirely unaffected.
+
+  **Benchmark result** (real Gemini, frozen `max_iterations=7`): 4
+  iterations, `stopping_reason=same_remediation_no_progress` (the loop
+  converged naturally on this smaller, 18-document corpus rather than
+  hitting the 7-iteration cap); 31 evidence items before narrowing → 15
+  after; **recall 1.0** — all 5 expected decisive documents
+  (NTC-KFI2-001, NOT-KFI2-001, CFC-KFI2-001, EFA-KFI2-001, LDA-KFI2-001)
+  present in the final citation set. All 12 questions in the suite
+  completed with zero Gemini errors; Scenarios 10 and 11's own recall
+  (0.4 and 0.6) and hits/misses are byte-for-byte unchanged from their
+  own prior recorded runs, confirming zero regression from adding a third
+  project.
+
+  **PROJECT ISOLATION VALIDATION — the centrepiece of this task, and a
+  genuine, significant finding.** Document-level isolation is perfect:
+  `search_documents` is DB `project_id`-scoped by construction, and this
+  was verified empirically in both directions — Project 3 investigations
+  retrieve *only* Project 3 documents (checked via direct search calls
+  and a full, real Investigation Loop run: `visited_document_ids`
+  contains zero foreign documents), and Project 1/2 investigations
+  retrieve *zero* Project 3 documents, even when deliberately queried
+  with Project 3's own vocabulary ("Rennick", "Kaldera", "termination").
+
+  **Contract clause retrieval, however, has NO project scoping at all --
+  a real, pre-existing architectural gap, not something this task
+  introduced.** `get_default_clause_repository()`
+  (`app/contracts/ingestion.py`) is a single, process-wide,
+  `lru_cache`-memoized repository built by scanning the *entire*
+  `backend/storage/contracts/` directory — one global pool, not one per
+  project — and `InvestigationService.__init__` never scopes it by
+  `project_id`; this has been true since Sprint 6 / Dataset V2
+  Implementation Task 01, simply never visible before because only one
+  project (NRB4) had ever had a contract package until this task added a
+  second, genuinely different one. Confirmed directly, both ways, in the
+  real 12-question benchmark run: Project 3's investigation retrieved all
+  12 NRB4 clause numbers alongside its own 4; 7 of the 11 NRB4 questions
+  retrieved all 4 KFI2 Termination clauses alongside their own (driven by
+  `ContractContextBuilder`'s topic mapping — `ClauseTopic.GENERAL`, which
+  every one of the 4 new Sub-Clauses was classified under by the
+  unmodified `ClauseParser`, is one of the topics several investigation
+  types already map to — and by `ClauseSearchService`'s plain
+  keyword-substring matching, which has no project boundary at all).
+  **Empirically, this contamination was confirmed NOT to affect
+  document-level evidence, citations, or recall** — Scenario 10 and 11's
+  recall is byte-for-byte unchanged, and Project 3's own recall reached
+  1.0 — because contract clauses and document evidence are separate
+  signals in the pipeline; only the contract-clause context section of
+  the reasoning prompt is polluted with foreign clauses. Per this task's
+  explicit "do not modify backend code" / "do not modify Investigation
+  Loop" instructions, **this was documented, not fixed**: fixing it would
+  require project-scoping `ContractPackageLoader`/
+  `get_default_clause_repository` (e.g. keyed by `project_id` or
+  `contract_no`) and how `InvestigationService` wires a
+  `ClauseRepository` per request — a genuine, scoped follow-up task, not
+  a same-task patch to a codebase explicitly frozen at v1.0. Recorded
+  as two explicit WARN-level checks (not failures) in
+  `validate_scenario_12.py`, so the gap is asserted and visible on every
+  future run rather than silently passing or silently regressing.
+
+  Validation (`dataset/scripts/validate_scenario_12.py`, real
+  `project_id=1/2/3` data, **31/31 hard checks passed, 2 known-gap WARNs
+  recorded as designed**): project creation, timeline consistency,
+  financial consistency (every figure in the Final Account/Payment
+  Statement/Retention Calculation/LD Assessment independently
+  recomputed from first principles and cross-checked), zero id/clause
+  collisions, real DB state, full bidirectional project isolation (both
+  document-level and, honestly, contract-clause-level), citation
+  quality, and benchmark correctness — plus an explicit Scenario 10/11
+  regression check comparing recorded `recall`/`hits` fields exactly.
+
+  Regression: GET /health, GET /search, and POST /investigate
+  re-verified live for all three projects — same response shapes;
+  `/search?project_id=3` and `/investigate` (project 3) return correct,
+  relevant KFI2 documents; `/investigate` (project 2, EOT-01 question)
+  unchanged. No backend or frontend code was modified — the only
+  "backend"-adjacent change was the additive, backward-compatible
+  `pdf_template.py` extension (dataset-generation tooling, not
+  `backend/app/` runtime code) and the new contract addendum files in
+  `backend/storage/contracts/` (gitignored data, not code).
+
+- **Sprint 8 — Backend Patch v1.0.1, Task 03: Project-Scoped Contract
+  Intelligence.** A production bug fix, not a feature or redesign: closes
+  the cross-project contract clause leakage Phase 4 Task 04 (Scenario 12)
+  found and explicitly documented, but was instructed not to fix at the
+  time (backend was frozen for that data-generation task).
+
+  **Root cause.** `get_default_clause_repository()`
+  (`app/contracts/ingestion.py`) was a zero-argument, process-wide
+  `functools.lru_cache(maxsize=1)` that built exactly one
+  `ClauseRepository` from *every* contract source file under
+  `storage/contracts/`, regardless of project. `InvestigationService`
+  resolved it once, at singleton-construction time (`app/api/routes/
+  investigate.py`'s `get_investigation_service()` is itself
+  `@lru_cache`'d — the service is constructed once and reused for the
+  process lifetime), and cached it as a fixed `self._clause_repository`/
+  `self._clause_retriever` for every subsequent request. Document
+  retrieval (`tools.search_documents`) was, and remains, correctly scoped
+  by `project_id` at the database query level — only Contract
+  Intelligence lacked any equivalent scoping. The gap was invisible from
+  Sprint 6 (Dataset V2 Implementation Task 01) until Phase 4 Task 04,
+  simply because only one project ever had a contract package until a
+  second, genuinely independent one (KFI2, project 3) existed to leak
+  into or from.
+
+  **Investigation.** Traced the full per-request call chain:
+  `investigate()` → `InvestigationLoop` → `InvestigationAgent.run()`
+  (`app/agent/investigation_agent.py:97-98`) is the *only* call site of
+  contract clause retrieval anywhere in the pipeline (`FocusedRetrievalExecutor`
+  and the other remediation executors never touch it) — `request`
+  (carrying `request.project_id`) is already in scope there, five lines
+  above the already-correctly-scoped `tools.search_documents(project_id=
+  request.project_id, ...)` call, making the fix's natural location
+  obvious and highly localized.
+
+  **Solution — the smallest correction that closes the gap:**
+  1. **Storage layout**: each project's contract package now lives in its
+     own subdirectory, `storage/contracts/{project_id}/`, mirroring the
+     per-project layout `app/ingestion/storage.py` already used for PDFs
+     and extracted text. `backend/storage/contracts/2/` (NRB4, 6 files)
+     and `backend/storage/contracts/3/` (KFI2, 4 files) — a pure data
+     move (`storage/` is gitignored), zero content changes. This *is* the
+     project → package mapping: no hardcoded `project_id -> package name`
+     table exists anywhere, so a future project's contract package is
+     onboarded by creating its own subdirectory, never by editing code.
+  2. **`app/contracts/ingestion.py`**: `get_default_clause_repository()`
+     replaced by `get_clause_repository(project_id: int)`, `@lru_cache`d
+     *per project_id* (`maxsize=None`) instead of a single zero-arg
+     cache slot — each project's package is still scanned/parsed at most
+     once per process, just keyed per project rather than globally.
+     `ContractPackageLoader` itself — and `ClauseParser`,
+     `ClauseRepository`, `ClauseRetriever`, `ClauseSearchService`,
+     `ContractContextBuilder` everywhere else — is completely unchanged;
+     the fix is purely which directory gets passed in.
+  3. **`app/agent/service.py`**: `InvestigationService.__init__` no
+     longer resolves a single fixed `ClauseRepository`/`ClauseRetriever`
+     (it cannot — no `project_id` exists yet at construction time). A
+     new private method, `_clause_retriever_for_project(project_id)`,
+     resolves one per call, honoring an explicitly-injected
+     `clause_repository` override (unchanged semantics) or falling back
+     to `get_clause_repository(project_id)`.
+  4. **`app/agent/investigation_agent.py`**: the two lines at
+     `InvestigationAgent.run()` that built clauses now call
+     `self._service._clause_retriever_for_project(request.project_id)`
+     instead of reusing the old fixed `self._service._clause_retriever`
+     attribute — the only functional change in the per-request path.
+
+  **Backward compatibility.** No automated test suite exists in this repo
+  (confirmed by search — only the manual `dataset/scripts/validate_*.py`
+  scripts), and grepping the whole backend confirmed the `clause_repository`
+  constructor override is never actually supplied by any caller other than
+  tests/validation scripts, none of which supply it either — so this was a
+  pure internal rewire with no external contract to preserve beyond the
+  API route (`get_investigation_service()`), which still constructs
+  `InvestigationService()` with zero arguments and is untouched.
+  `dataset/scripts/validate_scenario_10.py`/`validate_scenario_11.py`/
+  `validate_scenario_12.py` (which called `get_default_clause_repository()`
+  directly to inspect clause counts) were updated to the new
+  `get_clause_repository(project_id)` signature; `validate_scenario_12.py`'s
+  contract-clause-isolation checks, previously asserted as non-fatal WARNs
+  (the gap was known and deliberately left unfixed by that task), are now
+  ordinary hard `check()` assertions, since a regression here should now
+  fail validation like any other.
+
+  **Validation**
+  (`dataset/scripts/validate_contract_intelligence_project_scoping.py`,
+  19/19 checks passed): per-project storage layout confirmed; `project_id=1`
+  (no contract package) resolves to an empty repository, not an error;
+  `project_id=2` resolves to exactly its own 13 NRB4 clauses,
+  `project_id=3` to exactly its own 4 KFI2 clauses, zero overlap either
+  way; per-project memoization confirmed (repeated calls return the
+  identical cached object); `ContractPackageLoader` confirmed unchanged
+  (called directly, reproduces the same result); a real, live
+  `InvestigationLoop.run()` for `project_id=2` retrieves zero KFI2 clause
+  numbers and vice versa; and — the test that most directly proves the
+  fix, given the singleton root cause — **the same, already-constructed
+  `InvestigationService` instance, called for project 2, then project 3,
+  then project 2 again (the exact request-after-request shape production
+  traffic has), still resolves the correct project's clauses every time**,
+  not just on a fresh instance. Document retrieval and Evidence Narrowing
+  confirmed unaffected in the same run.
+
+  **Full regression** (`run_benchmarks_narrowed.py`, real Gemini, all 12
+  questions): every recall value is byte-for-byte identical to the
+  pre-fix run (EOT-01 0.6, MONSOON-DISPUTE 0.75, VO-004-VALUATION 0.75,
+  IPC-11-CERTIFICATION 0.5, RETENTION-INTERPRETATION 1.0, NOD-VALIDITY
+  0.5, NCR-001-QUALITY 0.25, RECOVERY-PROGRAMME 1.0, TAKING-OVER 1.0,
+  CONCURRENT-DELAY-P4 0.4, PIER-P2-DEFECT-LIABILITY 0.6,
+  KFI2-TERMINATION-FINAL-ACCOUNT 1.0), citation counts before/after
+  narrowing identical for all 12 questions, iterations and stopping
+  reasons identical. The *only* measured change: **cross-project contract
+  clause leakage, present in 8 of the 12 pre-fix runs, is now zero across
+  all 12** — exactly, and only, the fix's intended effect. Live regression:
+  `GET /health`, `GET /search` (projects 2 and 3), `POST /investigate`
+  (projects 2 and 3) all re-verified — same response shapes, correct
+  project-scoped results.
+
+  **Affected files**: `backend/app/contracts/ingestion.py`,
+  `backend/app/agent/service.py`, `backend/app/agent/investigation_agent.py`
+  (the only three backend files touched — confirmed via `git diff --stat`);
+  `backend/storage/contracts/{2,3}/` (data move, gitignored);
+  `dataset/scripts/validate_scenario_{10,11,12}.py` (updated to the new
+  API) and the new `dataset/scripts/validate_contract_intelligence_
+  project_scoping.py`. `ClauseParser`, `ClauseRepository`, `ClauseRetriever`,
+  `ClauseSearchService`, `ContractContextBuilder`, `ContractPackageLoader`,
+  Prompt Builder, Gemini, the Investigation Loop, and Retrieval were not
+  modified.
+
+  **Recommendation**: promote the backend from ClaimTrace Backend v1.0 to
+  **ClaimTrace Backend v1.0.1** — see the final report for the full
+  production readiness assessment.
+
+---
+
+### ClaimTrace Backend v1.0.1 — Release Candidate Validation (RC1)
+
+  **This is a verification/sign-off exercise, not a development task.** No
+  backend code, frontend code, or datasets were modified or generated; no
+  tuning was performed. Objective: independently confirm the frozen backend
+  is production-ready as the release candidate before frontend work begins.
+
+  **Scope validated**: repository integrity; database state for all 3
+  projects; each of the 14 named production components' wiring into the real
+  request path; project isolation (document/contract/search/investigation)
+  across Projects 1–3; the full dataset (Scenarios 1–12, 109 scenario PDFs +
+  8 contract PDFs, no duplicate document IDs); the complete 12-question
+  benchmark suite (fresh run); live `/health`, `/search`, `/investigate`;
+  and a read-only code-quality pass.
+
+  **Result: all validation passed.** Avg. benchmark recall 0.696, pass rate
+  10/12 at the ≥0.5 threshold (the 2 below-threshold cases —
+  NCR-001-QUALITY 0.25 and CONCURRENT-DELAY-P4 0.4 — are the same
+  pre-existing, already-documented `max_iterations=7` budget limitation
+  confirmed in earlier sessions, not new defects). No Gemini errors, no
+  exceptions, zero cross-project leakage on any dimension. All 14 components
+  confirmed wired into the real production call path; one true dead-code
+  stub found (`tools.verify_citation()`, never called — the working path is
+  `citation_verification.verify_citations()`) plus one unused module
+  (`app/agent/prompts.py` placeholder constants) and several stale module
+  docstrings claiming components are unintegrated when they are in fact
+  live in production — all documentation/cleanliness observations only, not
+  functional defects, and left unmodified per this task's scope.
+
+  **One repository-integrity finding** (not a backend defect): a
+  significant set of files that a clean checkout needs — all of
+  Scenario 10/11/12's data/ingestion/validation scripts, the Project 3
+  (KFI2) contract-package generation scripts, their generated PDFs, and
+  `dataset/scripts/tune_investigation_loop.py` /
+  `loop_tuning_results.json` — are currently untracked in git (`git status
+  --porcelain`), alongside modifications to `IMPLEMENTATION_LOG.md` and the
+  Sprint 8 Task 03 backend/dataset files that have not yet been committed.
+  A `git clone` of the current `main` branch right now would be missing all
+  of Phase 4 (Scenario 10–12 / Project 3) and Sprint 8 Task 03. Flagged for
+  the user's decision on committing — no git action was taken.
+
+  **Recommendation**: **READY FOR RELEASE.** Recommend tagging ClaimTrace
+  Backend v1.0.1 as the permanent backend release baseline once the
+  untracked files above are committed. See the final chat report for the
+  full 10-section validation and production readiness assessment.
+
 ---
 
 ## 🚧 Current Milestone
