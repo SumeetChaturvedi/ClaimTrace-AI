@@ -1,7 +1,11 @@
 """Aggregate every per-scenario index.json (and, separately, note the
 contracts index) into dataset/pdf/index.json, per Task 03's deliverable.
 Read-only with respect to the scenario/contracts folders -- only writes
-the new top-level file."""
+the new top-level file.
+
+Generalizes to however many scenario_NN folders exist on disk (glob +
+sort) -- no scenario count is hardcoded, so this file did not need to
+change when Phase 4 Task 02 added scenario_10."""
 
 import json
 from pathlib import Path
@@ -28,10 +32,11 @@ def build() -> list[dict]:
                     "title": e["title"],
                 }
             )
+    scenarios_included = sorted({e["scenario"] for e in combined})
     out_path = PDF_ROOT / "index.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(combined, f, indent=2, ensure_ascii=False)
-    print(f"wrote {out_path} with {len(combined)} entries (scenarios 1-9 only, per spec)")
+    print(f"wrote {out_path} with {len(combined)} entries (scenarios {scenarios_included})")
     return combined
 
 

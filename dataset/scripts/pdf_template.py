@@ -185,7 +185,7 @@ class DocumentSpec:
     title: str
     doc_type: str            # canonical DocumentType enum value
     doc_type_tag: str        # short label shown top-right of header band
-    letterhead: str          # key into LETTERHEADS
+    letterhead: str          # key into LETTERHEADS (or letterhead_registry, if given)
     letterhead_org_override: str | None = None  # for THIRD_PARTY: org name from doc text
     date: str = ""
     from_: str = ""
@@ -197,6 +197,17 @@ class DocumentSpec:
     body: list[tuple[str, str]] = field(default_factory=list)  # ("heading"|"para"|"bullet", text)
     closing_lines: list[str] = field(default_factory=list)     # verbatim closing/signature lines
     scenario: int = 1
+    # Independent-project overrides (Phase 4 Task 04 / Scenario 12): a
+    # document belonging to a genuinely different project (different
+    # Employer/Engineer/Contractor identities, different project name) sets
+    # these two fields; every existing DocumentSpec across Scenarios 1-11
+    # leaves them unset and renders byte-for-byte as before. project_line
+    # replaces the module-level PROJECT_LINE constant in the title subtitle
+    # and footer; letterhead_registry (shaped exactly like LETTERHEADS)
+    # replaces the module-level LETTERHEADS lookup in the header. No
+    # existing rendering path or output changes when these are left None.
+    project_line: str | None = None
+    letterhead_registry: dict | None = None
 
 
 class _FooteredCanvas(canvas_module.Canvas):
@@ -225,7 +236,8 @@ def _draw_header(c, doc, spec: DocumentSpec):
     width, height = PAGE_SIZE
     top = height - MARGIN_TOP
 
-    lh = LETTERHEADS[spec.letterhead]
+    registry = spec.letterhead_registry or LETTERHEADS
+    lh = registry[spec.letterhead]
     wordmark = lh["wordmark"] or (spec.letterhead_org_override or "")
     subtext = lh["subtext"] or ""
     rule_color = lh["rule_color"]
@@ -262,9 +274,25 @@ def _draw_header(c, doc, spec: DocumentSpec):
     c.line(MARGIN_LEFT, top - HEADER_BAND_HEIGHT + 6 * mm, width - MARGIN_RIGHT, top - HEADER_BAND_HEIGHT + 6 * mm)
 
 
+def _confidentiality_text(spec: DocumentSpec) -> str:
+    """Same wording as the original fixed CONFIDENTIALITY_TEXT, parametrized
+    on spec.contract_no instead of a hardcoded NRB4 contract number, so it
+    reads correctly for a genuinely independent project (Scenario 12). Every
+    existing DocumentSpec's contract_no already defaults to
+    "NHIA/NRB4/CW/2020-01", so this produces the exact original text for
+    Scenarios 1-11 with zero behavior change."""
+    return (
+        f"This document is issued in connection with Contract {spec.contract_no} and is "
+        "confidential to the Employer, Engineer, and Contractor and their permitted "
+        "recipients. Not for distribution outside the Parties without the Employer's consent."
+    )
+
+
 def _draw_footer(c, doc, spec: DocumentSpec, page_num: int, total_pages: int):
     width, _ = PAGE_SIZE
     bottom = MARGIN_BOTTOM
+
+    project_line = spec.project_line or PROJECT_LINE
 
     c.setStrokeColor(colors.HexColor("#999999"))
     c.setLineWidth(0.4)
@@ -272,13 +300,13 @@ def _draw_footer(c, doc, spec: DocumentSpec, page_num: int, total_pages: int):
 
     c.setFont("Times-Roman", 8)
     c.setFillColor(colors.HexColor("#333333"))
-    footer_text = f"{PROJECT_LINE}  |  {spec.doc_id}  |  Page {page_num} of {total_pages}"
+    footer_text = f"{project_line}  |  {spec.doc_id}  |  Page {page_num} of {total_pages}"
     c.drawCentredString(width / 2, bottom + 2 * mm, footer_text)
 
     if page_num == 1:
         c.setFont("Times-Italic", 6.8)
         c.setFillColor(colors.HexColor("#666666"))
-        c.drawCentredString(width / 2, bottom - 2.2 * mm, CONFIDENTIALITY_TEXT)
+        c.drawCentredString(width / 2, bottom - 2.2 * mm, _confidentiality_text(spec))
 
 
 def _metadata_table(spec: DocumentSpec) -> Table:
@@ -430,7 +458,7 @@ def render_document(spec: DocumentSpec, out_path: str) -> None:
 
     story = []
     story.append(Paragraph(esc(spec.title), TITLE_STYLE))
-    story.append(Paragraph(esc(PROJECT_LINE), SUBTITLE_STYLE))
+    story.append(Paragraph(esc(spec.project_line or PROJECT_LINE), SUBTITLE_STYLE))
     story.append(_metadata_table(spec))
     story.append(Spacer(1, 4 * mm))
     if spec.subject:

@@ -130,4 +130,68 @@ BENCHMARKS = [
         ],
         "expected_clause_hint": [],
     },
+    {
+        "scenario": 10,
+        "id": "CONCURRENT-DELAY-P4",
+        "question": "Was the Contractor entitled to the full extension of time claimed for "
+                     "the Pier P4 ground condition delay, or should the concurrent plant "
+                     "breakdown reduce that entitlement?",
+        "expected_outcome": "Partially Accepted — the ground condition at pile position P4-N4 "
+                             "is an Unforeseeable physical condition under Sub-Clause 4.12, but "
+                             "the concurrent 3-week unavailability of Piling Rig PR-2 (a "
+                             "Contractor-risk cause operative for the same period) is "
+                             "apportioned out under Sub-Clause 8.4; only 3 of the 6 weeks "
+                             "claimed are granted, with no additional cost for the concurrent "
+                             "period.",
+        "expected_decisive_docs": [
+            "CTR-NRB4-0125", "EQR-NRB4-001", "GEO-NRB4-004", "CPA-NRB4-001", "ENG-NRB4-0072",
+        ],
+        "expected_clause_hint": ["8.4", "4.12"],
+    },
+    {
+        "scenario": 11,
+        "id": "PIER-P2-DEFECT-LIABILITY",
+        "question": "Is the map cracking found at the Pier P2 pier cap during the Defects "
+                     "Notification Period attributable to the Contractor, and should the "
+                     "Contractor bear the cost of rectification?",
+        "expected_outcome": "The cracking is shallow surface (early-age drying shrinkage) "
+                             "cracking, confirmed by core testing, UPV survey and petrographic "
+                             "examination not to be attributable to design, materials, or "
+                             "ambient conditions; the Engineer determines it is attributable to "
+                             "inadequate curing (curing protection removed after "
+                             "approximately 3 days against a 7-day Specification requirement) "
+                             "— workmanship not in accordance with the Contract under "
+                             "Sub-Clause 11.2(b) — the Contractor is liable, and the cost of "
+                             "rectification (epoxy injection and surface sealing, accepted by "
+                             "the Engineer on completion) is borne solely by the Contractor, "
+                             "with the Contractor's objection to that liability finding "
+                             "recorded but not escalated.",
+        "expected_decisive_docs": [
+            "DIR-NRB4-001", "LAB-NRB4-058", "RCA-NRB4-004", "ENG-NRB4-0083", "EAC-NRB4-001",
+        ],
+        "expected_clause_hint": ["11.1", "11.2"],
+    },
+    {
+        "scenario": 12,
+        "project_id": 3,
+        "id": "KFI2-TERMINATION-FINAL-ACCOUNT",
+        "question": "Was the Employer contractually entitled to terminate the Contract, "
+                     "and how should the Contractor's financial claim, liquidated damages, "
+                     "and retention be resolved in the Final Account?",
+        "expected_outcome": "Partially Accepted — termination was contractually valid and "
+                             "procedurally correct under Sub-Clause 15.2, following an "
+                             "unremedied Notice to Correct (NTC-KFI2-001); the Contractor's "
+                             "valuation claim is substantially accepted with an increase over "
+                             "prior certification (KLD 15,800,000), but its demobilisation "
+                             "cost claim is rejected as not recoverable under Sub-Clause "
+                             "15.4; liquidated damages are recoverable but reduced from 19 to "
+                             "14 days (KLD 302,400) to reflect a documented utility "
+                             "relocation delay; the net balance of KLD 1,152,600, including "
+                             "full release of retention (KLD 755,000), is due to the "
+                             "Contractor.",
+        "expected_decisive_docs": [
+            "NTC-KFI2-001", "NOT-KFI2-001", "CFC-KFI2-001", "EFA-KFI2-001", "LDA-KFI2-001",
+        ],
+        "expected_clause_hint": ["15.1", "15.2", "15.3", "15.4"],
+    },
 ]

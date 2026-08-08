@@ -1,0 +1,100 @@
+[
+  {
+    "document_id": "DPR-1103-2022",
+    "filename": "DPR-1103-2022.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Pier P4 Supplementary Piling, 03-Nov-2022",
+    "scenario": 10
+  },
+  {
+    "document_id": "EQR-NRB4-001",
+    "filename": "EQR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Plant Breakdown Report — Piling Rig PR-2, Pier P4",
+    "scenario": 10
+  },
+  {
+    "document_id": "CTR-NRB4-0125",
+    "filename": "CTR-NRB4-0125.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice of Delay — Unforeseen Ground Condition at Pier P4",
+    "scenario": 10
+  },
+  {
+    "document_id": "CTR-NRB4-0131",
+    "filename": "CTR-NRB4-0131.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Notice of Delay — Plant Breakdown, Piling Rig PR-2",
+    "scenario": 10
+  },
+  {
+    "document_id": "GEO-NRB4-004",
+    "filename": "GEO-NRB4-004.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Geotechnical Investigation Report — Pier P4 Supplementary Pile Group",
+    "scenario": 10
+  },
+  {
+    "document_id": "SI-NRB4-027",
+    "filename": "SI-NRB4-027.pdf",
+    "document_type": "SITE_INSTRUCTION",
+    "title": "Site Instruction SI-NRB4-027 — Redesign of Pile Position P4-N4",
+    "scenario": 10
+  },
+  {
+    "document_id": "DPR-1130-2022",
+    "filename": "DPR-1130-2022.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Pier P4 Supplementary Piling, 30-Nov-2022",
+    "scenario": 10
+  },
+  {
+    "document_id": "PGM-NRB4-Rev09",
+    "filename": "PGM-NRB4-Rev09.pdf",
+    "document_type": "PROGRAMME",
+    "title": "Programme Update Rev. 09 — Pier P4 Supplementary Piling Delay Period",
+    "scenario": 10
+  },
+  {
+    "document_id": "MOM-NRB4-030",
+    "filename": "MOM-NRB4-030.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Monthly Progress Meeting No. 30",
+    "scenario": 10
+  },
+  {
+    "document_id": "CTR-NRB4-0142",
+    "filename": "CTR-NRB4-0142.pdf",
+    "document_type": "CLAIM",
+    "title": "Contractor's Detailed Particulars — Pier P4 Ground Condition Delay",
+    "scenario": 10
+  },
+  {
+    "document_id": "ENG-NRB4-0065",
+    "filename": "ENG-NRB4-0065.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Engineer's Request for Further Particulars — Claim CTR-NRB4-0142",
+    "scenario": 10
+  },
+  {
+    "document_id": "CPA-NRB4-001",
+    "filename": "CPA-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Critical Path Analysis — Pier P4 Ground Condition and Plant Breakdown",
+    "scenario": 10
+  },
+  {
+    "document_id": "ENG-NRB4-0072",
+    "filename": "ENG-NRB4-0072.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Determination — Extension of Time, Pier P4 Ground Condition and Plant Breakdown",
+    "scenario": 10
+  },
+  {
+    "document_id": "CTR-NRB4-0155",
+    "filename": "CTR-NRB4-0155.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Rebuttal — Determination ENG-NRB4-0072",
+    "scenario": 10
+  }
+]

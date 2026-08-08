@@ -467,5 +467,299 @@
     "filename": "TOC-NRB4-001.pdf",
     "document_type": "APPROVAL",
     "title": "Taking-Over Certificate"
+  },
+  {
+    "scenario": 10,
+    "document_id": "DPR-1103-2022",
+    "filename": "DPR-1103-2022.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Pier P4 Supplementary Piling, 03-Nov-2022"
+  },
+  {
+    "scenario": 10,
+    "document_id": "EQR-NRB4-001",
+    "filename": "EQR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Plant Breakdown Report — Piling Rig PR-2, Pier P4"
+  },
+  {
+    "scenario": 10,
+    "document_id": "CTR-NRB4-0125",
+    "filename": "CTR-NRB4-0125.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice of Delay — Unforeseen Ground Condition at Pier P4"
+  },
+  {
+    "scenario": 10,
+    "document_id": "CTR-NRB4-0131",
+    "filename": "CTR-NRB4-0131.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Notice of Delay — Plant Breakdown, Piling Rig PR-2"
+  },
+  {
+    "scenario": 10,
+    "document_id": "GEO-NRB4-004",
+    "filename": "GEO-NRB4-004.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Geotechnical Investigation Report — Pier P4 Supplementary Pile Group"
+  },
+  {
+    "scenario": 10,
+    "document_id": "SI-NRB4-027",
+    "filename": "SI-NRB4-027.pdf",
+    "document_type": "SITE_INSTRUCTION",
+    "title": "Site Instruction SI-NRB4-027 — Redesign of Pile Position P4-N4"
+  },
+  {
+    "scenario": 10,
+    "document_id": "DPR-1130-2022",
+    "filename": "DPR-1130-2022.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Pier P4 Supplementary Piling, 30-Nov-2022"
+  },
+  {
+    "scenario": 10,
+    "document_id": "PGM-NRB4-Rev09",
+    "filename": "PGM-NRB4-Rev09.pdf",
+    "document_type": "PROGRAMME",
+    "title": "Programme Update Rev. 09 — Pier P4 Supplementary Piling Delay Period"
+  },
+  {
+    "scenario": 10,
+    "document_id": "MOM-NRB4-030",
+    "filename": "MOM-NRB4-030.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Monthly Progress Meeting No. 30"
+  },
+  {
+    "scenario": 10,
+    "document_id": "CTR-NRB4-0142",
+    "filename": "CTR-NRB4-0142.pdf",
+    "document_type": "CLAIM",
+    "title": "Contractor's Detailed Particulars — Pier P4 Ground Condition Delay"
+  },
+  {
+    "scenario": 10,
+    "document_id": "ENG-NRB4-0065",
+    "filename": "ENG-NRB4-0065.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Engineer's Request for Further Particulars — Claim CTR-NRB4-0142"
+  },
+  {
+    "scenario": 10,
+    "document_id": "CPA-NRB4-001",
+    "filename": "CPA-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Critical Path Analysis — Pier P4 Ground Condition and Plant Breakdown"
+  },
+  {
+    "scenario": 10,
+    "document_id": "ENG-NRB4-0072",
+    "filename": "ENG-NRB4-0072.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Determination — Extension of Time, Pier P4 Ground Condition and Plant Breakdown"
+  },
+  {
+    "scenario": 10,
+    "document_id": "CTR-NRB4-0155",
+    "filename": "CTR-NRB4-0155.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Rebuttal — Determination ENG-NRB4-0072"
+  },
+  {
+    "scenario": 11,
+    "document_id": "DIR-NRB4-001",
+    "filename": "DIR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Defect Inspection Report — Routine Defects Notification Period Inspection, Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 11,
+    "document_id": "ENG-NRB4-0078",
+    "filename": "ENG-NRB4-0078.pdf",
+    "document_type": "NOTICE",
+    "title": "Engineer's Defect Notice — Cracking, Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 11,
+    "document_id": "CTR-NRB4-0162",
+    "filename": "CTR-NRB4-0162.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Initial Response — Defect Notice ENG-NRB4-0078"
+  },
+  {
+    "scenario": 11,
+    "document_id": "SIR-NRB4-001",
+    "filename": "SIR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Joint Site Inspection Record — Pier P2 Pier Cap Cracking"
+  },
+  {
+    "scenario": 11,
+    "document_id": "CMR-NRB4-001",
+    "filename": "CMR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Crack Mapping Report — Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 11,
+    "document_id": "LAB-NRB4-058",
+    "filename": "LAB-NRB4-058.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Laboratory Test Report — Core Tests, UPV Survey and Petrographic Analysis, Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 11,
+    "document_id": "RCA-NRB4-004",
+    "filename": "RCA-NRB4-004.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Contractor's Root Cause Analysis — Pier P2 Pier Cap Cracking"
+  },
+  {
+    "scenario": 11,
+    "document_id": "MOM-NRB4-031",
+    "filename": "MOM-NRB4-031.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Meeting — Defects Notification Period Review, Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 11,
+    "document_id": "ENG-NRB4-0083",
+    "filename": "ENG-NRB4-0083.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Determination — Root Cause and Liability, Pier P2 Pier Cap Cracking"
+  },
+  {
+    "scenario": 11,
+    "document_id": "CTR-NRB4-0169",
+    "filename": "CTR-NRB4-0169.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Objection — Determination ENG-NRB4-0083"
+  },
+  {
+    "scenario": 11,
+    "document_id": "SI-NRB4-031",
+    "filename": "SI-NRB4-031.pdf",
+    "document_type": "SITE_INSTRUCTION",
+    "title": "Site Instruction SI-NRB4-031 — Rectification of Cracking, Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 11,
+    "document_id": "MST-NRB4-001",
+    "filename": "MST-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Method Statement — Crack Injection Repair, Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 11,
+    "document_id": "RCR-NRB4-001",
+    "filename": "RCR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Rectification Completion Report — Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 11,
+    "document_id": "EAC-NRB4-001",
+    "filename": "EAC-NRB4-001.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Acceptance Certificate — Rectification of Cracking, Pier P2 Pier Cap"
+  },
+  {
+    "scenario": 12,
+    "document_id": "EPA-KFI2-001",
+    "filename": "EPA-KFI2-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Engineer's Progress Assessment — Month 21"
+  },
+  {
+    "scenario": 12,
+    "document_id": "EWN-KFI2-001",
+    "filename": "EWN-KFI2-001.pdf",
+    "document_type": "NOTICE",
+    "title": "Employer's Warning Notice — Inadequate Progress"
+  },
+  {
+    "scenario": 12,
+    "document_id": "NTC-KFI2-001",
+    "filename": "NTC-KFI2-001.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice to Correct NTC-KFI2-001 — Failure to Proceed with Due Diligence"
+  },
+  {
+    "scenario": 12,
+    "document_id": "CTR-KFI2-001",
+    "filename": "CTR-KFI2-001.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Response — Notice to Correct NTC-KFI2-001"
+  },
+  {
+    "scenario": 12,
+    "document_id": "NOT-KFI2-001",
+    "filename": "NOT-KFI2-001.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice of Termination NOT-KFI2-001"
+  },
+  {
+    "scenario": 12,
+    "document_id": "ETC-KFI2-001",
+    "filename": "ETC-KFI2-001.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Termination Certificate"
+  },
+  {
+    "scenario": 12,
+    "document_id": "SHR-KFI2-001",
+    "filename": "SHR-KFI2-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Site Handover Record"
+  },
+  {
+    "scenario": 12,
+    "document_id": "AIV-KFI2-001",
+    "filename": "AIV-KFI2-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Asset Inventory — Plant, Materials and Temporary Works at Handover"
+  },
+  {
+    "scenario": 12,
+    "document_id": "CFC-KFI2-001",
+    "filename": "CFC-KFI2-001.pdf",
+    "document_type": "CLAIM",
+    "title": "Contractor's Financial Claim — Following Termination"
+  },
+  {
+    "scenario": 12,
+    "document_id": "EFA-KFI2-001",
+    "filename": "EFA-KFI2-001.pdf",
+    "document_type": "APPROVAL",
+    "title": "Employer's Final Account — Valuation and Determination at Termination"
+  },
+  {
+    "scenario": 12,
+    "document_id": "PST-KFI2-011",
+    "filename": "PST-KFI2-011.pdf",
+    "document_type": "PAYMENT",
+    "title": "Payment Statement — Reconciliation of Amounts Certified and Paid to Date"
+  },
+  {
+    "scenario": 12,
+    "document_id": "RET-KFI2-001",
+    "filename": "RET-KFI2-001.pdf",
+    "document_type": "MEASUREMENT",
+    "title": "Retention Calculation — Sub-Clause 15.4"
+  },
+  {
+    "scenario": 12,
+    "document_id": "LDA-KFI2-001",
+    "filename": "LDA-KFI2-001.pdf",
+    "document_type": "MEASUREMENT",
+    "title": "Liquidated Damages Assessment — Sub-Clause 15.4"
+  },
+  {
+    "scenario": 12,
+    "document_id": "FCR-KFI2-001",
+    "filename": "FCR-KFI2-001.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Final Correspondence — Employer's Final Account EFA-KFI2-001"
   }
 ]

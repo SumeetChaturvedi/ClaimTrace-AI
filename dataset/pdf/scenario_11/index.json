@@ -1,0 +1,100 @@
+[
+  {
+    "document_id": "DIR-NRB4-001",
+    "filename": "DIR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Defect Inspection Report — Routine Defects Notification Period Inspection, Pier P2 Pier Cap",
+    "scenario": 11
+  },
+  {
+    "document_id": "ENG-NRB4-0078",
+    "filename": "ENG-NRB4-0078.pdf",
+    "document_type": "NOTICE",
+    "title": "Engineer's Defect Notice — Cracking, Pier P2 Pier Cap",
+    "scenario": 11
+  },
+  {
+    "document_id": "CTR-NRB4-0162",
+    "filename": "CTR-NRB4-0162.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Initial Response — Defect Notice ENG-NRB4-0078",
+    "scenario": 11
+  },
+  {
+    "document_id": "SIR-NRB4-001",
+    "filename": "SIR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Joint Site Inspection Record — Pier P2 Pier Cap Cracking",
+    "scenario": 11
+  },
+  {
+    "document_id": "CMR-NRB4-001",
+    "filename": "CMR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Crack Mapping Report — Pier P2 Pier Cap",
+    "scenario": 11
+  },
+  {
+    "document_id": "LAB-NRB4-058",
+    "filename": "LAB-NRB4-058.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Laboratory Test Report — Core Tests, UPV Survey and Petrographic Analysis, Pier P2 Pier Cap",
+    "scenario": 11
+  },
+  {
+    "document_id": "RCA-NRB4-004",
+    "filename": "RCA-NRB4-004.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Contractor's Root Cause Analysis — Pier P2 Pier Cap Cracking",
+    "scenario": 11
+  },
+  {
+    "document_id": "MOM-NRB4-031",
+    "filename": "MOM-NRB4-031.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Meeting — Defects Notification Period Review, Pier P2 Pier Cap",
+    "scenario": 11
+  },
+  {
+    "document_id": "ENG-NRB4-0083",
+    "filename": "ENG-NRB4-0083.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Determination — Root Cause and Liability, Pier P2 Pier Cap Cracking",
+    "scenario": 11
+  },
+  {
+    "document_id": "CTR-NRB4-0169",
+    "filename": "CTR-NRB4-0169.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Objection — Determination ENG-NRB4-0083",
+    "scenario": 11
+  },
+  {
+    "document_id": "SI-NRB4-031",
+    "filename": "SI-NRB4-031.pdf",
+    "document_type": "SITE_INSTRUCTION",
+    "title": "Site Instruction SI-NRB4-031 — Rectification of Cracking, Pier P2 Pier Cap",
+    "scenario": 11
+  },
+  {
+    "document_id": "MST-NRB4-001",
+    "filename": "MST-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Method Statement — Crack Injection Repair, Pier P2 Pier Cap",
+    "scenario": 11
+  },
+  {
+    "document_id": "RCR-NRB4-001",
+    "filename": "RCR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Rectification Completion Report — Pier P2 Pier Cap",
+    "scenario": 11
+  },
+  {
+    "document_id": "EAC-NRB4-001",
+    "filename": "EAC-NRB4-001.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Acceptance Certificate — Rectification of Cracking, Pier P2 Pier Cap",
+    "scenario": 11
+  }
+]

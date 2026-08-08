@@ -31,13 +31,14 @@ from app.db.session import init_engine
 
 from benchmarks import BENCHMARKS
 
-PROJECT_ID = 2
+PROJECT_ID = 2  # default for every benchmark question that doesn't state its own project_id
 TOP_K = 10
 
 
 def run_one(service: InvestigationService, bench: dict) -> dict:
     query = bench["question"]
-    request = InvestigationRequest(project_id=PROJECT_ID, query=query, top_k=TOP_K)
+    project_id = bench.get("project_id", PROJECT_ID)
+    request = InvestigationRequest(project_id=project_id, query=query, top_k=TOP_K)
 
     # Exactly what investigate() now does internally (Sprint 8 Task 01),
     # called directly so the loop's and narrower's own metadata is
@@ -81,6 +82,7 @@ def run_one(service: InvestigationService, bench: dict) -> dict:
 
     return {
         "scenario": bench["scenario"],
+        "project_id": project_id,
         "id": bench["id"],
         "question": query,
         "expected_outcome": bench["expected_outcome"],

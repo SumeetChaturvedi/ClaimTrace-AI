@@ -1,0 +1,268 @@
+{
+  "summary": {
+    "project_id": 2,
+    "project_name": "Dataset V2 — Nandira River Bridge Project, Package NRB-4",
+    "scenario": 11,
+    "documents_before": 85,
+    "documents_after": 99,
+    "total_pdfs_this_run": 14,
+    "ingested_ok": 14,
+    "ingested_fail": 0,
+    "total_chunks_this_run": 39,
+    "null_doc_type_after_enrichment": 0,
+    "null_doc_date_after_enrichment": 0,
+    "elapsed_seconds": 9.5,
+    "failures": []
+  },
+  "documents": [
+    {
+      "doc_id": "DIR-NRB4-001",
+      "status": "OK",
+      "document_pk": 104,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2024-02-14",
+      "referenced_ids": [
+        "1-4",
+        "2020-01",
+        "DIR-NRB4-001",
+        "EIN-NRB4-001",
+        "NRB-4",
+        "OWR-NRB4-001"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "ENG-NRB4-0078",
+      "status": "OK",
+      "document_pk": 105,
+      "doc_type": "NOTICE",
+      "doc_date": "2024-02-20",
+      "referenced_ids": [
+        "2020-01",
+        "DIR-NRB4-001",
+        "EIN-NRB4-001",
+        "ENG-NRB4-0078",
+        "NRB-4"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CTR-NRB4-0162",
+      "status": "OK",
+      "document_pk": 106,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2024-03-04",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0162",
+        "ENG-NRB4-0078",
+        "NRB-4"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "SIR-NRB4-001",
+      "status": "OK",
+      "document_pk": 107,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2024-03-08",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0162",
+        "DIR-NRB4-001",
+        "NRB-4",
+        "SIR-NRB4-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CMR-NRB4-001",
+      "status": "OK",
+      "document_pk": 108,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2024-03-15",
+      "referenced_ids": [
+        "2020-01",
+        "A1-A7",
+        "B2-B6",
+        "C3-D5",
+        "CMR-NRB4-001",
+        "E2-E6",
+        "F1-F7",
+        "NRB-4",
+        "SIR-NRB4-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "LAB-NRB4-058",
+      "status": "OK",
+      "document_pk": 109,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2024-03-29",
+      "referenced_ids": [
+        "2020-01",
+        "C-1",
+        "C-2",
+        "C-3",
+        "CMR-NRB4-001",
+        "LAB-NRB4-058",
+        "NRB-4",
+        "SIR-NRB4-001"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "RCA-NRB4-004",
+      "status": "OK",
+      "document_pk": 110,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2024-04-12",
+      "referenced_ids": [
+        "2020-01",
+        "32-35",
+        "CMR-NRB4-001",
+        "ENG-NRB4-0078",
+        "LAB-NRB4-058",
+        "NRB-4",
+        "RCA-NRB4-004"
+      ],
+      "chunk_count": 3,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "MOM-NRB4-031",
+      "status": "OK",
+      "document_pk": 111,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2024-04-18",
+      "referenced_ids": [
+        "2020-01",
+        "CMR-NRB4-001",
+        "ENG-NRB4-0078",
+        "LAB-NRB4-058",
+        "MOM-NRB4-031",
+        "NRB-4",
+        "RCA-NRB4-004"
+      ],
+      "chunk_count": 3,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "ENG-NRB4-0083",
+      "status": "OK",
+      "document_pk": 112,
+      "doc_type": "APPROVAL",
+      "doc_date": "2024-05-06",
+      "referenced_ids": [
+        "2020-01",
+        "CMR-NRB4-001",
+        "ENG-NRB4-0078",
+        "ENG-NRB4-0083",
+        "LAB-NRB4-058",
+        "MOM-NRB4-031",
+        "NRB-4",
+        "RCA-NRB4-004"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "CTR-NRB4-0169",
+      "status": "OK",
+      "document_pk": 113,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2024-05-20",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0169",
+        "ENG-NRB4-0083",
+        "NRB-4",
+        "RCA-NRB4-004"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "SI-NRB4-031",
+      "status": "OK",
+      "document_pk": 114,
+      "doc_type": "SITE_INSTRUCTION",
+      "doc_date": "2024-05-27",
+      "referenced_ids": [
+        "2020-01",
+        "CMR-NRB4-001",
+        "CTR-NRB4-0169",
+        "ENG-NRB4-0083",
+        "NRB-4",
+        "SI-NRB4-031",
+        "SIR-NRB4-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "MST-NRB4-001",
+      "status": "OK",
+      "document_pk": 115,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2024-06-10",
+      "referenced_ids": [
+        "2020-01",
+        "B2-E6",
+        "CMR-NRB4-001",
+        "MST-NRB4-001",
+        "NRB-4",
+        "SI-NRB4-031",
+        "SIR-NRB4-001"
+      ],
+      "chunk_count": 4,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "RCR-NRB4-001",
+      "status": "OK",
+      "document_pk": 116,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2024-07-22",
+      "referenced_ids": [
+        "2020-01",
+        "A1-A7",
+        "B2-E6",
+        "F1-F7",
+        "MST-NRB4-001",
+        "NRB-4",
+        "RCR-NRB4-001",
+        "SI-NRB4-031",
+        "SIR-NRB4-001"
+      ],
+      "chunk_count": 2,
+      "metadata_enriched": true
+    },
+    {
+      "doc_id": "EAC-NRB4-001",
+      "status": "OK",
+      "document_pk": 117,
+      "doc_type": "APPROVAL",
+      "doc_date": "2024-08-05",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0169",
+        "EAC-NRB4-001",
+        "ENG-NRB4-0083",
+        "MST-NRB4-001",
+        "NRB-4",
+        "RCR-NRB4-001",
+        "SI-NRB4-031"
+      ],
+      "chunk_count": 3,
+      "metadata_enriched": true
+    }
+  ]
+}
