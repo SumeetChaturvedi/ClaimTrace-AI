@@ -1,0 +1,51 @@
+[
+  {
+    "document_id": "STMT-NRB4-011",
+    "filename": "STMT-NRB4-011.pdf",
+    "document_type": "PAYMENT",
+    "title": "Contractor's Monthly Statement No. 11",
+    "scenario": 4
+  },
+  {
+    "document_id": "QMS-NRB4-011",
+    "filename": "QMS-NRB4-011.pdf",
+    "document_type": "MEASUREMENT",
+    "title": "Quantity Measurement Summary — Statement No. 11",
+    "scenario": 4
+  },
+  {
+    "document_id": "IPC-NRB4-011",
+    "filename": "IPC-NRB4-011.pdf",
+    "document_type": "PAYMENT",
+    "title": "Interim Payment Certificate No. 11",
+    "scenario": 4
+  },
+  {
+    "document_id": "MOM-NRB4-023",
+    "filename": "MOM-NRB4-023.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Monthly Progress Meeting No. 23",
+    "scenario": 4
+  },
+  {
+    "document_id": "NHIA-NRB4-PAY-011",
+    "filename": "NHIA-NRB4-PAY-011.pdf",
+    "document_type": "PAYMENT",
+    "title": "Employer's Payment Advice — Interim Payment Certificate No. 11",
+    "scenario": 4
+  },
+  {
+    "document_id": "BTC-NRB4-011",
+    "filename": "BTC-NRB4-011.pdf",
+    "document_type": "PAYMENT",
+    "title": "Bank Transfer Confirmation — Interim Payment Certificate No. 11",
+    "scenario": 4
+  },
+  {
+    "document_id": "CTR-NRB4-0084",
+    "filename": "CTR-NRB4-0084.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Acknowledgement of Payment — Interim Payment Certificate No. 11",
+    "scenario": 4
+  }
+]

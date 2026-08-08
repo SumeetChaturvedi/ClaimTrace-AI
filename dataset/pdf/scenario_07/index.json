@@ -1,0 +1,58 @@
+[
+  {
+    "document_id": "INSP-NRB4-014",
+    "filename": "INSP-NRB4-014.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Quality Inspection Report — Review of Cube Test Results, Pier P5 Pier Shaft",
+    "scenario": 7
+  },
+  {
+    "document_id": "LAB-NRB4-034",
+    "filename": "LAB-NRB4-034.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Cube Test Report — Pier P5 Pier Shaft Pour, 14-Feb-2022",
+    "scenario": 7
+  },
+  {
+    "document_id": "NCR-NRB4-001",
+    "filename": "NCR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Non-Conformance Report NCR-NRB4-001 — Pier P5 Pier Shaft, Concrete Strength (Set B)",
+    "scenario": 7
+  },
+  {
+    "document_id": "RCA-NRB4-003",
+    "filename": "RCA-NRB4-003.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Contractor's Root Cause Analysis — NCR-NRB4-001",
+    "scenario": 7
+  },
+  {
+    "document_id": "LAB-NRB4-041",
+    "filename": "LAB-NRB4-041.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Additional Test Report — Core Tests and Non-Destructive Testing, Pier P5 Pier Shaft",
+    "scenario": 7
+  },
+  {
+    "document_id": "CTR-NRB4-0112",
+    "filename": "CTR-NRB4-0112.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Corrective Action Proposal — NCR-NRB4-001",
+    "scenario": 7
+  },
+  {
+    "document_id": "ENG-NRB4-0045",
+    "filename": "ENG-NRB4-0045.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Technical Assessment — NCR-NRB4-001",
+    "scenario": 7
+  },
+  {
+    "document_id": "ENG-NRB4-0049",
+    "filename": "ENG-NRB4-0049.pdf",
+    "document_type": "APPROVAL",
+    "title": "NCR Close-Out Notice — NCR-NRB4-001",
+    "scenario": 7
+  }
+]

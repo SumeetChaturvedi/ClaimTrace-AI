@@ -14,6 +14,17 @@ vs. justified-and-wrapped), so header fields aren't reliably newline-delimited
 appear on one physical line. `_DOC_TYPE_RE` therefore stops at the first
 following "ALL-CAPS LABEL:" pattern rather than assuming a line break.
 
+Label matching is case-insensitive (Sprint 7 Task 3): "DATE:", "Date:", and
+"date:" are all recognised, since not every document layout that reaches
+this module uses the all-caps convention the original fictional dataset
+happened to use. Only the literal label text is matched case-insensitively
+(via a scoped `(?i:...)` group) — the rest of each pattern, including
+`_DOC_TYPE_RE`'s all-caps lookahead for the *next* field label, is unchanged
+and stays case-sensitive, so this is a format-tolerance fix, not a new
+document-type-detection strategy (a document whose text never contains the
+literal words "DOCUMENT TYPE" still yields no doc_type here, exactly as
+before).
+
 Document references vs. location references (Sprint 4 Task 04): the same
 _ID_CODE_RE that catches genuine document identifiers (SI-088,
 CTR-DMV7-0412, DPR-0703-2019, drawing IDs, ...) also catches bare
@@ -37,8 +48,8 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime
 
-_DOC_TYPE_RE = re.compile(r"DOCUMENT TYPE:\s*(.+?)(?=\s+[A-Z][A-Z /]{2,24}:|\n|$)")
-_DATE_RE = re.compile(r"\bDATE(?:\s*RANGE)?:\s*(\d{1,2}-[A-Za-z]{3,9}-\d{4})")
+_DOC_TYPE_RE = re.compile(r"(?i:DOCUMENT TYPE):\s*(.+?)(?=\s+[A-Z][A-Z /]{2,24}:|\n|$)")
+_DATE_RE = re.compile(r"\b(?i:DATE)(?:\s*(?i:RANGE))?:\s*(\d{1,2}-[A-Za-z]{3,9}-\d{4})")
 _ID_CODE_RE = re.compile(r"\b[A-Z0-9]{1,8}(?:-[A-Z0-9]{1,10}){1,5}\b")
 _REV_RE = re.compile(r"\bRev\.?\s*\d+\b", re.IGNORECASE)
 

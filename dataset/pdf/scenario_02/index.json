@@ -1,0 +1,58 @@
+[
+  {
+    "document_id": "CTR-NRB4-0052",
+    "filename": "CTR-NRB4-0052.pdf",
+    "document_type": "CLAIM",
+    "title": "Contractor's Supplementary Claim — Dispute of EOT-01 Assessment",
+    "scenario": 2
+  },
+  {
+    "document_id": "DPR-0614-2021",
+    "filename": "DPR-0614-2021.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Piers P1/P2, 14-Jun-2021",
+    "scenario": 2
+  },
+  {
+    "document_id": "DPR-0722-2021",
+    "filename": "DPR-0722-2021.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Piers P2/P5, 22-Jul-2021",
+    "scenario": 2
+  },
+  {
+    "document_id": "DPR-0830-2021",
+    "filename": "DPR-0830-2021.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Piers P1/P4, 30-Aug-2021",
+    "scenario": 2
+  },
+  {
+    "document_id": "MET-NRB4-2021-03",
+    "filename": "MET-NRB4-2021-03.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Site Rainfall Report — Monsoon Season 2021 (June–September)",
+    "scenario": 2
+  },
+  {
+    "document_id": "PGM-NRB4-Rev04",
+    "filename": "PGM-NRB4-Rev04.pdf",
+    "document_type": "PROGRAMME",
+    "title": "Programme Update Rev. 04 — Critical Path Analysis, Pier P3 Delay Period",
+    "scenario": 2
+  },
+  {
+    "document_id": "MOM-NRB4-021",
+    "filename": "MOM-NRB4-021.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Monthly Progress Meeting No. 21",
+    "scenario": 2
+  },
+  {
+    "document_id": "ENG-NRB4-0024",
+    "filename": "ENG-NRB4-0024.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Determination — Supplementary Claim CTR-NRB4-0052",
+    "scenario": 2
+  }
+]

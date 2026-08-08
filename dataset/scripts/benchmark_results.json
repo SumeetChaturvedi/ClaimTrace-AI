@@ -1,0 +1,840 @@
+[
+  {
+    "scenario": 1,
+    "id": "EOT-01",
+    "question": "Was the Contractor entitled to an extension of time for the Pier 3 utility conflict, and if so, for how long?",
+    "expected_outcome": "Partially Accepted — EOT-01 grants a 10-week extension of time under Sub-Clause 8.4(c) for the undisclosed 132kV tower foundation encountered at Pier P3.",
+    "planner": {
+      "investigation_type": "delay",
+      "goal": "Was the Contractor entitled to an extension of time for the Pier 3 utility conflict, and if so, for how long?",
+      "primary_entities": [
+        "Contractor"
+      ],
+      "likely_evidence_sources": [
+        "DocumentType.PROGRESS_REPORT",
+        "DocumentType.PROGRAMME",
+        "DocumentType.NOTICE",
+        "DocumentType.MEETING_MINUTES"
+      ]
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        24,
+        27,
+        29,
+        33,
+        35,
+        37,
+        39
+      ],
+      "retrieved_document_stems": [
+        "CTR-NRB4-0021",
+        "CTR-NRB4-0028",
+        "CTR-NRB4-0061",
+        "DPR-0830-2021",
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0024",
+        "PGM-NRB4-Rev04"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "CTR-NRB4-0021",
+        "CTR-NRB4-0028",
+        "ENG-NRB4-0019",
+        "VPGC-NRB4-0012",
+        "VPGC-NRB4-0045"
+      ],
+      "hits": [
+        "CTR-NRB4-0021",
+        "CTR-NRB4-0028",
+        "ENG-NRB4-0019"
+      ],
+      "misses": [
+        "VPGC-NRB4-0012",
+        "VPGC-NRB4-0045"
+      ],
+      "precision_at_expected": 0.43,
+      "recall": 0.6
+    },
+    "timeline": {
+      "timeline_context_chars": 242,
+      "timeline_nonempty": true,
+      "timeline_preview": "2021-02-10 — Contractor Notice Submitted\n2021-03-24 — Correspondence Sent\n2021-08-30 — Progress Report Recorded\n2021-09-22 — Contractor Notice Submitted\n2021-09-25 — Approval Granted\n2021-10-15 — Programme Issued\n2021-11-05 — Approval Granted"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [
+        "13.1",
+        "13.3",
+        "14.3",
+        "14.7",
+        "20.1",
+        "3.3",
+        "4.1",
+        "8.4",
+        "8.7"
+      ],
+      "clause_count": 9,
+      "expected_clause_hint": [
+        "8.4",
+        "20.1"
+      ]
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 23687,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": true
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the supplied evidence, the provided excerpts do not contain the specific determination or duration regarding whether the Contractor was entitled to an extension of time for the Pier 3 utility conflict or for how long. Therefore, the evidence is insufficient to answer the question.",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 8.8
+  },
+  {
+    "scenario": 2,
+    "id": "MONSOON-DISPUTE",
+    "question": "Was the Contractor entitled to additional time beyond EOT-01 for monsoon conditions during the Pier P3 relocation?",
+    "expected_outcome": "Rejected — the original 10-week EOT-01 extension stands; monsoon-season productivity loss is a Contractor risk under Particular Conditions Part D.1 and does not increase the Sub-Clause 8.4(c) entitlement.",
+    "planner": {
+      "investigation_type": "entitlement",
+      "goal": "Was the Contractor entitled to additional time beyond EOT-01 for monsoon conditions during the Pier P3 relocation?",
+      "primary_entities": [
+        "Pier P3",
+        "Contractor"
+      ],
+      "likely_evidence_sources": [
+        "DocumentType.CONTRACT",
+        "DocumentType.NOTICE",
+        "DocumentType.SITE_INSTRUCTION",
+        "DocumentType.CORRESPONDENCE"
+      ]
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        20,
+        24,
+        25,
+        27,
+        29,
+        30,
+        35,
+        37,
+        39
+      ],
+      "retrieved_document_stems": [
+        "CTR-NRB4-0021",
+        "CTR-NRB4-0028",
+        "CTR-NRB4-0052",
+        "CTR-NRB4-0061",
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0024",
+        "NRB4-PC-2020",
+        "PGM-NRB4-Rev04",
+        "SI-NRB4-014"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0024",
+        "MET-NRB4-2021-03",
+        "PGM-NRB4-Rev04"
+      ],
+      "hits": [
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0024",
+        "PGM-NRB4-Rev04"
+      ],
+      "misses": [
+        "MET-NRB4-2021-03"
+      ],
+      "precision_at_expected": 0.33,
+      "recall": 0.75
+    },
+    "timeline": {
+      "timeline_context_chars": 301,
+      "timeline_nonempty": true,
+      "timeline_preview": "2020-12-05 — Contract Executed\n2021-02-10 — Contractor Notice Submitted\n2021-02-25 — Site Instruction Issued\n2021-03-24 — Correspondence Sent\n2021-09-22 — Contractor Notice Submitted\n2021-09-25 — Approval Granted\n2021-10-08 — Claim Submitted\n2021-10-15 — Programme Issued\n2021-11-05 — Approval Granted"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [
+        "13.1",
+        "13.3",
+        "14.3",
+        "14.7",
+        "20.1",
+        "3.3",
+        "4.1",
+        "8.4",
+        "8.7"
+      ],
+      "clause_count": 9,
+      "expected_clause_hint": [
+        "8.4"
+      ]
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 23747,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": true
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the supplied evidence, the evidence is insufficient to fully answer whether the Contractor was entitled to additional time beyond EOT-01 for monsoon conditions during the Pier P3 relocation. \n\nHowever, the supplied evidence indicates that:\n- The period fell within the ordinary \"Monsoon Period\" defined at Particular Conditions Part D.1 (1 June to 30 September), which is expressly stated to be \"not independently compensable\" [3, 6]. \n- The rainfall did not meet the 100mm threshold for an \"Adverse Weather Event\" under Particular Conditions Part D.2 [3]. \n\nNo final determination regarding an entitlement beyond EOT-01 is present in the provided evidence.",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 1.7
+  },
+  {
+    "scenario": 3,
+    "id": "VO-004-VALUATION",
+    "question": "Was the Engineer's valuation of Variation VO-NRB4-004 reasonable and contractually justified?",
+    "expected_outcome": "The Variation is genuine (Pier P3 pile cap redesign necessitated by disturbed backfill); the Engineer's valuation of VTD 590,700 (against the Contractor's VTD 687,400 quotation) is substantially correct — measured-quantity adjustments accepted, disruption lump sum correctly excluded.",
+    "planner": {
+      "investigation_type": "variation",
+      "goal": "Was the Engineer's valuation of Variation VO-NRB4-004 reasonable and contractually justified?",
+      "primary_entities": [
+        "Engineer"
+      ],
+      "likely_evidence_sources": [
+        "DocumentType.SITE_INSTRUCTION",
+        "DocumentType.VARIATION",
+        "DocumentType.DRAWING",
+        "DocumentType.CORRESPONDENCE"
+      ]
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        42,
+        43,
+        45,
+        46,
+        53,
+        54,
+        58,
+        61,
+        63,
+        66
+      ],
+      "retrieved_document_stems": [
+        "CIM-NRB4-002",
+        "CTR-NRB4-0067",
+        "CTR-NRB4-0084",
+        "CTR-NRB4-0091",
+        "CTR-NRB4-0098",
+        "DRPN-NRB4-001",
+        "LCM-NRB4-001",
+        "MOM-NRB4-022",
+        "NHIA-NRB4-APR-006",
+        "VO-NRB4-004"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "CTR-NRB4-0067",
+        "ENG-NRB4-0031",
+        "NHIA-NRB4-APR-006",
+        "VO-NRB4-004"
+      ],
+      "hits": [
+        "CTR-NRB4-0067",
+        "NHIA-NRB4-APR-006",
+        "VO-NRB4-004"
+      ],
+      "misses": [
+        "ENG-NRB4-0031"
+      ],
+      "precision_at_expected": 0.3,
+      "recall": 0.75
+    },
+    "timeline": {
+      "timeline_context_chars": 341,
+      "timeline_nonempty": true,
+      "timeline_preview": "2021-10-08 — Variation Issued\n2021-10-22 — Variation Issued\n2021-11-20 — Meeting Held\n2021-11-25 — Approval Granted\n2022-01-28 — Correspondence Sent\n2022-02-10 — Contractor Notice Submitted\n2022-02-28 — Technical Report Issued\n2022-03-25 — Contractor Notice Submitted\n2022-04-08 — Technical Report Issued\n2022-04-29 — Technical Report Issued"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [
+        "1.3",
+        "13.1",
+        "13.3",
+        "14.3",
+        "14.7",
+        "20.1",
+        "3.3",
+        "4.1",
+        "8.4",
+        "8.7"
+      ],
+      "clause_count": 10,
+      "expected_clause_hint": [
+        "13.1",
+        "13.3"
+      ]
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 25909,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": true
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the supplied evidence, the provided documents indicate that:\n- The Engineer's assessment (ENG-NRB4-0031) of the Contractor's quotation (CTR-NRB4-0067) resulted in a recommended valuation of VTD 590,700 for Variation VO-NRB4-004 (compared to the Contractor's quoted VTD 687,400).\n- Subsequent project documentation and reviews (including CIM-NRB4-002, LCM-NRB4-001, and DRPN-NRB4-001) independently evaluated the Engineer's interpretation under Sub-Clause 13.3 and Contract Data Section 6, confirming that the treatment and value of Variation VO-NRB4-004 at its approved value of VTD 590,700 were correct and properly included in the retention base.\n\nHowever, the supplied evidence does not contain a full, standalone legal or technical audit to comprehensively prove or disprove whether every aspect of the valuation was reasonable beyond these confirming reports and the approved value of VTD 590,700.",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 1.9
+  },
+  {
+    "scenario": 4,
+    "id": "IPC-11-CERTIFICATION",
+    "question": "Was Variation VO-NRB4-004 correctly included in Interim Payment Certificate No. 11, and was payment made in accordance with the Contract?",
+    "expected_outcome": "Correctly included at its approved value (VTD 590,700); retention and certification arithmetic correct; payment made within the 56-day period, so no interest arises.",
+    "planner": {
+      "investigation_type": "variation",
+      "goal": "Was Variation VO-NRB4-004 correctly included in Interim Payment Certificate No. 11, and was payment made in accordance with the Contract?",
+      "primary_entities": [],
+      "likely_evidence_sources": [
+        "DocumentType.SITE_INSTRUCTION",
+        "DocumentType.VARIATION",
+        "DocumentType.DRAWING",
+        "DocumentType.CORRESPONDENCE"
+      ]
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        19,
+        48,
+        49,
+        54,
+        55,
+        58,
+        59
+      ],
+      "retrieved_document_stems": [
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "ENG-NRB4-0038",
+        "IPC-NRB4-011",
+        "NHIA-NRB4-COMM-003",
+        "NRB4-GC-2020",
+        "QMS-NRB4-011"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "BTC-NRB4-011",
+        "IPC-NRB4-011",
+        "NHIA-NRB4-APR-006",
+        "NHIA-NRB4-PAY-011"
+      ],
+      "hits": [
+        "IPC-NRB4-011"
+      ],
+      "misses": [
+        "BTC-NRB4-011",
+        "NHIA-NRB4-APR-006",
+        "NHIA-NRB4-PAY-011"
+      ],
+      "precision_at_expected": 0.14,
+      "recall": 0.25
+    },
+    "timeline": {
+      "timeline_context_chars": 235,
+      "timeline_nonempty": true,
+      "timeline_preview": "2020-12-05 — Contract Executed\n2021-12-10 — Measurement Recorded\n2021-12-17 — Payment Recorded\n2022-02-10 — Contractor Notice Submitted\n2022-02-18 — Correspondence Sent\n2022-02-28 — Technical Report Issued\n2022-03-04 — Approval Granted"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [
+        "13.1",
+        "13.3",
+        "3.3"
+      ],
+      "clause_count": 3,
+      "expected_clause_hint": [
+        "14.3",
+        "14.7"
+      ]
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 10964,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": true
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the provided evidence, Variation VO-NRB4-004 was included in Interim Payment Certificate No. 11 (IPC-NRB4-011) at an approved value of VTD 590,700 [9]. \n\nHowever, the provided evidence is insufficient to determine whether payment was made in full accordance with the Contract, as the documents only discuss its inclusion in the IPC, its characterization as reimbursement versus value of work executed, and its treatment regarding Retention [1, 4, 8].",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 1.3
+  },
+  {
+    "scenario": 5,
+    "id": "RETENTION-INTERPRETATION",
+    "question": "Was retention correctly applied to Variation VO-NRB4-004 in IPC-11, and is interest payable?",
+    "expected_outcome": "Retention was correctly applied to the full cumulative value including the Variation, per Sub-Clause 13.3/14.3 and Contract Data Section 6 (no exemption for Variations); no interest is payable.",
+    "planner": {
+      "investigation_type": "variation",
+      "goal": "Was retention correctly applied to Variation VO-NRB4-004 in IPC-11, and is interest payable?",
+      "primary_entities": [],
+      "likely_evidence_sources": [
+        "DocumentType.SITE_INSTRUCTION",
+        "DocumentType.VARIATION",
+        "DocumentType.DRAWING",
+        "DocumentType.CORRESPONDENCE"
+      ]
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        54,
+        55,
+        56,
+        58,
+        59,
+        62,
+        66
+      ],
+      "retrieved_document_stems": [
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "DRPN-NRB4-001",
+        "ENG-NRB4-0038",
+        "FCS-NRB4-011",
+        "NHIA-NRB4-COMM-003",
+        "NHIA-NRB4-COMM-004"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "ENG-NRB4-0038",
+        "FCS-NRB4-011"
+      ],
+      "hits": [
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "ENG-NRB4-0038",
+        "FCS-NRB4-011"
+      ],
+      "misses": [],
+      "precision_at_expected": 0.57,
+      "recall": 1.0
+    },
+    "timeline": {
+      "timeline_context_chars": 244,
+      "timeline_nonempty": true,
+      "timeline_preview": "2022-02-10 — Contractor Notice Submitted\n2022-02-18 — Correspondence Sent\n2022-02-22 — Measurement Recorded\n2022-02-28 — Technical Report Issued\n2022-03-04 — Approval Granted\n2022-04-01 — Correspondence Sent\n2022-04-29 — Technical Report Issued"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [
+        "13.1",
+        "13.3",
+        "3.3"
+      ],
+      "clause_count": 3,
+      "expected_clause_hint": [
+        "13.3",
+        "14.3"
+      ]
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 10935,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": true
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the provided evidence:\n\n* **Application of Retention:** Retention was correctly applied to Variation VO-NRB4-004 in IPC-11. Contract Data Section 6 states Retention at 5 percent \"of each amount otherwise due,\" without qualification or carve-out for Variations, and no provision in the General Conditions, Particular Conditions, or Contract Data exempts Variations from Retention.\n* **Payment of Interest:** No interest is due, as the value of Variation VO-NRB4-004 was correctly included under IPC-NRB4-011 and no repayment or interest is payable. \n\nThe evidence is otherwise insufficient to provide further details regarding interest calculations.",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 1.4
+  },
+  {
+    "scenario": 6,
+    "id": "NOD-VALIDITY",
+    "question": "Is the Contractor's Notice of Dissatisfaction procedurally valid, and is it likely to succeed on the merits?",
+    "expected_outcome": "Procedurally valid and timely (within 28 days); unlikely to succeed on the merits — the Engineer's retention interpretation in ENG-NRB4-0038 remains correct; dispute remains formally open, pending amicable discussion.",
+    "planner": {
+      "investigation_type": "unknown",
+      "goal": "Is the Contractor's Notice of Dissatisfaction procedurally valid, and is it likely to succeed on the merits?",
+      "primary_entities": [
+        "Contractor"
+      ],
+      "likely_evidence_sources": []
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        19,
+        20,
+        21,
+        22,
+        63,
+        64,
+        66
+      ],
+      "retrieved_document_stems": [
+        "DRPN-NRB4-001",
+        "LCM-NRB4-001",
+        "NRB4-CD-2020",
+        "NRB4-ER-2020",
+        "NRB4-GC-2020",
+        "NRB4-PC-2020",
+        "SMM-NRB4-004"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "CTR-NRB4-0098",
+        "DRPN-NRB4-001",
+        "ENG-NRB4-0038",
+        "LCM-NRB4-001"
+      ],
+      "hits": [
+        "DRPN-NRB4-001",
+        "LCM-NRB4-001"
+      ],
+      "misses": [
+        "CTR-NRB4-0098",
+        "ENG-NRB4-0038"
+      ],
+      "precision_at_expected": 0.29,
+      "recall": 0.5
+    },
+    "timeline": {
+      "timeline_context_chars": 223,
+      "timeline_nonempty": true,
+      "timeline_preview": "2020-12-05 — Contract Executed\n2020-12-05 — Contract Executed\n2020-12-05 — Contract Executed\n2020-12-05 — Contract Executed\n2022-04-08 — Technical Report Issued\n2022-04-15 — Meeting Held\n2022-04-29 — Technical Report Issued"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [
+        "13.1",
+        "13.3",
+        "14.3",
+        "14.7",
+        "20.1",
+        "3.3",
+        "4.1",
+        "8.4",
+        "8.7"
+      ],
+      "clause_count": 9,
+      "expected_clause_hint": [
+        "20.1"
+      ]
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 23656,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": true
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the supplied evidence, the evidence is insufficient to fully answer whether the Contractor's Notice of Dissatisfaction is procedurally valid and likely to succeed on the merits. \n\nWhile the supporting evidence mentions that documents such as `CIM-NRB4-002` and `LCM-NRB4-001` independently evaluated the procedural and substantive aspects (concluding on Sub-Clause 13.3 and Contract Data Section 6), the specific text or findings of those documents regarding the procedural validity and merits of the Notice of Dissatisfaction are not provided in the evidence.",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 1.5
+  },
+  {
+    "scenario": 7,
+    "id": "NCR-001-QUALITY",
+    "question": "Was the Pier P5 concrete quality non-conformance legitimate, and does the structure remain structurally acceptable?",
+    "expected_outcome": "NCR-NRB4-001 was legitimately triggered by low Test Set B cube results, but core testing and UPV survey confirm the in-place concrete is structurally adequate; no demolition required; NCR closed.",
+    "planner": {
+      "investigation_type": "quality",
+      "goal": "Was the Pier P5 concrete quality non-conformance legitimate, and does the structure remain structurally acceptable?",
+      "primary_entities": [
+        "Pier P5"
+      ],
+      "likely_evidence_sources": []
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        32,
+        40,
+        41,
+        42,
+        67,
+        69,
+        72,
+        73
+      ],
+      "retrieved_document_stems": [
+        "CTR-NRB4-0112",
+        "DPR-0722-2021",
+        "DRG-NRB4-P3-PC-Rev02",
+        "ENG-NRB4-0045",
+        "INSP-NRB4-014",
+        "NCR-NRB4-001",
+        "TM-NRB4-009",
+        "VO-NRB4-004"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "ENG-NRB4-0045",
+        "ENG-NRB4-0049",
+        "LAB-NRB4-034",
+        "LAB-NRB4-041"
+      ],
+      "hits": [
+        "ENG-NRB4-0045"
+      ],
+      "misses": [
+        "ENG-NRB4-0049",
+        "LAB-NRB4-034",
+        "LAB-NRB4-041"
+      ],
+      "precision_at_expected": 0.12,
+      "recall": 0.25
+    },
+    "timeline": {
+      "timeline_context_chars": 270,
+      "timeline_nonempty": true,
+      "timeline_preview": "2021-07-22 — Progress Report Recorded\n2021-10-01 — Technical Report Issued\n2021-10-08 — Drawing Issued\n2021-10-08 — Variation Issued\n2022-03-16 — Progress Report Recorded\n2022-03-18 — Technical Report Issued\n2022-04-18 — Correspondence Sent\n2022-04-29 — Approval Granted"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
+      "expected_clause_hint": []
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 4229,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": false
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the provided evidence:\n\n- **Legitimacy of the Non-Conformance:** The evidence confirms that Test Set B relating to the Pier P5 pier shaft resulted in a non-conforming concrete strength (addressed in NCR-NRB4-001), while Test Sets A and C covering the remainder of the same pour were satisfactory. \n- **Structural Acceptability:** The affected portion of the Pier P5 pier shaft is accepted as structurally adequate (with no indication of voiding or discontinuity providing direct evidence of the in-place concrete's condition), and no demolition or reconstruction is required. \n\nThe provided evidence is otherwise insufficient to explicitly detail whether the non-conformance was \"legitimate\" beyond recording the non-conforming result and accepting the structural adequacy.",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 1.6
+  },
+  {
+    "scenario": 8,
+    "id": "RECOVERY-PROGRAMME",
+    "question": "Is the Contractor's Recovery Programme credible, and does it support the revised completion strategy?",
+    "expected_outcome": "Credible and accepted by the Engineer; the shortfall reduced from 6 to 3 percentage points over the reporting period; one measure (Paving Train 2) underperformed initially but recovered, not undermining the overall strategy.",
+    "planner": {
+      "investigation_type": "programme",
+      "goal": "Is the Contractor's Recovery Programme credible, and does it support the revised completion strategy?",
+      "primary_entities": [
+        "Contractor"
+      ],
+      "likely_evidence_sources": []
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        27,
+        29,
+        78,
+        80,
+        81,
+        82,
+        83
+      ],
+      "retrieved_document_stems": [
+        "COORD-NRB4-001",
+        "CTR-NRB4-0028",
+        "CTR-NRB4-0198",
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0052",
+        "RPN-NRB4-001",
+        "WPR-NRB4-023"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "ENG-NRB4-0052",
+        "RPN-NRB4-001",
+        "WPR-NRB4-018",
+        "WPR-NRB4-023"
+      ],
+      "hits": [
+        "ENG-NRB4-0052",
+        "RPN-NRB4-001",
+        "WPR-NRB4-023"
+      ],
+      "misses": [
+        "WPR-NRB4-018"
+      ],
+      "precision_at_expected": 0.43,
+      "recall": 0.75
+    },
+    "timeline": {
+      "timeline_context_chars": 227,
+      "timeline_nonempty": true,
+      "timeline_preview": "2021-03-24 — Correspondence Sent\n2021-09-25 — Approval Granted\n2022-06-15 — Programme Issued\n2022-06-22 — Meeting Held\n2022-07-29 — Progress Report Recorded\n2022-08-08 — Approval Granted\n2023-09-05 — Contractor Notice Submitted"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [
+        "13.1",
+        "13.3",
+        "14.3",
+        "14.7",
+        "20.1",
+        "3.3",
+        "4.1",
+        "8.4",
+        "8.7"
+      ],
+      "clause_count": 9,
+      "expected_clause_hint": []
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 23661,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": true
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the provided evidence, the Contractor's Recovery Programme is considered credible and supports the revised completion strategy, subject to the following findings:\n\n* **Credibility of the Recovery Programme:** The Engineer's Representative considered an assumed full-productivity period shortfall of 3 weeks to be a \"genuine, if modest, underperformance of one measure within the Recovery Programme, not a failure of the overall strategy\" (Paving Train 1, the drainage and kerb subcontractor, and the geotechnical sign-off measure) [ENG-NRB4-0052.pdf]. \n* **Support for the Strategy:** Approach road pavement on both banks, drainage, parapets, and expansion joint installation are complete, which is consistent with the recovery strategy [CTR-NRB4-0198.pdf]. Additionally, the Employer's representative noted no objection to the proposed subcontract engagement of Suvarna Civil Works Pvt. Ltd. for drainage and kerb works in support of the recovery measures [COORD-NRB4-001.pdf].",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 1.7
+  },
+  {
+    "scenario": 9,
+    "id": "TAKING-OVER",
+    "question": "Do the outstanding punch-list items prevent Practical Completion of the Works?",
+    "expected_outcome": "No — the four outstanding items are all minor (none structural or safety-related); the Engineer was contractually justified in issuing the Taking-Over Certificate while requiring their completion within an agreed period.",
+    "planner": {
+      "investigation_type": "practical_completion",
+      "goal": "Do the outstanding punch-list items prevent Practical Completion of the Works?",
+      "primary_entities": [],
+      "likely_evidence_sources": []
+    },
+    "retrieval": {
+      "retrieved_document_ids": [
+        19,
+        20,
+        22,
+        44,
+        83,
+        85,
+        86,
+        87,
+        89
+      ],
+      "retrieved_document_stems": [
+        "CTR-NRB4-0198",
+        "ENG-NRB4-0031",
+        "JIR-NRB4-001",
+        "NRB4-ER-2020",
+        "NRB4-GC-2020",
+        "NRB4-PC-2020",
+        "OWR-NRB4-001",
+        "PL-NRB4-001",
+        "TOC-NRB4-001"
+      ],
+      "citation_count": 10,
+      "expected_decisive_docs": [
+        "JIR-NRB4-001",
+        "PL-NRB4-001",
+        "TOC-NRB4-001"
+      ],
+      "hits": [
+        "JIR-NRB4-001",
+        "PL-NRB4-001",
+        "TOC-NRB4-001"
+      ],
+      "misses": [],
+      "precision_at_expected": 0.33,
+      "recall": 1.0
+    },
+    "timeline": {
+      "timeline_context_chars": 304,
+      "timeline_nonempty": true,
+      "timeline_preview": "2020-12-05 — Contract Executed\n2020-12-05 — Contract Executed\n2020-12-05 — Contract Executed\n2021-11-05 — Approval Granted\n2023-09-05 — Contractor Notice Submitted\n2023-09-11 — Technical Report Issued\n2023-09-12 — Technical Report Issued\n2023-09-12 — Technical Report Issued\n2023-09-22 — Approval Granted"
+    },
+    "contract_clauses": {
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
+      "expected_clause_hint": []
+    },
+    "prompt": {
+      "system_prompt_chars": 359,
+      "user_prompt_chars": 4218,
+      "has_evidence_section": true,
+      "has_timeline_section": true,
+      "has_contract_clause_section": false
+    },
+    "gemini": {
+      "error": null,
+      "answer": "Based on the supplied evidence, no item on the punch list is assessed as critical or as preventing beneficial use of the Works (or preventing Practical Completion). Specifically, the evidence states that none of the outstanding items are assessed as \"preventing beneficial use of the Works\" and are not critical [1, 2].",
+      "citation_count_returned": 10,
+      "reasoning_steps": [
+        "Retrieved relevant evidence.",
+        "Ranked evidence by confidence.",
+        "Selected the highest-confidence supporting evidence.",
+        "Generated an answer using the configured language model, grounded in that evidence.",
+        "Verified each citation against the database before returning it."
+      ]
+    },
+    "elapsed_seconds": 1.3
+  }
+]

@@ -18,6 +18,16 @@ question text. Ambiguous or oddly-phrased questions may still be
 misclassified, and questions matching multiple categories still resolve to
 whichever category is checked first — this is still a known, accepted
 limitation for a "lightweight planning task," not an oversight.
+
+Sprint 7 Task 5: five categories added — quality, programme, practical
+completion, defects, taking over — covering investigation types the
+original seven (built against Dataset V1's delay/variation/payment/approval-
+centric vocabulary) had no coverage for, so a question like "was the
+concrete quality non-conformance legitimate?" or "does the punch list
+prevent Practical Completion?" no longer falls through to "unknown". Added
+strictly after the original seven in _KEYWORDS_BY_TYPE, so priority order
+for every pre-existing category is unchanged and no previously-classified
+question can be reclassified — this is purely additive.
 """
 
 import re
@@ -50,6 +60,29 @@ _KEYWORDS_BY_TYPE: dict[str, list[str]] = {
     "compliance": [
         "compliance", "comply", "compliant", "breach", "violation",
         "notice period", "contractual obligation",
+    ],
+    # -- Sprint 7 Task 5: added after the original seven; see module
+    # docstring. Priority order among these five is arbitrary (no benchmark
+    # question matched more than one), listed in the order Task 5 itself
+    # lists the categories.
+    "quality": [
+        "quality", "non-conformance", "nonconformance", "ncr",
+        "concrete strength", "cube test", "workmanship",
+    ],
+    "programme": [
+        "recovery programme", "recovery program", "critical path",
+        "programme update", "program update", "resource loading",
+    ],
+    "practical_completion": [
+        "practical completion", "beneficial use",
+    ],
+    "defects": [
+        "defect", "defects", "defects notification period",
+        "remedy the defect", "remedy defects",
+    ],
+    "taking_over": [
+        "taking-over", "taking over", "punch list", "punch-list",
+        "outstanding items",
     ],
 }
 

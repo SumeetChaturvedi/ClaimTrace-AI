@@ -10,6 +10,37 @@ approached, tools.py/this module know how to gather evidence,
 investigation_package.py packages it up model-agnostically, reasoning.py
 knows what it means.
 
+Investigation Loop integration (Phase 3 Task 07): investigate() no longer
+performs a single retrieval pass itself. It delegates evidence-gathering
+entirely to InvestigationLoop (app/agent/investigation_loop.py, Phase 3
+Task 06) — which itself orchestrates InvestigationAgent's initial pass plus
+the three remediation executors (Reference Expansion, Focused Retrieval,
+Full Document Read) against EvidenceSufficiencyAssessor's decisions — then
+packages the loop's final InvestigationState exactly as the old single-pass
+code packaged one search_documents() call's citations. None of those reused
+components are modified here; investigate() only wires them together. The
+production flow is now: Investigation Planner -> Investigation Loop ->
+Prompt Builder -> Reasoning Engine -> Gemini, matching the approved Task 07
+architecture. Imports of investigation_loop/investigation_agent are local to
+__init__ (not module-level) because InvestigationAgent itself imports
+InvestigationService (Task 02's private-method-reuse pattern) to call this
+class's own planner/contract-clause/evidence/timeline helpers — a
+module-level import here would be circular; deferring it to __init__ (by
+which point this module has already finished defining InvestigationService)
+resolves that without changing either module's public shape.
+
+Timeline refresh (Phase 3 Task 07, a genuine integration defect found and
+fixed here — see investigate() below): none of the three remediation
+executors update InvestigationState.timeline_context (only
+InvestigationAgent's initial pass does, once, before any remediation runs).
+Left alone, a loop that grows evidence far beyond the initial pass would
+package a timeline reflecting only that small initial document set,
+silently stale relative to the documents Gemini's evidence section actually
+shows it. investigate() now rebuilds the timeline once, after the loop
+completes, from the final evidence's full citation set — reusing the
+existing, unmodified _build_timeline_context() below with different input,
+not a new timeline implementation.
+
 Evidence construction: Citation carries the actual matched chunk text
 (citation.chunk_text, populated by search_documents() straight from the
 semantic search result), so excerpt/surrounding_context are built from that
@@ -55,6 +86,8 @@ at most once per process. Injecting a clause_repository explicitly (e.g. in
 tests) always overrides this default entirely.
 """
 
+from typing import TYPE_CHECKING
+
 from app.agent import tools
 from app.agent.investigation_package import InvestigationPackageBuilder
 from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse
@@ -66,6 +99,13 @@ from app.contracts.repository import ClauseRepository
 from app.contracts.search import ClauseSearchService
 from app.investigation import InvestigationPlanner
 from app.investigation.timeline import TimelineBuilder, TimelineFormatter
+
+if TYPE_CHECKING:
+    # Type-checking only, to avoid the module-level circular import
+    # explained above investigate() -- InvestigationLoop's own import chain
+    # reaches back into this module.
+    from app.agent.evidence_narrowing import EvidenceNarrower
+    from app.agent.investigation_loop import InvestigationLoop
 
 # Excerpt length within a matched chunk (or, in the read_document() fallback,
 # within the truncated full-document prefix). Picked as a reasonable default
@@ -94,6 +134,8 @@ class InvestigationService:
         timeline_formatter: TimelineFormatter | None = None,
         clause_repository: ClauseRepository | None = None,
         contract_context_builder: ContractContextBuilder | None = None,
+        investigation_loop: "InvestigationLoop | None" = None,
+        evidence_narrower: "EvidenceNarrower | None" = None,
     ) -> None:
         self._reasoning_engine = reasoning_engine or ReasoningEngine()
         self._package_builder = package_builder or InvestigationPackageBuilder()
@@ -112,39 +154,89 @@ class InvestigationService:
         self._contract_context_builder = contract_context_builder or ContractContextBuilder()
         self._clause_retriever = ClauseRetriever(self._clause_repository, ClauseSearchService(self._clause_repository))
 
+        if investigation_loop is not None:
+            self._investigation_loop = investigation_loop
+        else:
+            # Local imports: see the module docstring's "Investigation Loop
+            # integration" note for why these can't be module-level imports.
+            from app.agent.focused_retrieval_executor import FocusedRetrievalExecutor
+            from app.agent.investigation_agent import InvestigationAgent
+            from app.agent.investigation_loop import InvestigationLoop
+
+            # `service=self` / `service=self` below: InvestigationAgent and
+            # FocusedRetrievalExecutor each already accept an injectable
+            # InvestigationService purely as a source of reusable private
+            # methods (planner, contract context/clause retrieval, evidence
+            # assembly — Task 02/04's private-method-reuse pattern). Passing
+            # this same, already-fully-configured instance avoids
+            # constructing a second, redundant InvestigationService (and,
+            # transitively, a second ReasoningEngine/GeminiProvider) purely
+            # to reach those methods.
+            self._investigation_loop = InvestigationLoop(
+                agent=InvestigationAgent(service=self),
+                focused_retrieval_executor=FocusedRetrievalExecutor(service=self),
+            )
+
+        # Local import for the same reason as above: evidence_narrowing.py
+        # imports CONTEXT_CHARS/EXCERPT_CHARS/_truncate/_clamp_confidence
+        # from this module, so a module-level import here would be circular.
+        from app.agent.evidence_narrowing import EvidenceNarrower
+
+        self._evidence_narrower = evidence_narrower if evidence_narrower is not None else EvidenceNarrower()
+
     async def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
         """Run an investigation for `request`: create an InvestigationPlan,
-        retrieve supporting evidence via semantic search, build an Evidence
-        object per result, assemble an InvestigationPackage from the
-        question and evidence, hand it to ReasoningEngine, and map its
-        ReasoningResult onto InvestigationResponse. Does not verify
-        citations or call an LLM yet — see ReasoningEngine for what
-        "reasoning" currently means.
+        gather evidence via the Investigation Loop (initial retrieval plus
+        deterministic remediation — Reference Expansion, Focused Retrieval,
+        Full Document Read — until EvidenceSufficiencyAssessor reports
+        sufficiency or the loop's own stopping conditions fire), assemble an
+        InvestigationPackage from the question and the loop's final
+        evidence/timeline/clauses, hand it to ReasoningEngine, and map its
+        ReasoningResult onto InvestigationResponse.
 
-        The InvestigationPlan is created and passed through to
-        search_documents(), which now converts it to a RetrievalContext and
-        forwards it into retrieval — its primary_entities feed a
-        deterministic entity-match scoring bonus there (see
-        app/retrieval/scoring.py). It doesn't otherwise shape the query,
-        evidence, packaging, or reasoning, and is never exposed on
-        InvestigationResponse."""
+        The Investigation Loop plans internally (InvestigationAgent creates
+        the InvestigationPlan as its own first step) and retrieves/builds
+        evidence, clauses, and an initial timeline via the same components
+        this method used to call directly — see InvestigationLoop and
+        InvestigationAgent for exactly what runs and in what order. This
+        method's own job is now: run the loop, refresh the timeline against
+        everything the loop actually gathered (see the module docstring's
+        "Timeline refresh" note), narrow the loop's full evidence set down
+        to what materially supports the answer (Sprint 8 Task 01 — see
+        evidence_narrowing.py), package, and reason — no retrieval,
+        evidence-building, or clause-retrieval logic lives here anymore.
+
+        Evidence narrowing (Sprint 8 Task 01): the Investigation Loop
+        routinely gathers 50+ evidence items across its remediation
+        iterations, but not all of it materially supports the answer —
+        left unfiltered, every one of those items becomes a citation on
+        InvestigationResponse. EvidenceNarrower runs here, after the loop
+        and before packaging, so PromptBuilder and ReasoningEngine only
+        ever see the narrowed set — no changes were needed to either.
+        Timeline and contract clauses are built from the loop's FULL
+        evidence (not the narrowed set): narrowing is specifically a
+        citation/evidence-noise concern, not a chronology or contract-topic
+        concern, so neither should be scoped down by it."""
         self._validate(request)
 
-        plan = self._planner.create_plan(request.query)
+        loop_result = self._investigation_loop.run(request)
+        state = loop_result.state
 
-        contract_context = self._contract_context_builder.build(plan)
-        retrieved_clauses = self._clause_retriever.retrieve(contract_context)
+        # Timeline refresh (see module docstring): state.timeline_context
+        # reflects only InvestigationAgent's initial pass. Rebuild it from
+        # the loop's complete, final evidence set using the existing,
+        # unmodified _build_timeline_context() — not a new implementation,
+        # just called again with a fuller citation list. Built from the
+        # FULL evidence, before narrowing (see docstring above).
+        final_timeline_context = self._build_timeline_context([item.citation for item in state.evidence])
 
-        citations = tools.search_documents(
-            project_id=request.project_id,
-            query=request.query,
-            top_k=request.top_k,
-            investigation_plan=plan,
-        )
-        evidence = self._build_evidence(citations)
-        timeline_context = self._build_timeline_context(citations)
+        narrowing_result = self._evidence_narrower.narrow(state.evidence)
+
         package = self._package_builder.build(
-            request.query, evidence, timeline_context=timeline_context, retrieved_clauses=retrieved_clauses
+            request.query,
+            narrowing_result.retained_evidence,
+            timeline_context=final_timeline_context,
+            retrieved_clauses=list(state.retrieved_clauses),
         )
 
         result = self._reasoning_engine.reason(package)

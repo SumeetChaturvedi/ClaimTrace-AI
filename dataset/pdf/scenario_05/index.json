@@ -1,0 +1,51 @@
+[
+  {
+    "document_id": "CTR-NRB4-0091",
+    "filename": "CTR-NRB4-0091.pdf",
+    "document_type": "NOTICE",
+    "title": "Contractor's Commercial Notice — Retention Treatment of Variation VO-NRB4-004",
+    "scenario": 5
+  },
+  {
+    "document_id": "NHIA-NRB4-COMM-003",
+    "filename": "NHIA-NRB4-COMM-003.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Employer's Response — Commercial Notice CTR-NRB4-0091",
+    "scenario": 5
+  },
+  {
+    "document_id": "FCS-NRB4-011",
+    "filename": "FCS-NRB4-011.pdf",
+    "document_type": "MEASUREMENT",
+    "title": "Financial Calculation Sheet — Retention Comparison, IPC-11",
+    "scenario": 5
+  },
+  {
+    "document_id": "PRE-NRB4-011",
+    "filename": "PRE-NRB4-011.pdf",
+    "document_type": "PAYMENT",
+    "title": "Payment Register Extract — Certificates No. 09 to No. 11",
+    "scenario": 5
+  },
+  {
+    "document_id": "CIM-NRB4-002",
+    "filename": "CIM-NRB4-002.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Contract Interpretation Memorandum — Retention and Variations",
+    "scenario": 5
+  },
+  {
+    "document_id": "ENG-NRB4-0038",
+    "filename": "ENG-NRB4-0038.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Commercial Assessment — Commercial Notice CTR-NRB4-0091",
+    "scenario": 5
+  },
+  {
+    "document_id": "MOM-NRB4-026",
+    "filename": "MOM-NRB4-026.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Monthly Progress Meeting No. 26",
+    "scenario": 5
+  }
+]
