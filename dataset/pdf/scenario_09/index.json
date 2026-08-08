@@ -1,0 +1,51 @@
+[
+  {
+    "document_id": "CTR-NRB4-0198",
+    "filename": "CTR-NRB4-0198.pdf",
+    "document_type": "NOTICE",
+    "title": "Contractor's Application for the Taking-Over Certificate",
+    "scenario": 9
+  },
+  {
+    "document_id": "EIN-NRB4-001",
+    "filename": "EIN-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Engineer's Inspection Notes — Taking-Over Inspection",
+    "scenario": 9
+  },
+  {
+    "document_id": "JIR-NRB4-001",
+    "filename": "JIR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Joint Inspection Report — Taking-Over Inspection",
+    "scenario": 9
+  },
+  {
+    "document_id": "PL-NRB4-001",
+    "filename": "PL-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Punch List — Taking-Over Inspection",
+    "scenario": 9
+  },
+  {
+    "document_id": "OWR-NRB4-001",
+    "filename": "OWR-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Outstanding Works Register",
+    "scenario": 9
+  },
+  {
+    "document_id": "COMP-NRB4-001",
+    "filename": "COMP-NRB4-001.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Completion Meeting — Taking-Over",
+    "scenario": 9
+  },
+  {
+    "document_id": "TOC-NRB4-001",
+    "filename": "TOC-NRB4-001.pdf",
+    "document_type": "APPROVAL",
+    "title": "Taking-Over Certificate",
+    "scenario": 9
+  }
+]

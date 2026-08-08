@@ -1,0 +1,1137 @@
+{
+  "summary": {
+    "project_id": 2,
+    "project_name": "Dataset V2 \u2014 Nandira River Bridge Project, Package NRB-4",
+    "total_pdfs_expected": 71,
+    "ingested_ok": 71,
+    "total_chunks": 232,
+    "null_doc_type": 0,
+    "null_doc_date": 0,
+    "zero_chunk_documents": []
+  },
+  "documents": [
+    {
+      "doc_id": "NRB4-GC-2020",
+      "document_pk": 19,
+      "doc_type": "CONTRACT",
+      "doc_date": "2020-12-05",
+      "referenced_ids": [
+        "2020-01",
+        "NRB-4",
+        "NRB4-GC-2020"
+      ],
+      "chunk_count": 27
+    },
+    {
+      "doc_id": "NRB4-PC-2020",
+      "document_pk": 20,
+      "doc_type": "CONTRACT",
+      "doc_date": "2020-12-05",
+      "referenced_ids": [
+        "2020-01",
+        "NRB-4",
+        "NRB4-PC-2020"
+      ],
+      "chunk_count": 20
+    },
+    {
+      "doc_id": "NRB4-CD-2020",
+      "document_pk": 21,
+      "doc_type": "CONTRACT",
+      "doc_date": "2020-12-05",
+      "referenced_ids": [
+        "2020-01",
+        "NH-14",
+        "NRB-4",
+        "NRB4-CD-2020"
+      ],
+      "chunk_count": 5
+    },
+    {
+      "doc_id": "NRB4-ER-2020",
+      "document_pk": 22,
+      "doc_type": "CONTRACT",
+      "doc_date": "2020-12-05",
+      "referenced_ids": [
+        "2020-01",
+        "AS-BUILT",
+        "NH-14",
+        "NRB-4",
+        "NRB4-ER-2020"
+      ],
+      "chunk_count": 16
+    },
+    {
+      "doc_id": "DPR-0128-2021",
+      "document_pk": 23,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2021-01-28",
+      "referenced_ids": [
+        "2020-01",
+        "DPR-0128-2021",
+        "NRB-4"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "CTR-NRB4-0021",
+      "document_pk": 24,
+      "doc_type": "NOTICE",
+      "doc_date": "2021-02-10",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0021",
+        "DPR-0128-2021",
+        "NRB-4"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "SI-NRB4-014",
+      "document_pk": 25,
+      "doc_type": "SITE_INSTRUCTION",
+      "doc_date": "2021-02-25",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0021",
+        "NRB-4",
+        "SI-NRB4-014"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "VPGC-NRB4-0012",
+      "document_pk": 26,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2021-03-05",
+      "referenced_ids": [
+        "2020-01",
+        "NRB-4",
+        "VPGC-NRB4-0012"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "CTR-NRB4-0028",
+      "document_pk": 27,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2021-03-24",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0021",
+        "CTR-NRB4-0028",
+        "DPR-0128-2021",
+        "NRB-4",
+        "SI-NRB4-014",
+        "VPGC-NRB4-0012"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "VPGC-NRB4-0045",
+      "document_pk": 28,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2021-09-10",
+      "referenced_ids": [
+        "2020-01",
+        "NRB-4",
+        "VPGC-NRB4-0012",
+        "VPGC-NRB4-0045"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "ENG-NRB4-0019",
+      "document_pk": 29,
+      "doc_type": "APPROVAL",
+      "doc_date": "2021-09-25",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0021",
+        "CTR-NRB4-0028",
+        "ENG-NRB4-0019",
+        "EOT-01",
+        "NRB-4",
+        "SI-NRB4-014",
+        "VPGC-NRB4-0012",
+        "VPGC-NRB4-0045"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "CTR-NRB4-0052",
+      "document_pk": 30,
+      "doc_type": "CLAIM",
+      "doc_date": "2021-10-08",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0021",
+        "CTR-NRB4-0028",
+        "CTR-NRB4-0052",
+        "ENG-NRB4-0019",
+        "EOT-01",
+        "NRB-4",
+        "SI-NRB4-014"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "DPR-0614-2021",
+      "document_pk": 31,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2021-06-14",
+      "referenced_ids": [
+        "2020-01",
+        "DPR-0614-2021",
+        "NRB-4",
+        "SI-NRB4-014",
+        "VPGC-NRB4-0012"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "DPR-0722-2021",
+      "document_pk": 32,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2021-07-22",
+      "referenced_ids": [
+        "2020-01",
+        "DPR-0722-2021",
+        "NRB-4"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "DPR-0830-2021",
+      "document_pk": 33,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2021-08-30",
+      "referenced_ids": [
+        "2020-01",
+        "DPR-0830-2021",
+        "NRB-4",
+        "VPGC-NRB4-0012"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "MET-NRB4-2021-03",
+      "document_pk": 34,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2021-10-05",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0052",
+        "DPR-0722-2021",
+        "MET-NRB4-2021-03",
+        "NRB-4"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "PGM-NRB4-Rev04",
+      "document_pk": 35,
+      "doc_type": "PROGRAMME",
+      "doc_date": "2021-10-15",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0052",
+        "DPR-0128-2021",
+        "DPR-0614-2021",
+        "DPR-0722-2021",
+        "DPR-0830-2021",
+        "ENG-NRB4-0019",
+        "EOT-01",
+        "MET-NRB4-2021-03",
+        "NRB-4",
+        "PGM-NRB4",
+        "Rev. 04",
+        "Rev04",
+        "SI-NRB4-014",
+        "VPGC-NRB4-0045"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "MOM-NRB4-021",
+      "document_pk": 36,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2021-10-20",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0052",
+        "DPR-0722-2021",
+        "ENG-NRB4-0019",
+        "MET-NRB4-2021-03",
+        "MOM-NRB4-021",
+        "NRB-4",
+        "PGM-NRB4",
+        "Rev04",
+        "VPGC-NRB4-0045"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "ENG-NRB4-0024",
+      "document_pk": 37,
+      "doc_type": "APPROVAL",
+      "doc_date": "2021-11-05",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0052",
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0024",
+        "MET-NRB4-2021-03",
+        "NRB-4",
+        "PGM-NRB4",
+        "Rev04"
+      ],
+      "chunk_count": 4
+    },
+    {
+      "doc_id": "DPR-0920-2021",
+      "document_pk": 38,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2021-09-20",
+      "referenced_ids": [
+        "2020-01",
+        "DPR-0128-2021",
+        "DPR-0920-2021",
+        "NRB-4",
+        "VPGC-NRB4-0045"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "CTR-NRB4-0061",
+      "document_pk": 39,
+      "doc_type": "NOTICE",
+      "doc_date": "2021-09-22",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0021",
+        "CTR-NRB4-0061",
+        "DPR-0128-2021",
+        "DPR-0920-2021",
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0024",
+        "NRB-4",
+        "VPGC-NRB4-0045"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "TM-NRB4-009",
+      "document_pk": 40,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2021-10-01",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0061",
+        "DPR-0920-2021",
+        "NRB-4",
+        "TM-NRB4-009",
+        "TP-1",
+        "TP-3",
+        "VPGC-NRB4-0045"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "DRG-NRB4-P3-PC-Rev02",
+      "document_pk": 41,
+      "doc_type": "DRAWING",
+      "doc_date": "2021-10-08",
+      "referenced_ids": [
+        "2020-01",
+        "DRG-NRB4-P3-PC",
+        "NRB-4",
+        "Rev01",
+        "Rev02",
+        "TM-NRB4-009",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "VO-NRB4-004",
+      "document_pk": 42,
+      "doc_type": "VARIATION",
+      "doc_date": "2021-10-08",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0061",
+        "DRG-NRB4-P3-PC",
+        "NRB-4",
+        "Rev02",
+        "TM-NRB4-009",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "CTR-NRB4-0067",
+      "document_pk": 43,
+      "doc_type": "VARIATION",
+      "doc_date": "2021-10-22",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0061",
+        "CTR-NRB4-0067",
+        "DRG-NRB4-P3-PC",
+        "NRB-4",
+        "Rev02",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "ENG-NRB4-0031",
+      "document_pk": 44,
+      "doc_type": "APPROVAL",
+      "doc_date": "2021-11-05",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0067",
+        "DRG-NRB4-P3-PC",
+        "ENG-NRB4-0031",
+        "NRB-4",
+        "Rev02",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 4
+    },
+    {
+      "doc_id": "MOM-NRB4-022",
+      "document_pk": 45,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2021-11-20",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0067",
+        "ENG-NRB4-0031",
+        "MOM-NRB4-022",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "NHIA-NRB4-APR-006",
+      "document_pk": 46,
+      "doc_type": "APPROVAL",
+      "doc_date": "2021-11-25",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0067",
+        "ENG-NRB4-0031",
+        "NHIA-NRB4-APR-006",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "STMT-NRB4-011",
+      "document_pk": 47,
+      "doc_type": "PAYMENT",
+      "doc_date": "2021-12-03",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0067",
+        "ENG-NRB4-0031",
+        "NHIA-NRB4-APR-006",
+        "NRB-4",
+        "STMT-NRB4-011",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "QMS-NRB4-011",
+      "document_pk": 48,
+      "doc_type": "MEASUREMENT",
+      "doc_date": "2021-12-10",
+      "referenced_ids": [
+        "2020-01",
+        "ENG-NRB4-0031",
+        "ITEM-BY-ITEM",
+        "NHIA-NRB4-APR-006",
+        "NRB-4",
+        "QMS-NRB4-011",
+        "STMT-NRB4-011",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "IPC-NRB4-011",
+      "document_pk": 49,
+      "doc_type": "PAYMENT",
+      "doc_date": "2021-12-17",
+      "referenced_ids": [
+        "2020-01",
+        "IPC-NRB4-011",
+        "NHIA-NRB4-APR-006",
+        "NRB-4",
+        "QMS-NRB4-011",
+        "STMT-NRB4-011",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "MOM-NRB4-023",
+      "document_pk": 50,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2021-12-20",
+      "referenced_ids": [
+        "2020-01",
+        "IPC-NRB4-011",
+        "MOM-NRB4-023",
+        "NRB-4",
+        "QMS-NRB4-011",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "NHIA-NRB4-PAY-011",
+      "document_pk": 51,
+      "doc_type": "PAYMENT",
+      "doc_date": "2022-01-26",
+      "referenced_ids": [
+        "2020-01",
+        "IPC-NRB4-011",
+        "NHIA-NRB4-APR-006",
+        "NHIA-NRB4-PAY-011",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "BTC-NRB4-011",
+      "document_pk": 52,
+      "doc_type": "PAYMENT",
+      "doc_date": "2022-01-27",
+      "referenced_ids": [
+        "2020-01",
+        "BTC-NRB4-011",
+        "IPC-NRB4-011",
+        "NHIA-TXN-2022-0114",
+        "NRB-4"
+      ],
+      "chunk_count": 1
+    },
+    {
+      "doc_id": "CTR-NRB4-0084",
+      "document_pk": 53,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2022-01-28",
+      "referenced_ids": [
+        "2020-01",
+        "BTC-NRB4-011",
+        "CTR-NRB4-0084",
+        "IPC-NRB4-011",
+        "NRB-4",
+        "QMS-NRB4-011",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "CTR-NRB4-0091",
+      "document_pk": 54,
+      "doc_type": "NOTICE",
+      "doc_date": "2022-02-10",
+      "referenced_ids": [
+        "2020-01",
+        "BTC-NRB4-011",
+        "CTR-NRB4-0091",
+        "IPC-NRB4-011",
+        "NHIA-NRB4-PAY-011",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 4
+    },
+    {
+      "doc_id": "NHIA-NRB4-COMM-003",
+      "document_pk": 55,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2022-02-18",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0091",
+        "IPC-NRB4-011",
+        "NHIA-NRB4-COMM-003",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "FCS-NRB4-011",
+      "document_pk": 56,
+      "doc_type": "MEASUREMENT",
+      "doc_date": "2022-02-22",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0091",
+        "FCS-NRB4-011",
+        "IPC-11",
+        "IPC-NRB4-011",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "PRE-NRB4-011",
+      "document_pk": 57,
+      "doc_type": "PAYMENT",
+      "doc_date": "2022-02-22",
+      "referenced_ids": [
+        "2020-01",
+        "IPC-NRB4-009",
+        "IPC-NRB4-010",
+        "IPC-NRB4-011",
+        "NRB-4",
+        "PRE-NRB4-011",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "CIM-NRB4-002",
+      "document_pk": 58,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-02-28",
+      "referenced_ids": [
+        "2020-01",
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "IPC-NRB4-011",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "ENG-NRB4-0038",
+      "document_pk": 59,
+      "doc_type": "APPROVAL",
+      "doc_date": "2022-03-04",
+      "referenced_ids": [
+        "2020-01",
+        "BTC-NRB4-011",
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "ENG-NRB4-0038",
+        "FCS-NRB4-011",
+        "IPC-NRB4-011",
+        "NRB-4",
+        "PRE-NRB4-011",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "MOM-NRB4-026",
+      "document_pk": 60,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2022-03-20",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0091",
+        "ENG-NRB4-0038",
+        "MOM-NRB4-026",
+        "NHIA-NRB4-COMM-003",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "CTR-NRB4-0098",
+      "document_pk": 61,
+      "doc_type": "NOTICE",
+      "doc_date": "2022-03-25",
+      "referenced_ids": [
+        "2020-01",
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "CTR-NRB4-0098",
+        "ENG-NRB4-0038",
+        "FCS-NRB4-011",
+        "IPC-NRB4-011",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "NHIA-NRB4-COMM-004",
+      "document_pk": 62,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2022-04-01",
+      "referenced_ids": [
+        "2020-01",
+        "CIM-NRB4-002",
+        "CTR-NRB4-0098",
+        "ENG-NRB4-0038",
+        "IPC-NRB4-011",
+        "NHIA-NRB4-COMM-004",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "LCM-NRB4-001",
+      "document_pk": 63,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-04-08",
+      "referenced_ids": [
+        "2020-01",
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "CTR-NRB4-0098",
+        "ENG-NRB4-0038",
+        "LCM-NRB4-001",
+        "NRB-4",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "SMM-NRB4-004",
+      "document_pk": 64,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2022-04-15",
+      "referenced_ids": [
+        "2020-01",
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "CTR-NRB4-0098",
+        "ENG-NRB4-0038",
+        "LCM-NRB4-001",
+        "NRB-4",
+        "SMM-NRB4-004",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "CTR-NRB4-0104",
+      "document_pk": 65,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2022-04-22",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0091",
+        "CTR-NRB4-0098",
+        "CTR-NRB4-0104",
+        "IPC-NRB4-011",
+        "NRB-4",
+        "SMM-NRB4-004",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "DRPN-NRB4-001",
+      "document_pk": 66,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-04-29",
+      "referenced_ids": [
+        "2020-01",
+        "CIM-NRB4-002",
+        "CTR-NRB4-0091",
+        "CTR-NRB4-0098",
+        "CTR-NRB4-0104",
+        "DRPN-NRB4-001",
+        "ENG-NRB4-0038",
+        "FCS-NRB4-011",
+        "IPC-NRB4-011",
+        "LCM-NRB4-001",
+        "NHIA-NRB4-APR-006",
+        "NHIA-NRB4-COMM-003",
+        "NHIA-NRB4-COMM-004",
+        "NRB-4",
+        "PRE-NRB4-011",
+        "VO-NRB4-004"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "INSP-NRB4-014",
+      "document_pk": 67,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2022-03-16",
+      "referenced_ids": [
+        "2020-01",
+        "INSP-NRB4-014",
+        "LAB-NRB4-034",
+        "NRB-4"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "LAB-NRB4-034",
+      "document_pk": 68,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-03-15",
+      "referenced_ids": [
+        "2020-01",
+        "LAB-NRB4-034",
+        "NRB-4"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "NCR-NRB4-001",
+      "document_pk": 69,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-03-18",
+      "referenced_ids": [
+        "2020-01",
+        "INSP-NRB4-014",
+        "LAB-NRB4-034",
+        "NCR-NRB4-001",
+        "NRB-4"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "RCA-NRB4-003",
+      "document_pk": 70,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-04-01",
+      "referenced_ids": [
+        "2020-01",
+        "IN-PLACE",
+        "NCR-NRB4-001",
+        "NRB-4",
+        "RCA-NRB4-003"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "LAB-NRB4-041",
+      "document_pk": 71,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-04-12",
+      "referenced_ids": [
+        "2020-01",
+        "C-1",
+        "C-2",
+        "C-3",
+        "LAB-NRB4-041",
+        "NCR-NRB4-001",
+        "NRB-4",
+        "RCA-NRB4-003"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "CTR-NRB4-0112",
+      "document_pk": 72,
+      "doc_type": "CORRESPONDENCE",
+      "doc_date": "2022-04-18",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0112",
+        "LAB-NRB4-041",
+        "NCR-NRB4-001",
+        "NRB-4",
+        "RCA-NRB4-003"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "ENG-NRB4-0045",
+      "document_pk": 73,
+      "doc_type": "APPROVAL",
+      "doc_date": "2022-04-29",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0098",
+        "CTR-NRB4-0112",
+        "ENG-NRB4-0045",
+        "LAB-NRB4-041",
+        "NCR-NRB4-001",
+        "NRB-4",
+        "RCA-NRB4-003"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "ENG-NRB4-0049",
+      "document_pk": 74,
+      "doc_type": "APPROVAL",
+      "doc_date": "2022-05-06",
+      "referenced_ids": [
+        "2020-01",
+        "CLOSE-OUT",
+        "CTR-NRB4-0112",
+        "ENG-NRB4-0045",
+        "ENG-NRB4-0049",
+        "INSP-NRB4-014",
+        "LAB-NRB4-034",
+        "LAB-NRB4-041",
+        "NCR-NRB4-001",
+        "NRB-4",
+        "RCA-NRB4-003"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "WPR-NRB4-018",
+      "document_pk": 75,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2022-06-03",
+      "referenced_ids": [
+        "2020-01",
+        "EOT-01",
+        "MOM-NRB4-026",
+        "NCR-NRB4-001",
+        "NRB-4",
+        "WPR-NRB4-018"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "PGM-NRB4-Rev07",
+      "document_pk": 76,
+      "doc_type": "PROGRAMME",
+      "doc_date": "2022-06-03",
+      "referenced_ids": [
+        "2020-01",
+        "ACT-4210",
+        "ACT-4220",
+        "ACT-4310",
+        "ACT-4320",
+        "ACT-4400",
+        "ACT-4500",
+        "ACT-5100",
+        "ACT-6100",
+        "EOT-01",
+        "NRB-4",
+        "PGM-NRB4",
+        "Rev07",
+        "WPR-NRB4-018"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "PROD-NRB4-002",
+      "document_pk": 77,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2022-06-08",
+      "referenced_ids": [
+        "2020-01",
+        "NRB-4",
+        "PROD-NRB4-002"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "RPN-NRB4-001",
+      "document_pk": 78,
+      "doc_type": "PROGRAMME",
+      "doc_date": "2022-06-15",
+      "referenced_ids": [
+        "2020-01",
+        "ACT-5100",
+        "ENG-NRB4-0019",
+        "EOT-01",
+        "NRB-4",
+        "PGM-NRB4",
+        "PROD-NRB4-002",
+        "RLP-NRB4-001",
+        "RPN-NRB4-001",
+        "Rev07",
+        "WPR-NRB4-018"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "RLP-NRB4-001",
+      "document_pk": 79,
+      "doc_type": "PROGRAMME",
+      "doc_date": "2022-06-15",
+      "referenced_ids": [
+        "2020-01",
+        "NRB-4",
+        "RLP-NRB4-001",
+        "RPN-NRB4-001"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "COORD-NRB4-001",
+      "document_pk": 80,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2022-06-22",
+      "referenced_ids": [
+        "2020-01",
+        "COORD-NRB4-001",
+        "NRB-4",
+        "PROD-NRB4-002",
+        "RLP-NRB4-001",
+        "RPN-NRB4-001"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "WPR-NRB4-023",
+      "document_pk": 81,
+      "doc_type": "PROGRESS_REPORT",
+      "doc_date": "2022-07-29",
+      "referenced_ids": [
+        "2020-01",
+        "COORD-NRB4-001",
+        "NRB-4",
+        "RLP-NRB4-001",
+        "SIGN-OFF",
+        "WPR-NRB4-018",
+        "WPR-NRB4-023"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "ENG-NRB4-0052",
+      "document_pk": 82,
+      "doc_type": "APPROVAL",
+      "doc_date": "2022-08-08",
+      "referenced_ids": [
+        "2020-01",
+        "COORD-NRB4-001",
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0052",
+        "EOT-01",
+        "NRB-4",
+        "PROD-NRB4-002",
+        "RLP-NRB4-001",
+        "RPN-NRB4-001",
+        "WPR-NRB4-018",
+        "WPR-NRB4-023"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "CTR-NRB4-0198",
+      "document_pk": 83,
+      "doc_type": "NOTICE",
+      "doc_date": "2023-09-05",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0198",
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0052",
+        "ENG-NRB4-0058",
+        "EOT-01",
+        "MOM-NRB4-026",
+        "NRB-4",
+        "TAKING-OVER"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "EIN-NRB4-001",
+      "document_pk": 84,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2023-09-09",
+      "referenced_ids": [
+        "2020-01",
+        "EIN-NRB4-001",
+        "NRB-4"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "JIR-NRB4-001",
+      "document_pk": 85,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2023-09-11",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0198",
+        "ENG-NRB4-0058",
+        "JIR-NRB4-001",
+        "NRB-4",
+        "PL-NRB4-001"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "PL-NRB4-001",
+      "document_pk": 86,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2023-09-12",
+      "referenced_ids": [
+        "2020-01",
+        "JIR-NRB4-001",
+        "NRB-4",
+        "OWR-NRB4-001",
+        "PL-NRB4-001"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "OWR-NRB4-001",
+      "document_pk": 87,
+      "doc_type": "TECHNICAL_REPORT",
+      "doc_date": "2023-09-12",
+      "referenced_ids": [
+        "2020-01",
+        "NRB-4",
+        "OWR-001-01",
+        "OWR-001-02",
+        "OWR-001-03",
+        "OWR-001-04",
+        "OWR-NRB4-001",
+        "PL-NRB4-001"
+      ],
+      "chunk_count": 2
+    },
+    {
+      "doc_id": "COMP-NRB4-001",
+      "document_pk": 88,
+      "doc_type": "MEETING_MINUTES",
+      "doc_date": "2023-09-14",
+      "referenced_ids": [
+        "2020-01",
+        "COMP-NRB4-001",
+        "CTR-NRB4-0198",
+        "JIR-NRB4-001",
+        "NRB-4",
+        "OWR-NRB4-001",
+        "PL-NRB4-001",
+        "TAKING-OVER"
+      ],
+      "chunk_count": 3
+    },
+    {
+      "doc_id": "TOC-NRB4-001",
+      "document_pk": 89,
+      "doc_type": "APPROVAL",
+      "doc_date": "2023-09-22",
+      "referenced_ids": [
+        "2020-01",
+        "CTR-NRB4-0198",
+        "ENG-NRB4-0019",
+        "ENG-NRB4-0058",
+        "EOT-01",
+        "JIR-NRB4-001",
+        "NRB-4",
+        "OWR-NRB4-001",
+        "PL-NRB4-001",
+        "TOC-NRB4-001"
+      ],
+      "chunk_count": 2
+    }
+  ]
+}

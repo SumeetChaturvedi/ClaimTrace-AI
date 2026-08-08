@@ -1,0 +1,65 @@
+[
+  {
+    "document_id": "DPR-0920-2021",
+    "filename": "DPR-0920-2021.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Pier P3 Excavation Resumption, 20-Sep-2021",
+    "scenario": 3
+  },
+  {
+    "document_id": "CTR-NRB4-0061",
+    "filename": "CTR-NRB4-0061.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice of Differing Site Conditions — Pier P3 Founding Level",
+    "scenario": 3
+  },
+  {
+    "document_id": "TM-NRB4-009",
+    "filename": "TM-NRB4-009.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Technical Memorandum — Geotechnical Assessment of Pier P3 Founding Conditions",
+    "scenario": 3
+  },
+  {
+    "document_id": "DRG-NRB4-P3-PC-Rev02",
+    "filename": "DRG-NRB4-P3-PC-Rev02.pdf",
+    "document_type": "DRAWING",
+    "title": "Revised Drawing — Pier P3 Pile Cap, Revision 02",
+    "scenario": 3
+  },
+  {
+    "document_id": "VO-NRB4-004",
+    "filename": "VO-NRB4-004.pdf",
+    "document_type": "VARIATION",
+    "title": "Variation Order VO-NRB4-004 — Pier P3 Pile Cap Redesign",
+    "scenario": 3
+  },
+  {
+    "document_id": "CTR-NRB4-0067",
+    "filename": "CTR-NRB4-0067.pdf",
+    "document_type": "VARIATION",
+    "title": "Contractor's Variation Quotation — VO-NRB4-004",
+    "scenario": 3
+  },
+  {
+    "document_id": "ENG-NRB4-0031",
+    "filename": "ENG-NRB4-0031.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Assessment of Variation Quotation — VO-NRB4-004",
+    "scenario": 3
+  },
+  {
+    "document_id": "MOM-NRB4-022",
+    "filename": "MOM-NRB4-022.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Monthly Progress Meeting No. 22",
+    "scenario": 3
+  },
+  {
+    "document_id": "NHIA-NRB4-APR-006",
+    "filename": "NHIA-NRB4-APR-006.pdf",
+    "document_type": "APPROVAL",
+    "title": "Employer's Approval — Variation VO-NRB4-004 Valuation",
+    "scenario": 3
+  }
+]

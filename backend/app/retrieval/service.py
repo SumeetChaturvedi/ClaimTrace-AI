@@ -16,6 +16,27 @@ bonus is enough to outscore chunks inside the original cutoff (Sprint 4 Task
 01). Semantic similarity itself, and RetrievalScorer's own logic, are
 unchanged — only the point in the pipeline where the LIMIT is applied moved
 from before scoring to after it.
+
+Project scoping (Sprint 7 Task 1): `project_id` is an optional hard filter
+applied directly in the SQL query, before the candidate pool is even
+assembled — a document belonging to a different project is never a
+candidate, never scored, and never returned. This is unrelated to
+RetrievalContext/RetrievalScorer (which only ever re-weight an already
+project-scoped candidate set); it's the fix for a real, previously-known gap
+(this module's own prior docstring said project scoping "has no project
+filter" and "there is nothing to scope against" back when V0 had exactly one
+project). `project_id=None` preserves the exact prior behaviour (search
+across every project) — the /search API route still calls search_chunks()
+without a project_id and is intentionally unaffected.
+
+Result diversity (Sprint 7 Task 2): after scoring and sorting, results are
+walked in score order and capped at MAX_CHUNKS_PER_DOCUMENT per document_id
+before truncating to top_k (see _apply_diversity_cap below) — a document
+that would otherwise contribute several of the highest-scoring chunks no
+longer crowds out other, otherwise-lower-scoring-but-still-in-pool
+documents. This only changes which chunks are dropped at the final
+truncation step; the widened candidate pool and every chunk's score are
+computed exactly as before.
 """
 
 from dataclasses import dataclass, replace
@@ -39,6 +60,13 @@ DEFAULT_TOP_K = 5
 CANDIDATE_POOL_MULTIPLIER = 3
 CANDIDATE_POOL_MINIMUM = 15
 
+# Maximum number of chunks any single document may contribute to a result
+# set (Sprint 7 Task 2). Chosen to still let a genuinely central document
+# supply more than one piece of evidence (unlike a hard cap of 1), while
+# preventing it from dominating a small top_k the way a single 3-chunk
+# document previously could.
+MAX_CHUNKS_PER_DOCUMENT = 2
+
 
 @dataclass(frozen=True)
 class ChunkSearchResult:
@@ -57,6 +85,7 @@ def search_chunks(
     query: str,
     top_k: int = DEFAULT_TOP_K,
     retrieval_context: RetrievalContext | None = None,
+    project_id: int | None = None,
 ) -> list[ChunkSearchResult]:
     """Embed `query` with the same model used at indexing time and return the
     top_k most similar chunks (cosine similarity, most relevant first) with
@@ -69,6 +98,12 @@ def search_chunks(
     `retrieval_context` is optional; when supplied, it's forwarded to
     RetrievalScorer and can change which chunks end up in the returned
     top_k, not just their order (Sprint 4 Task 01) — see candidate_k below.
+
+    `project_id` is optional; when supplied, only chunks belonging to that
+    project are ever considered a candidate (Sprint 7 Task 1). `None`
+    (the default) searches across every project, exactly as before this
+    parameter existed — existing callers that don't pass it see no change
+    in behaviour.
     """
     if not query or not query.strip():
         raise ValueError("query must not be empty")
@@ -88,9 +123,13 @@ def search_chunks(
         select(DocumentChunk, Document, distance)
         .join(Document, DocumentChunk.document_id == Document.id)
         .where(DocumentChunk.embedding.is_not(None))
-        .order_by(distance)
-        .limit(candidate_k)
     )
+    if project_id is not None:
+        # Hard filter, applied before the candidate pool is assembled — a
+        # document outside this project is never a candidate, never scored,
+        # never returned (Sprint 7 Task 1).
+        stmt = stmt.where(Document.project_id == project_id)
+    stmt = stmt.order_by(distance).limit(candidate_k)
 
     candidates = [
         ChunkSearchResult(
@@ -117,4 +156,29 @@ def search_chunks(
     ]
 
     scored.sort(key=lambda result: result.similarity, reverse=True)
-    return scored[:top_k]
+    return _apply_diversity_cap(scored, top_k, MAX_CHUNKS_PER_DOCUMENT)
+
+
+def _apply_diversity_cap(
+    results: list[ChunkSearchResult],
+    top_k: int,
+    max_per_document: int,
+) -> list[ChunkSearchResult]:
+    """Walk `results` (already sorted by score, most relevant first) and
+    return up to top_k of them, skipping any chunk whose document has
+    already contributed max_per_document chunks to the selection (Sprint 7
+    Task 2). This is the new final truncation step: relative ranking is
+    otherwise untouched — a chunk is only ever skipped for diversity, never
+    reordered or rescored."""
+    selected: list[ChunkSearchResult] = []
+    counts: dict[int, int] = {}
+
+    for result in results:
+        if counts.get(result.document_id, 0) >= max_per_document:
+            continue
+        selected.append(result)
+        counts[result.document_id] = counts.get(result.document_id, 0) + 1
+        if len(selected) >= top_k:
+            break
+
+    return selected

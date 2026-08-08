@@ -1,0 +1,44 @@
+[
+  {
+    "document_id": "CTR-NRB4-0098",
+    "filename": "CTR-NRB4-0098.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice of Dissatisfaction — Engineer's Commercial Assessment ENG-NRB4-0038",
+    "scenario": 6
+  },
+  {
+    "document_id": "NHIA-NRB4-COMM-004",
+    "filename": "NHIA-NRB4-COMM-004.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Employer's Acknowledgement — Notice of Dissatisfaction CTR-NRB4-0098",
+    "scenario": 6
+  },
+  {
+    "document_id": "LCM-NRB4-001",
+    "filename": "LCM-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Legal and Contracts Memorandum — Validity and Merits of Notice of Dissatisfaction CTR-NRB4-0098",
+    "scenario": 6
+  },
+  {
+    "document_id": "SMM-NRB4-004",
+    "filename": "SMM-NRB4-004.pdf",
+    "document_type": "MEETING_MINUTES",
+    "title": "Minutes of Senior Management Meeting No. 4 — Commercial Dispute Review",
+    "scenario": 6
+  },
+  {
+    "document_id": "CTR-NRB4-0104",
+    "filename": "CTR-NRB4-0104.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Without Prejudice Correspondence — Proposal for Amicable Discussion",
+    "scenario": 6
+  },
+  {
+    "document_id": "DRPN-NRB4-001",
+    "filename": "DRPN-NRB4-001.pdf",
+    "document_type": "TECHNICAL_REPORT",
+    "title": "Dispute Resolution Preparation Note — Retention Interpretation Dispute",
+    "scenario": 6
+  }
+]

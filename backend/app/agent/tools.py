@@ -16,9 +16,10 @@ populate Evidence.document_name — see its docstring for why it exists.
 
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.agent.models import Citation
+from app.agent.reference_expansion_config import DEFAULT_REFERENCE_EXPANSION_CONFIG, ReferenceExpansionConfig
 from app.db.models import Document
 from app.db.session import get_session_factory
 from app.ingestion.metadata import is_location_reference
@@ -43,10 +44,11 @@ def search_documents(
 
     Wraps app/retrieval/service.py's search_chunks(); opens and closes its
     own DB session so callers only need to pass plain values. `project_id` is
-    accepted for interface stability but not yet used to scope results:
-    search_chunks() has no project filter, and V0 has exactly one project, so
-    there is nothing to scope against without changing the retrieval module,
-    which is out of scope for this task.
+    forwarded to search_chunks() as a hard filter (Sprint 7 Task 1), so a
+    document belonging to a different project is never a candidate for this
+    investigation's evidence — this is what keeps multiple ingested projects
+    (e.g. Dataset V1 and Dataset V2) from contaminating each other's
+    retrieval results.
 
     `investigation_plan`, when supplied, is converted to a RetrievalContext
     via RetrievalContextBuilder (reused as-is — no mapping logic duplicated
@@ -68,7 +70,13 @@ def search_documents(
     )
 
     with get_session_factory()() as session:
-        results = search_chunks(session, query, top_k=top_k, retrieval_context=retrieval_context)
+        results = search_chunks(
+            session,
+            query,
+            top_k=top_k,
+            retrieval_context=retrieval_context,
+            project_id=project_id,
+        )
 
     return [
         Citation(
@@ -140,7 +148,11 @@ def get_document_filename(document_id: int) -> str:
     return document.filename
 
 
-def find_related_documents(document_ids: list[int]) -> list[int]:
+def find_related_documents(
+    document_ids: list[int],
+    project_id: int | None = None,
+    config: ReferenceExpansionConfig | None = None,
+) -> list[int]:
     """Given a set of already-retrieved document ids, return the ids of
     additional documents (not already in `document_ids`) that share at
     least one identifier with any of them, via Document.referenced_ids —
@@ -170,9 +182,32 @@ def find_related_documents(document_ids: list[int]) -> list[int]:
     genuine document identifiers. Location tags are still present in
     Document.referenced_ids exactly as before — filtered here at the point
     of use, not removed from storage.
+
+    project_id (Phase 3 Task 03A): when supplied, both the boilerplate
+    frequency computation below and the final candidate query are scoped to
+    that project only — a document belonging to a different project can
+    never be returned, mirroring search_chunks()'s existing project_id
+    filter (Sprint 7 Task 1). None (the default) preserves this function's
+    original, project-unscoped behaviour.
+
+    Boilerplate/document-frequency filtering (Phase 3 Task 03A): Sprint 7 /
+    Phase 3 Task 03 found that on Dataset V2, a project code ("NRB-4") and a
+    contract-number fragment ("2020-01") appear in nearly every document's
+    header and are the same letters/digits/hyphens shape as a genuine
+    document identifier, so a single expansion hop pulled in 64 of 71
+    documents. Before the overlap query runs, any collected reference token
+    present in more than `config.max_document_frequency_ratio` of the
+    documents in scope is dropped — see reference_expansion_config.py for
+    why this generalizes to any future project's own boilerplate without a
+    hardcoded token list.
     """
     if not document_ids:
         return []
+
+    config = config or DEFAULT_REFERENCE_EXPANSION_CONFIG
+
+    def _scoped(query):
+        return query.where(Document.project_id == project_id) if project_id is not None else query
 
     with get_session_factory()() as session:
         retrieved_documents = session.scalars(
@@ -189,14 +224,40 @@ def find_related_documents(document_ids: list[int]) -> list[int]:
         if not collected_ids:
             return []
 
-        related_ids = session.scalars(
-            select(Document.id)
-            .where(Document.id.notin_(document_ids))
+        total_in_scope = session.scalar(_scoped(select(func.count(Document.id))))
+        if total_in_scope:
             # Postgres array-overlap ("&&"): Document.referenced_ids is
             # mapped via the generic sqlalchemy.ARRAY, whose comparator
             # doesn't expose .overlap() — .op("&&") applies the same
-            # operator directly, no column/model change needed.
-            .where(Document.referenced_ids.op("&&")(list(collected_ids)))
+            # operator directly, no column/model change needed. Restricting
+            # to documents that already overlap collected_ids (rather than
+            # unnesting the whole scope) is equivalent for this purpose: any
+            # document containing one of our candidate tokens necessarily
+            # overlaps collected_ids by definition.
+            reference_column = func.unnest(Document.referenced_ids).label("reference")
+            frequency_rows = session.execute(
+                _scoped(
+                    select(reference_column, func.count(func.distinct(Document.id))).where(
+                        Document.referenced_ids.op("&&")(list(collected_ids))
+                    )
+                ).group_by(reference_column)
+            ).all()
+            boilerplate = {
+                reference
+                for reference, doc_count in frequency_rows
+                if reference in collected_ids and doc_count / total_in_scope > config.max_document_frequency_ratio
+            }
+            collected_ids -= boilerplate
+
+        if not collected_ids:
+            return []
+
+        related_ids = session.scalars(
+            _scoped(
+                select(Document.id)
+                .where(Document.id.notin_(document_ids))
+                .where(Document.referenced_ids.op("&&")(list(collected_ids)))
+            )
         ).all()
 
     return list(related_ids)

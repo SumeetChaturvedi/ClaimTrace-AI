@@ -1,0 +1,51 @@
+[
+  {
+    "document_id": "DPR-0128-2021",
+    "filename": "DPR-0128-2021.pdf",
+    "document_type": "PROGRESS_REPORT",
+    "title": "Daily Progress Report — Pier 3 Excavation, 28-Jan-2021",
+    "scenario": 1
+  },
+  {
+    "document_id": "CTR-NRB4-0021",
+    "filename": "CTR-NRB4-0021.pdf",
+    "document_type": "NOTICE",
+    "title": "Notice of Delay — Unforeseen Utility Conflict at Pier P3",
+    "scenario": 1
+  },
+  {
+    "document_id": "SI-NRB4-014",
+    "filename": "SI-NRB4-014.pdf",
+    "document_type": "SITE_INSTRUCTION",
+    "title": "Site Instruction SI-NRB4-014 — Resequencing of Works, Pier P3",
+    "scenario": 1
+  },
+  {
+    "document_id": "VPGC-NRB4-0012",
+    "filename": "VPGC-NRB4-0012.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Vantara Power Grid Corporation — Relocation Timeline Confirmation",
+    "scenario": 1
+  },
+  {
+    "document_id": "CTR-NRB4-0028",
+    "filename": "CTR-NRB4-0028.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Contractor's Detailed Particulars — Pier P3 Utility Conflict Delay",
+    "scenario": 1
+  },
+  {
+    "document_id": "VPGC-NRB4-0045",
+    "filename": "VPGC-NRB4-0045.pdf",
+    "document_type": "CORRESPONDENCE",
+    "title": "Vantara Power Grid Corporation — Utility Relocation Completion Notice",
+    "scenario": 1
+  },
+  {
+    "document_id": "ENG-NRB4-0019",
+    "filename": "ENG-NRB4-0019.pdf",
+    "document_type": "APPROVAL",
+    "title": "Engineer's Determination — Extension of Time (EOT-01), Pier P3 Utility Conflict",
+    "scenario": 1
+  }
+]

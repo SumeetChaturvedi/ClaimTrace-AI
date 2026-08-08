@@ -1048,32 +1048,834 @@ Architecture, design decisions, and milestones are documented in `PROJECT_PLAN.m
   and API routes were not touched. GET /health, GET /search, and
   POST /investigate re-verified working; dataset confirmed unchanged
   (17 documents) after testing.
+- Dataset V2 Phase 2A/2B (documented in detail in the conversation record
+  rather than backfilled here entry-by-entry): the full Scenario 1-9 plus
+  Contract Package PDF corpus was generated (71 PDFs, dataset/pdf/), a
+  reusable PDF template system built entirely outside the backend
+  (dataset/scripts/, no backend changes), then ingested into a new
+  project_id=2 via the unmodified ingestion pipeline (88 documents total
+  across both projects, 250 chunks) and evaluated with a 9-question
+  benchmark suite run against real Gemini calls. That evaluation is what
+  motivated Sprint 7 below.
+- Sprint 7 - Backend Optimization Sprint. Five targeted fixes, each
+  justified by a specific finding in the Dataset V2 benchmark report, no
+  new features and no architecture changes:
+  (1) Project-scoped retrieval: app/retrieval/service.py's search_chunks()
+  gained an optional project_id filter, applied in the SQL query before
+  the candidate pool is assembled (not a post-filter); app/agent/tools.py's
+  search_documents() now actually forwards the project_id it already
+  received (previously accepted but silently unused - its own docstring
+  said so). project_id=None preserves prior behaviour exactly, so the
+  project-agnostic GET /search route is unaffected.
+  (2) Retrieval diversity: search_chunks() now applies a
+  MAX_CHUNKS_PER_DOCUMENT=2 cap at the final truncation step (new
+  _apply_diversity_cap() helper) - walks the already-scored, already-sorted
+  candidate list and skips a chunk once its document has contributed its
+  cap, so one document's near-duplicate high-scoring chunks can no longer
+  fill most of a small top_k. Chosen over MMR reranking as the better fit
+  for the existing widen-then-score-then-truncate pipeline (Sprint 4 Task
+  01) - this is a new final truncation step, not a new scoring mechanism.
+  (3) Metadata extraction robustness: app/ingestion/metadata.py's
+  _DOC_TYPE_RE/_DATE_RE now match "DATE:"/"Date:"/"date:" and
+  "DOCUMENT TYPE:" case-insensitively via scoped (?i:...) groups around
+  only the literal label text - the all-caps lookahead that finds the
+  *next* field label, and everything else about each pattern, stays
+  case-sensitive and unchanged. Verified byte-for-byte identical
+  doc_type/doc_date extraction across all 17 Dataset V1 documents before
+  and after.
+  (4) Document type normalization: app/domain/document_types.py's
+  normalize_document_type() now checks the original, unmodified 14-entry
+  Dataset V1 exact-match table first (guaranteeing zero V1 regression,
+  reconfirmed against all 17 documents), then falls back to a new
+  _keyword_match() - a small table of natural-language keywords per
+  canonical DocumentType (not per raw dataset string), matched whole-word
+  via the same \b...\b approach app/investigation/classifier.py already
+  uses (a plain substring check would have let "contract" match inside
+  "contractor" - caught and fixed during verification), with the longest
+  matching keyword winning so a specific word like "determination" beats a
+  generic one like "letter" regardless of which DocumentType is declared
+  first.
+  (5) Investigation classification expansion: app/investigation/
+  classifier.py's _KEYWORDS_BY_TYPE gained five new categories - quality,
+  programme, practical_completion, defects, taking_over - appended after
+  the original seven so their priority and matching is completely
+  unaffected; the five new categories cover exactly the Dataset V2
+  question types that previously fell through to "unknown" (confirmed:
+  Scenarios 7-9 changed from investigation_type=unknown to
+  quality/programme/practical_completion respectively on re-benchmark).
+  Explicitly NOT touched, per the sprint's regression list:
+  InvestigationPlanner's create_plan() flow and InvestigationPlan schema,
+  _EVIDENCE_SOURCES_BY_TYPE (service.py) and ContractContextBuilder's topic
+  mapping were left unextended for the five new categories - both would
+  need genuinely new entries (not just wiring) to help further, and
+  neither was in this sprint's stated scope.
+  Re-benchmarking the same 9 questions against project_id=2 confirmed:
+  cross-project (Dataset V1) contamination eliminated in every scenario
+  (was up to 4 of 10 retrieved slots in one case, now 0 in all 9);
+  Scenario 5's retrieval recall improved to perfect (0.75 -> 1.0, previously
+  missing document now retrieved); Scenario 3's answer now cites the
+  correct valuation figures and the correct document by name (previously
+  absent, now present, even though the source document itself still isn't
+  in the top-10 - Gemini correctly used a different retrieved document that
+  quotes it); 3 of 9 scenarios reclassified from "unknown" to a real,
+  correct investigation_type. Overall pass/fail stayed 4/9 (unchanged
+  benchmark outcome, but for a materially cleaner and more diagnosable
+  system) - the remaining failures trace to a single document's chunk
+  selection (e.g. ENG-NRB4-0019's top-2-by-score chunks both happen to be
+  the intro paragraph, never the determination paragraph containing "10
+  weeks" - a real, honestly-reported residual limitation the per-document
+  cap does not address, since capping at 2 does not help when the same 2
+  redundant chunks are what scored highest). Latency unaffected (~1.3-1.9s
+  per query before and after; the added SQL filter and in-memory diversity
+  pass are negligible next to the Gemini round-trip). No test suite exists
+  in this repository to run; regression safety was verified by direct,
+  scripted comparison against all 17 Dataset V1 documents' actual stored
+  values for every changed function. Timeline Builder, Contract Clause
+  Parser, Clause Repository, Clause Retrieval, Prompt Builder, Gemini
+  Provider, Citation Verification, API routes, and the database schema
+  were not touched - confirmed via git diff --stat, which shows exactly
+  5 files changed: app/agent/tools.py, app/domain/document_types.py,
+  app/ingestion/metadata.py, app/investigation/classifier.py,
+  app/retrieval/service.py.
+
+- Phase 3 Task 01 — Investigation Agent Foundations. Design-only
+  predecessor task (not logged separately here) produced an approved
+  architecture specification for an iterative Investigation Agent
+  orchestrating the existing components; this task implements only its two
+  foundational, standalone building blocks — no loop, no integration.
+  New files: app/agent/investigation_state.py (InvestigationState, a pure
+  Pydantic state container for one investigation's working memory --
+  accumulated evidence, visited chunk/document ids, fully-read document
+  ids, followed reference ids, retrieved clauses/clause numbers, timeline
+  context, search history, iteration count, stopping reason -- plus
+  mechanical, non-deciding bookkeeping methods: add_evidence()/
+  add_clauses() dedup by chunk_id/clause_number and return how many items
+  were genuinely new, mark_document_fully_read()/mark_reference_followed()
+  record what's been done, record_search() appends an explainability
+  entry, advance_iteration()/stop() are plain counters/setters) and
+  app/agent/evidence_sufficiency.py (EvidenceSufficiencyAssessor, a
+  stateless, DB-free, four-stage deterministic decision model -- unresolved
+  document references, named-but-unretrieved contract clauses, low entity
+  coverage/confidence, a dominant document whose retrieved excerpts lack
+  determination content -- run in that priority order, returning a single
+  SufficiencyDecision naming at most one remediation, or "sufficient,
+  stop" if none fire). Both reuse existing logic rather than duplicating
+  it: reference detection calls the existing extract_document_references()
+  unchanged; whole-word matching (for entities and clause references) uses
+  the same \b-bounded regex approach already established in
+  classifier.py/document_types.py, specifically to avoid the same class of
+  substring-collision bug (e.g. "contract" inside "contractor") caught
+  during Sprint 7. Neither module is imported anywhere outside itself --
+  confirmed via a repo-wide grep -- so no existing behaviour can be
+  affected; InvestigationPlanner, Retrieval, RetrievalScorer, Timeline,
+  Contract Intelligence, Prompt Builder, ReasoningEngine, GeminiProvider,
+  Citation Verification, InvestigationService, and API routes were not
+  touched. Validated with a standalone fixture-based script (45 checks,
+  all passing): state initialization defaults, mutable-default isolation
+  between instances, duplicate-chunk and duplicate-clause rejection
+  (including within a single batch), fully-read/followed-reference
+  tracking, timeline replace-not-append semantics, iteration/search-history
+  bookkeeping, and all four assessor remediation types plus the
+  sufficient/stop case, each exercised on both a firing and a
+  now-resolved fixture, plus a priority-ordering check confirming stage 1
+  wins when multiple stages could fire, and a check that assess() itself
+  never mutates the state it's given. Regression: started the live server
+  and re-ran GET /health, GET /search (unscoped, confirming Sprint 7's
+  project_id=None default path is unaffected), and POST /investigate
+  against project_id=2 with the same Scenario 9 question benchmarked in
+  Sprint 7 -- identical answer, citations, and reasoning_steps to the
+  post-Sprint-7 baseline, confirming the two new, unused files have zero
+  effect on production behaviour.
+- Phase 3 Task 02 — Investigation Agent (Standalone). New file
+  app/agent/investigation_agent.py: InvestigationAgent, an orchestration
+  skeleton that runs exactly one retrieval pass and returns, with no loop
+  and no remediation -- the scope this task deliberately stopped at.
+  run(request) does five things: creates an InvestigationState from a
+  freshly-planned InvestigationPlan; runs one tools.search_documents()
+  call; populates the state with evidence, retrieved clauses (via
+  ContractContextBuilder + ClauseRetriever), timeline context, and one
+  search_history entry; invokes EvidenceSufficiencyAssessor (both from
+  Task 01); and returns an AgentRunResult(state, decision) -- if the
+  decision says more evidence is needed, that decision is simply returned,
+  never acted on. Contains no retrieval, timeline, contract, or Gemini
+  logic of its own: it holds an InvestigationService instance purely to
+  reuse its already-correct sub-component calls (_planner,
+  _contract_context_builder, _clause_retriever, and critically
+  _build_evidence()/_build_timeline_context(), which exist only as
+  InvestigationService's own methods) -- the same "call the private method
+  directly" pattern dataset/scripts/run_benchmarks.py already used in
+  Sprint 7 to introspect this pipeline without going through
+  InvestigationResponse. This satisfies "no duplicate logic" and "no
+  InvestigationService changes" simultaneously: the dependency runs one
+  way only (agent depends on service; service does not know the agent
+  exists), and constructing an InvestigationService (which transitively
+  constructs a ReasoningEngine/GeminiProvider) never makes a Gemini call,
+  since nothing in this module calls reason()/generate(). Confirmed via
+  grep that investigation_agent.py is imported nowhere else in app/.
+  Validated against the real, already-ingested Dataset V2 corpus
+  (project_id=2 -- real embeddings, real clause retrieval, real timeline
+  building, zero Gemini calls): state/evidence/clause/timeline/
+  search-history population all confirmed correct; a real EOT-01 query
+  reproduced Sprint 7's known finding (VPGC-NRB4-0012/0045 mentioned in
+  retrieved text but not retrieved) as a live REFERENCE_EXPANSION
+  decision; a real NOD-VALIDITY query surfaced 5 real unresolved document
+  references. One honest, evidence-based limitation surfaced during
+  validation, not fixed here since remediation is explicitly out of this
+  task's scope: after simulating "as if reference expansion had already
+  run" (marking EOT-01's flagged references as followed and
+  re-assessing), the assessor reported the evidence sufficient --
+  correctly by its own heuristics, but the evidence set is the one Sprint
+  7 already proved is missing the actual "10 weeks" determination
+  sentence. This is the coarse-heuristic-vs-real-understanding trade-off
+  the architecture spec already named, now observed directly rather than
+  only anticipated. Also observed: extract_document_references() (reused
+  unchanged) picks up some non-document boilerplate as reference-shaped
+  matches on Dataset V2's richer document footers (e.g. "NRB-4", "2020-01",
+  business-object labels like "EOT-01") -- harmless given the
+  mark-as-followed-regardless-of-outcome contract already designed for
+  this, but a likely source of extra, low-value remediation cycles once
+  the loop is built. InvestigationPlanner, Retrieval, RetrievalScorer,
+  Timeline, Contract Intelligence, Prompt Builder, ReasoningEngine,
+  GeminiProvider, Citation Verification, InvestigationService, and API
+  routes were not touched. Regression: GET /health, GET /search
+  (unscoped), and POST /investigate (project_id=2, the same Scenario 5
+  question benchmarked in Sprint 7) all re-verified identical to the
+  post-Sprint-7 baseline; confirmed the new agent is not imported or
+  reachable from main.py, any route, or InvestigationService.
+
+- Phase 3 Task 03 — Reference Expansion Executor. New file
+  app/agent/reference_expansion_executor.py: ReferenceExpansionExecutor,
+  the first actual remediation executor (Task 02's InvestigationAgent
+  still performs none). expand(state) identifies state's currently
+  unresolved document references by calling EvidenceSufficiencyAssessor's
+  existing stage-1 check directly (not re-derived), resolves them via the
+  existing tools.find_related_documents() (Sprint 4 Task 04's one-hop,
+  referenced_ids-overlap tool, unchanged), fetches any newly-found
+  documents' chunks, folds them into state via add_evidence() (Task 01's
+  existing dedup), marks every attempted reference followed regardless of
+  outcome, and records exactly one search_history entry per call, success
+  or failure alike. No retrieval, timeline, or contract logic added; no
+  Gemini call; no loop.
+  One real bug found and fixed during validation, entirely within this
+  new file: tools.get_documents() closes its own DB session before
+  returning, so its Document rows' `.chunks` relationship (lazy-loaded)
+  raised DetachedInstanceError when accessed afterward. Fixed by adding a
+  small _fetch_chunks() helper in this same file that queries
+  DocumentChunk directly by document_id, in a session it owns and closes
+  itself -- the same per-call session convention every function in
+  tools.py already uses, and a plain foreign-key lookup rather than a
+  retrieval algorithm, so this doesn't touch "no duplicate retrieval
+  logic". tools.py itself was not modified.
+  Validated against the real, already-ingested Dataset V2 corpus
+  (project_id=2) plus controlled fixtures for the specific edge cases:
+  a real EOT-01 investigation's unresolved references (VPGC-NRB4-0012,
+  VPGC-NRB4-0045) were genuinely discovered and folded into state as real,
+  chunk-backed evidence; state/evidence/clause*/timeline/search-history
+  bookkeeping all confirmed correct (*clauses unaffected by this
+  executor, already present from InvestigationAgent's initial pass);
+  duplicate/repeated references confirmed to terminate immediately with
+  zero new retrieval; an unresolvable reference confirmed to terminate
+  cleanly (no exception), get marked followed anyway, and still produce
+  an explainable search_history entry recording zero new evidence.
+  Two real, evidence-based findings surfaced, neither fixed here since
+  both live in reused code this task was explicitly scoped not to modify:
+  (1) tools.find_related_documents(), reused unchanged, is far more
+  promiscuous on Dataset V2 than intended -- nearly every document's
+  metadata box shares boilerplate tokens (the contract number "2020-01",
+  the project code "NRB-4") that extract_document_references() (also
+  reused unchanged) treats as document identifiers, so even the first
+  expansion call from a 10-document starting set discovered 64 of the
+  corpus's 71 documents, not just the 2 specifically-named ones. (2)
+  find_related_documents()'s query has no project_id filter at all (unlike
+  search_chunks(), which Sprint 7 added one to) -- confirmed empirically
+  by seeding it with a Dataset V1 document id and observing it return
+  other Dataset V1 documents, regardless of which project the calling
+  investigation is scoped to. Both are real characteristics of existing,
+  unmodified tools, surfaced by testing this new executor against real
+  data rather than defects introduced by it -- recorded here and in the
+  final report as required reading before any future task builds the
+  actual iteration loop or wires remediation into production, since an
+  unbounded loop calling this executor repeatedly would very quickly pull
+  in most of the corpus. InvestigationPlanner, Retrieval, RetrievalScorer,
+  Timeline, Contract Intelligence, Prompt Builder, ReasoningEngine,
+  GeminiProvider, Citation Verification, InvestigationService,
+  InvestigationAgent, and API routes were not touched (tools.py's
+  find_related_documents()/get_documents() were called, not modified).
+  Regression: GET /health, GET /search, and POST /investigate
+  (project_id=2, the Scenario 1 EOT-01 question) all re-verified
+  byte-identical to the pre-existing baseline; confirmed the new executor
+  is not imported or reachable from anywhere in app/ outside itself.
+
+- **Phase 3 — Investigation Agent, Task 03A: Reference Expansion Hardening.**
+  Fixed both real findings from Task 03 directly at their source —
+  `find_related_documents()` (app/agent/tools.py) — rather than papering
+  over them in the executor. Files: new
+  `app/agent/reference_expansion_config.py` (centralized
+  `ReferenceExpansionConfig`: `max_document_frequency_ratio` (default 0.5),
+  `max_references_processed` (10), `max_documents_added` (5),
+  `max_new_evidence_added` (30) — every tunable knob for this feature lives
+  in one place, no dataset-specific value anywhere in it); modified
+  `find_related_documents()` (gained optional `project_id` and `config`
+  params, `None`/default preserving the original unscoped/unfiltered
+  behaviour); modified `ReferenceExpansionExecutor.expand()` (public
+  signature unchanged) to infer the active project from `state`'s own
+  visited documents (`_infer_project_id()`, a new module-level helper — no
+  new field added to InvestigationState) and enforce the budget.
+
+  **Project scoping (Task 1):** `find_related_documents()`'s two queries
+  (the boilerplate-frequency computation and the final overlap query) now
+  take an optional `Document.project_id == project_id` filter, applied only
+  when supplied — mirrors `search_chunks()`'s existing filter (Sprint 7 Task
+  1). Verified directly: seeding with Dataset V1 ids and `project_id=1`
+  returns only project-1 ids; the same seed with `project_id=None`
+  reproduces the original unscoped query.
+
+  **Reference quality / resolution precision (Tasks 2 & 3, one mechanism):**
+  a real DB query (`SELECT unnest(referenced_ids), COUNT(DISTINCT id) ...`)
+  confirmed the Task 03 hypothesis exactly — the contract-number fragment
+  "2020-01" and the project code "NRB-4" each appear in **71 of 71**
+  Dataset V2 documents' `referenced_ids`, while genuine document
+  identifiers (e.g. "VPGC-NRB4-0012") appear in 1–7. Before the overlap
+  query runs, `find_related_documents()` now computes, for every candidate
+  reference token, what fraction of the documents in scope contain it, and
+  drops any token above `max_document_frequency_ratio` — the same principle
+  as IDF-style stopword filtering in information retrieval. This is
+  computed live from whatever corpus is in scope, with no token named
+  anywhere in code, so it generalizes to a different future project's own
+  boilerplate without a code change. This single mechanism satisfies both
+  Task 2 (fewer low-value matches) and Task 3 (genuine references no longer
+  diluted by incidental ones) — no fuzzy matching, no embeddings, no ranking
+  algorithm added; the join is still exact array overlap, just over a
+  cleaner candidate set.
+
+  **Expansion budget (Task 4):** `ReferenceExpansionExecutor.expand()` now
+  processes at most `max_references_processed` unresolved references per
+  call (deterministic: `extract_document_references()` already returns them
+  sorted; the remainder is reported as `references_deferred` and
+  deliberately NOT marked followed, so it's picked up by a future call, not
+  lost), fetches at most `max_documents_added` newly-discovered documents
+  (deterministic: sorted by id; excess reported as `documents_deferred`),
+  and adds at most `max_new_evidence_added` Evidence items (deterministic:
+  chunks sorted by document id then chunk id). `ReferenceExpansionResult`
+  gained `references_deferred`, `documents_deferred`, and
+  `new_evidence_deferred` fields for explainability.
+
+  **Measured before/after** (dataset/scripts/validate_reference_expansion_hardening.py,
+  real project_id=2 EOT-01 investigation, 7 initially-visited documents):
+  calling the tool through the exact same code path with filtering
+  disabled and no project scope (reproducing Task 03's original behaviour)
+  discovered **64 documents**; the hardened tool, same seed, discovered
+  **19 documents** — a ~70% reduction — while both specifically-named real
+  documents (VPGC-NRB4-0012.pdf, VPGC-NRB4-0045.pdf) were still discovered
+  by both. The hardened result is a strict subset of the unfiltered one
+  (filtering only removes candidates, never adds). Also verified: project
+  isolation (V1/V2 seeds each stay within their own id range once scoped),
+  duplicate prevention still works (unchanged from Task 03), missing
+  references still terminate cleanly, and a deliberately tight budget
+  (1/1/1) demonstrably caps `references_attempted`/`documents_added`/
+  `new_evidence_count` to 1 while reporting the rest as deferred rather than
+  silently dropping them. 25/25 checks passed. Task 03's original
+  validation script (dataset/scripts/validate_reference_expansion.py) was
+  re-run unmodified (aside from one monkeypatch signature fix for the new
+  `project_id`/`config` params) and still passes all 27 checks — its
+  "corpus-scale finding" section now shows 5 documents discovered instead of
+  the original 64, annotated as historical.
+
+  No changes to InvestigationAgent, InvestigationService, retrieval scoring,
+  Timeline, Contract Intelligence, extract_document_references() (extraction
+  itself is untouched — filtering happens only at the join, in
+  find_related_documents()), or any other remediation executor (none
+  exist). Regression: GET /health, GET /search, and POST /investigate
+  (project_id=2, EOT-01 question) all re-verified — same 10 citations,
+  same evidence/retrieval behaviour (answer wording itself varies slightly
+  run-to-run, as expected from Gemini's non-deterministic generation, not
+  from anything this task touched); confirmed no file outside
+  app/agent/reference_expansion_config.py,
+  app/agent/reference_expansion_executor.py, and app/agent/tools.py
+  references reference expansion at all.
+
+- **Phase 3 — Investigation Agent, Task 04: Focused Retrieval Executor.**
+  Second remediation executor, built in complete isolation from the first
+  (Reference Expansion) and from every other component. New files:
+  `app/agent/focused_retrieval_config.py` (centralized
+  `FocusedRetrievalConfig`: `retrieval_top_k` default 10, `max_new_evidence_added`
+  default 10) and `app/agent/focused_retrieval_executor.py`
+  (`FocusedRetrievalExecutor.retrieve(state, decision) -> FocusedRetrievalResult`).
+
+  **Design.** `retrieve()` performs exactly one retrieval pass: builds a
+  deterministic query (`_build_focused_query()` — plain string assembly,
+  zero Gemini/LLM calls) from the original user question (recovered from
+  `state.search_history[0].query_text`, since that raw text isn't stored
+  anywhere else — no new InvestigationState field added), the decision's
+  `uncovered_entities` (falling back to `state.plan.primary_entities` when
+  the triggering gap is a confidence shortfall rather than a named coverage
+  gap), the plan's `investigation_type`, and the decision's own `reason`
+  text (appended last, so it can only add context, never dominate the
+  query's semantic content) — calls `tools.search_documents()` (the exact
+  same retrieval path `InvestigationAgent`'s initial pass uses — same
+  embeddings, same `RetrievalScorer`, same project scoping, reused
+  unmodified) — builds `Evidence` via `InvestigationService._build_evidence()`
+  (same private-method-reuse pattern as Task 02/03) — filters
+  already-visited chunks before evidence assembly (for an explainable
+  `duplicates_ignored` count) while still relying on
+  `InvestigationState.add_evidence()`'s own dedup as the actual source of
+  truth — enforces the centralized budget deterministically (chunks kept
+  in the retrieval service's own relevance-ranked order) — and records one
+  `search_history` entry with `trigger_reason=FOCUSED_RETRIEVAL` regardless
+  of outcome. Project scoping uses the same `_infer_project_id()` technique
+  as `ReferenceExpansionExecutor` (derived from `state.visited_document_ids`,
+  not a new state field), deliberately duplicated rather than shared
+  between the two executors so each remediation strategy stays independently
+  readable and isolated, per this task's own isolation requirement.
+  `FocusedRetrievalResult` reports `termination_reason` ∈
+  `{no_results, no_new_evidence, budget_exhausted, evidence_added}` for
+  explainability.
+
+  **Validation** (dataset/scripts/validate_focused_retrieval.py, real
+  project_id=2 data). A genuine, non-fabricated FOCUSED_RETRIEVAL decision
+  was obtained by calling `EvidenceSufficiencyAssessor._check_coverage_and_confidence()`
+  directly against a real, deliberately-small (top_k=1) `InvestigationAgent`
+  pass — the same "call the assessor's stage method directly" technique
+  Task 03's validation used for stage 1. Real scenario: "What did Vantara
+  Power Grid Corporation say about the tower relocation timeline for Pier
+  P3?" at top_k=1 genuinely produces `uncovered_entities=["Pier P3"]` (0%
+  coverage, 1 confident-evidence item against a threshold of 2). Measured:
+  evidence count **1 → 10** after one focused pass (9 new items, 1 citation
+  was already-visited and correctly ignored as a duplicate). Query
+  construction verified deterministic (identical state+decision →
+  byte-identical query, twice). Duplicate rejection verified by calling
+  `retrieve()` again immediately on the same state: retrieval is
+  deterministic (same 10 citations returned), all 10 correctly recognized
+  as duplicates, 0 new evidence added, `termination_reason=no_new_evidence`.
+  Budget enforcement verified with a tight `max_new_evidence_added=1`
+  config on a second real scenario (quality non-conformance / Meridian
+  Engineering Consultants query): 10 citations retrieved, capped to 1 new
+  evidence item, 8 correctly reported as deferred,
+  `termination_reason=budget_exhausted`. Determinism across independent
+  runs verified: two fresh `agent.run()` calls for the same query, followed
+  by two fresh `FocusedRetrievalExecutor` instances, produced identical
+  `query_used`, identical `citations_retrieved`, and identical
+  `new_evidence_count`. 27/27 checks passed.
+
+  No changes to InvestigationAgent, InvestigationService, retrieval scoring,
+  embeddings, vector search, ReferenceExpansionExecutor, or any other
+  remediation executor (Full Document Read and Clause Top-up remain
+  unbuilt). Regression: GET /health, GET /search, and POST /investigate
+  (project_id=2, EOT-01 question) all re-verified — same 10 citations,
+  same retrieval/evidence behaviour; confirmed no file outside
+  app/agent/focused_retrieval_config.py and
+  app/agent/focused_retrieval_executor.py references focused retrieval at
+  all.
+
+- **Phase 3 — Investigation Agent, Task 05: Full Document Read Executor.**
+  Third and final evidence-acquisition remediation executor, built in
+  complete isolation from Reference Expansion and Focused Retrieval. New
+  files: `app/agent/full_document_read_config.py` (centralized
+  `FullDocumentReadConfig`: `max_documents_per_call` default 2,
+  `max_new_evidence_added` default 40) and
+  `app/agent/full_document_read_executor.py`
+  (`FullDocumentReadExecutor.read(state, decision) -> FullDocumentReadResult`).
+
+  **Design.** Document selection is entirely passive:
+  `_document_ids_from_decision()` reads only `decision.details['document_id']`
+  (or `['document_ids']`, plural, for forward-compatibility with a future
+  decision naming more than one) — no search, no `find_related_documents()`,
+  no query construction. "Complete document content" is defined as every
+  `DocumentChunk` row already stored for a document, fetched directly by
+  `document_id` (`_fetch_all_chunks()`, the same direct-FK-lookup pattern
+  Task 03's `_fetch_chunks()` established, duplicated locally per Task 04's
+  isolation precedent) — a deliberate choice over
+  `InvestigationService._build_evidence()`'s existing `read_document()`
+  fallback path, which truncates to `CONTEXT_CHARS` (800 characters) and
+  would not actually be "complete" for a multi-page real document; fetching
+  every already-chunked row instead covers 100% of the extracted text (via
+  chunking already done at ingestion, not re-chunked here) while keeping
+  every resulting `Evidence` item chunk-accurate (a real `chunk_id`, real
+  page number) exactly like every other `Evidence` object elsewhere in the
+  system. `FULL_DOCUMENT_READ_CONFIDENCE = 0.8` (module-level, documented)
+  stands in for a similarity score no direct-fetch chunk has, set above
+  Task 03's `REFERENCE_EXPANSION_CONFIDENCE` (0.75) since a dominant
+  document `EvidenceSufficiencyAssessor` itself flagged as the likely
+  decisive source is a stronger signal than a document merely named by
+  reference.
+
+  Budget is applied in two stages: `max_documents_per_call` first bounds
+  which candidate documents are even opened; then, per document, if its
+  full candidate-evidence set would not fit in the remaining
+  `max_new_evidence_added` budget, that document is deferred *whole* rather
+  than partially added — the design decision that
+  `document_id in state.fully_read_document_ids` should always mean
+  "everything this document contributed is actually present in evidence,"
+  never "we read some of it." A document whose every chunk was already
+  visited (zero new candidates) is still marked fully read, since it
+  genuinely was fully inspected. `FullDocumentReadResult` reports
+  `documents_read`, `already_fully_read`, `documents_deferred`,
+  `duplicates_ignored`, `new_evidence_deferred`, and `termination_reason`
+  (`no_documents_identified` / `already_fully_read` / `no_new_evidence` /
+  `budget_exhausted` / `evidence_added`) for full explainability.
+
+  **Validation** (dataset/scripts/validate_full_document_read.py, real
+  project_id=2 data). A genuine, non-fabricated `FULL_DOCUMENT_READ`
+  decision was obtained by calling
+  `EvidenceSufficiencyAssessor._check_dominant_document()` directly against
+  a real, small-top_k `InvestigationAgent` pass — the same technique used
+  for stage 1 (Task 03) and stage 3 (Task 04). Real scenario: "What was the
+  outcome of the practical completion inspection?" at top_k=2 genuinely
+  produces a dominant-document decision for document 83 (50% of a 2-item
+  evidence set, no determination content). Ground truth was computed
+  independently via a direct DB query (3 total chunks stored, 1 already
+  visited, 2 genuinely new) and the executor's real output matched exactly:
+  evidence count **2 → 4**, `duplicates_ignored=1`,
+  `termination_reason=evidence_added`. A repeat call against the same state
+  correctly refused to reopen the document
+  (`termination_reason=already_fully_read`, 0 new evidence). Budgets
+  verified with real documents: `max_documents_per_call=1` against a
+  two-document decision (documents 83 and 84, from two different real
+  scenarios) opened only the first and correctly deferred the second
+  (not marked fully read); `max_new_evidence_added=1` against document 83's
+  2 genuinely-new chunks deferred the document *whole* (0 read, 2 deferred)
+  rather than adding 1 and dropping 1. Determinism verified across two
+  fully independent `agent.run()` + assessor + executor pipelines for the
+  same query: identical documents read, identical new-evidence and
+  duplicate counts. 30/30 checks passed.
+
+  No changes to InvestigationAgent, InvestigationService, Timeline,
+  Contract Intelligence, Prompt Builder, Gemini, retrieval scoring,
+  embeddings, ReferenceExpansionExecutor, or FocusedRetrievalExecutor.
+  Clause Top-up remains the one unbuilt remediation type. Regression: GET
+  /health, GET /search, and POST /investigate (project_id=2, EOT-01
+  question) all re-verified — same 10 citations, same retrieval/evidence
+  behaviour; confirmed no file outside
+  app/agent/full_document_read_config.py and
+  app/agent/full_document_read_executor.py references full document read
+  at all.
+
+- **Phase 3 — Investigation Agent, Task 06: Controlled Investigation Loop.**
+  Orchestrates the six already-built components (InvestigationState,
+  InvestigationAgent, EvidenceSufficiencyAssessor, and the three
+  remediation executors) exactly as implemented — no redesign, no
+  modification to retrieval, scoring, embeddings, Timeline, Contract
+  Intelligence, Prompt Builder, or Gemini. New files:
+  `app/agent/investigation_loop_config.py` (`InvestigationLoopConfig`:
+  `max_iterations` default 5) and `app/agent/investigation_loop.py`
+  (`InvestigationLoop.run(request) -> LoopRunResult`).
+
+  **Design.** `run()` follows the specified workflow exactly: one
+  `InvestigationAgent.run()`, then a loop that checks sufficiency, checks
+  `max_iterations`, dispatches exactly one remediation via a
+  `RemediationType -> executor` table (`REFERENCE_EXPANSION` ->
+  `ReferenceExpansionExecutor.expand()`, `FOCUSED_RETRIEVAL` ->
+  `FocusedRetrievalExecutor.retrieve()`, `FULL_DOCUMENT_READ` ->
+  `FullDocumentReadExecutor.read()`), and reassesses. Every stopping
+  condition maps to a distinct, explicit `stopping_reason`: `sufficient`,
+  `max_iterations_reached`, `no_progress` (a remediation added zero new
+  evidence), `same_remediation_no_progress` (a more specific label for the
+  same zero-evidence case when the identical remediation type also ran the
+  previous iteration), `budget_exhausted` (a remediation's own executor
+  reported hitting its per-call budget while adding zero evidence),
+  `unsupported_remediation` (no executor registered for the decision's
+  remediation — `CLAUSE_TOP_UP` today), and `executor_failure` (any
+  exception from an executor call, caught and recorded rather than
+  propagated). `ReferenceExpansionResult` (Task 03) predates the
+  `termination_reason` convention Task 04/05 established, so
+  `_run_reference_expansion()` derives an equivalent signal from its
+  existing `references_deferred`/`documents_deferred` fields by reading
+  them — `reference_expansion_executor.py` itself is untouched. Every
+  remediation call already appends its own complete `search_history` entry
+  internally (unchanged executor behaviour); the loop adds its own entry
+  only for the two paths where no executor ran at all
+  (`unsupported_remediation`, `executor_failure`), so the trail has no gap.
+  `InvestigationState` is reused exactly as implemented — no second state
+  type, no new fields.
+
+  **Key empirical finding** (see validation below): on real Dataset V2
+  data, every document's own boilerplate metadata header contains at least
+  one ID-shaped reference, so `EvidenceSufficiencyAssessor`'s stage-1
+  priority (unresolved references) fires on the very first `assess()` call
+  for every query tried, and — because this corpus is richly
+  cross-referenced — stays selected for roughly 15 iterations before
+  reference expansion exhausts itself. A fresh, real, end-to-end
+  `loop.run()` call therefore reliably demonstrates the
+  `REFERENCE_EXPANSION` path plus the `max_iterations_reached` /
+  `same_remediation_no_progress` stopping conditions, but does not reach
+  `FOCUSED_RETRIEVAL`, `FULL_DOCUMENT_READ`, `sufficient`, or
+  `CLAUSE_TOP_UP` within any practical iteration budget — a real property
+  of this corpus interacting with the assessor's fixed stage priority
+  (both reused exactly as implemented, per this task's own instructions),
+  not a defect in the loop. Reassessing a real, fully-exhausted investigation
+  state (15 real iterations, 158 evidence items, 66/71 documents visited)
+  genuinely produces a `CLAUSE_TOP_UP` decision (6 real contract clauses —
+  10.1, 13.1, 13.3, 14.3, 20.5, 8.4 — named in evidence text but outside the
+  retrieved clause set) — real proof that Clause Top-up is a genuine future
+  need, but the loop's own actual run stops one step earlier via
+  `same_remediation_no_progress`, so the loop itself never dispatches
+  `CLAUSE_TOP_UP` in practice. Per this task's explicit instruction, Clause
+  Top-up was NOT implemented — the loop did not force the issue, though the
+  finding is flagged prominently for future work.
+
+  **Validation** (dataset/scripts/validate_investigation_loop.py, real
+  project_id=2 data, 33/33 checks passed). Real end-to-end traces (3
+  queries, default config) all exercise `REFERENCE_EXPANSION` and correctly
+  stop at `max_iterations_reached` (iteration 5). An extended-budget real
+  trace (`max_iterations=25`) runs 15 real iterations to genuine
+  `same_remediation_no_progress` convergence. `FOCUSED_RETRIEVAL` and
+  `FULL_DOCUMENT_READ` were validated by dispatching the loop's own real
+  code against real, non-fabricated stage-3/stage-4 decisions (same
+  technique Tasks 04/05 established) — both added real new evidence (1→10
+  and 2→4 respectively) through the loop's own dispatch methods.
+  `sufficient` was validated by injecting a real state (genuine
+  `agent.run()` output) paired with a stubbed sufficient decision via
+  `InvestigationAgent`'s own existing assessor-injection point (Task 02) —
+  the loop correctly stopped with zero remediations executed.
+  `unsupported_remediation` was validated using the real captured
+  `CLAUSE_TOP_UP` decision described above, fed through the loop's actual
+  public `run()` via a stub agent. `executor_failure` was validated with an
+  injected always-raising executor against a real starting state. Two
+  independent `loop.run()` calls for the same query produced identical
+  stopping reasons, iteration counts, evidence counts, and remediation
+  sequences.
+
+  No changes to InvestigationAgent, InvestigationService, EvidenceSufficiencyAssessor,
+  InvestigationState, ReferenceExpansionExecutor, FocusedRetrievalExecutor,
+  FullDocumentReadExecutor, retrieval, scoring, embeddings, Timeline,
+  Contract Intelligence, Prompt Builder, or Gemini. Regression: GET
+  /health, GET /search, and POST /investigate (project_id=2, EOT-01
+  question) all re-verified — same 10 citations, same behaviour; confirmed
+  no file outside app/agent/investigation_loop.py and
+  app/agent/investigation_loop_config.py references the investigation loop
+  at all.
+
+- **Phase 3 — Investigation Agent, Task 07: Production Integration &
+  End-to-End Benchmark.** The Investigation Loop (Task 06) is now the
+  production investigation mechanism. `app/agent/service.py` is the only
+  file modified: `InvestigationService.investigate()` no longer performs a
+  single retrieval pass itself — it delegates entirely to
+  `InvestigationLoop.run(request)`, then packages the loop's final
+  `InvestigationState` (evidence, clauses) and hands it to the unmodified
+  `PromptBuilder` → `ReasoningEngine` → Gemini pipeline. The flow is now
+  exactly: Planner (internal to `InvestigationAgent`) → Investigation Loop
+  → Prompt Builder → Reasoning Engine → Gemini, per the approved
+  architecture. `InvestigationAgent`, `EvidenceSufficiencyAssessor`,
+  `InvestigationState`, all three remediation executors, retrieval,
+  scoring, embeddings, Timeline, Contract Intelligence, Prompt Builder,
+  Gemini, and citation generation were not modified.
+
+  **Two integration-only additions to `InvestigationService`:**
+  (1) `InvestigationLoop`/`InvestigationAgent` imports are local to
+  `__init__`, not module-level — `InvestigationAgent` already imports
+  `InvestigationService` (Task 02's private-method-reuse pattern), so a
+  module-level import here would be circular; deferring resolves it without
+  changing either module's public shape (verified both import orders work,
+  and `app.main` imports cleanly). `InvestigationAgent(service=self)` and
+  `FocusedRetrievalExecutor(service=self)` are passed the service's own
+  instance rather than defaulting, avoiding a redundant nested
+  `InvestigationService`/`ReasoningEngine`/`GeminiProvider`.
+  (2) **A genuine integration defect, found and fixed**: none of the three
+  remediation executors update `InvestigationState.timeline_context` (only
+  `InvestigationAgent`'s initial pass does, once). Left alone, the packaged
+  timeline would reflect only the initial small document set while the
+  evidence section shows everything the loop gathered — silently stale.
+  `investigate()` now rebuilds the timeline once, after the loop completes,
+  by calling the existing, unmodified `_build_timeline_context()` with the
+  final evidence's full citation list — reused, not reimplemented. Verified
+  directly: for a real EOT-01 investigation, the stale (initial-pass-only)
+  timeline was 242 characters; the refreshed one, from the same
+  investigation's full 59-item evidence set, is 898 characters.
+  `retrieved_clauses` was left alone (not similarly refreshed): clause
+  retrieval is driven by the investigation plan, not by which documents
+  were retrieved, so it doesn't go stale the same way — evolving it further
+  is exactly what the still-unbuilt Clause Top-up remediation would do
+  (Task 06 finding, unchanged).
+
+  **Real end-to-end benchmark** (`dataset/scripts/run_benchmarks_loop.py`,
+  same 9 approved questions from `benchmarks.py`, real Gemini calls,
+  compared against the existing Sprint 7 `benchmark_results.json`
+  baseline, pass threshold recall ≥ 0.5):
+
+  | Metric | Previous (single-pass) | New (Investigation Loop) |
+  |---|---|---|
+  | Average recall | 0.65 | **0.806** |
+  | Benchmarks passing | 7/9 | **8/9** |
+  | Average evidence items | 10.0 | 59.2 |
+  | Average documents visited | ~10 | 27.9 |
+  | Average loop iterations | n/a (1 pass) | 5.0 (all 9 hit `max_iterations_reached`) |
+  | Average latency | 2.36s | 3.16s |
+  | Average user_prompt_chars | 16,778 | 35,460 |
+
+  5/9 scenarios improved (EOT-01, MONSOON-DISPUTE, VO-004-VALUATION,
+  IPC-11-CERTIFICATION, RECOVERY-PROGRAMME), 4/9 unchanged (2 already at
+  perfect recall, 2 unchanged: NOD-VALIDITY and NCR-001-QUALITY). Every
+  scenario's `clause_count` was identical before/after, confirming the
+  known, unchanged Clause Top-up gap.
+
+  **Root-cause investigation, NCR-001-QUALITY (recall stuck at 0.25):**
+  re-run with `max_iterations=20` instead of the default 5, all 4 expected
+  documents (`ENG-NRB4-0045`, `ENG-NRB4-0049`, `LAB-NRB4-034`,
+  `LAB-NRB4-041`) were found (`stopping_reason=same_remediation_no_progress`
+  at iteration 14, 66 documents visited) — confirming the miss at the
+  default budget is purely "iteration budget not yet exhausted," not a
+  retrieval or scoring defect. Reported as a finding, not fixed: changing
+  the production default is a tuning decision, not a defect fix, and
+  `InvestigationLoopConfig.max_iterations` is already the centralized knob
+  for it (Task 06) — no code change needed if this is ever adjusted.
+
+  **Answer-quality observation (EOT-01):** with 59 evidence items instead
+  of 10, one real Gemini answer hedged more than the old 10-item version
+  despite the correct "10 weeks" fact being present in evidence, because
+  the larger evidence set also surfaces a genuine follow-up dispute
+  document (`CTR-NRB4-0052`, a supplementary claim for a further 6 weeks)
+  that the smaller single-pass evidence never included. Not a factual
+  error — the model declined to fully commit given genuinely conflicting
+  real evidence it now has visibility into — but a real, worth-flagging
+  behavior change from more evidence reaching Gemini per call.
+
+  **Citation volume**: `InvestigationResponse.citations` still returns
+  every evidence item passed to `ReasoningEngine.reason()` unfiltered (Sprint 7 already noted this equals input evidence count, not
+  a Gemini-verified subset — Citation Verification, §19, remains
+  unbuilt) — with evidence now averaging ~59 items instead of ~10, this
+  pre-existing gap becomes much more consequential: every real API
+  response's `citations` array is ~6x larger despite no citation
+  verification narrowing it. Not fixed here (out of this task's explicit
+  "no changes to citation generation" scope) — flagged as a remaining
+  backend issue.
+
+  Regression: GET /health, GET /search, and POST /investigate (project_id=2,
+  EOT-01 question) all re-verified — same response shape
+  (`answer`/`citations`/`reasoning_steps`), `/health` and `/search`
+  byte-identical to baseline, `/investigate` now returns ~59 citations
+  (expected, given the integration) with a correct, well-grounded answer.
+
+- **Sprint 8 — Backend Finalization, Task 01: Citation Verification &
+  Evidence Narrowing.** New files: `app/agent/evidence_narrowing_config.py`
+  (`EvidenceNarrowingConfig`) and `app/agent/evidence_narrowing.py`
+  (`EvidenceNarrower.narrow(evidence) -> EvidenceNarrowingResult`). One file
+  modified: `app/agent/service.py` — `investigate()` now narrows the
+  Investigation Loop's full evidence set before packaging (between the
+  Task 07 timeline refresh and `_package_builder.build()`); Timeline and
+  contract clauses are still built from the loop's FULL evidence, only the
+  citation/evidence section is narrowed. No changes to
+  `InvestigationLoop`, retrieval, Prompt Builder, or Gemini.
+
+  **Not the same module as the pre-existing
+  `app/agent/citation_verification.py`** (Sprint 4 Task 03,
+  `verify_citations()`, called from `reasoning.py` — a post-Gemini,
+  DB-well-formedness integrity check). This task's file was deliberately
+  named `evidence_narrowing.py` to avoid colliding with or having to touch
+  that already-in-production module; the two are complementary and neither
+  needs to know the other exists.
+
+  **Pipeline** (four deterministic stages, no LLM, no semantic reranking):
+  (1) exact-text deduplication; (2) merge same-document, same-page,
+  consecutive-chunk evidence into one combined passage — chunking.py's
+  sliding window (`CHUNK_OVERLAP_WORDS=40`) guarantees these share literal
+  overlapping text, detected and stitched via actual suffix/prefix word
+  matching, not an assumed fixed offset; (3) an optional confidence floor
+  (decisive evidence exempt); (4) cap citations per document, then cap the
+  total, ranked by a `(real_retrieval, decisive, confidence)` priority.
+  "Decisive" reuses `EvidenceSufficiencyAssessor._has_determination_content()`
+  verbatim (evidence_sufficiency.py) — no second definition of what counts
+  as decisive.
+
+  **A real regression found and fixed during validation.** The first
+  ranking design used `(is_decisive, confidence)` as a strict lexicographic
+  key; against the real benchmark this dropped average recall from 0.806 to
+  0.356 — root cause: `ReferenceExpansionExecutor`/`FullDocumentReadExecutor`
+  assign **fixed** confidence (0.75 / 0.8) to everything they find, so a
+  large tied cluster of flatly-scored remediation evidence out-ranked
+  genuinely well-matched real-retrieval evidence (real cosine similarities
+  of 0.6-0.79) whenever ranked as plain comparable numbers, and ties within
+  that flat cluster then broke arbitrarily (by document_id). Fixed by
+  making "real retrieval vs. remediation" (an existing metadata
+  distinction, carried through merges via a new `origin_source` metadata
+  key) the *primary* ranking signal — recovering real recall to 0.706. A
+  second regression, found the same way: the confidence floor (stage 3)
+  defaulted to 0.55, which — since this general-purpose MiniLM model was
+  never fine-tuned on construction-claims text — silently discarded
+  genuinely correct real matches scoring as low as 0.3 while never once
+  affecting remediation evidence (always ≥0.75). Fixed by defaulting
+  `min_confidence_to_retain` to 0.0 (mechanism kept, configurable, just not
+  doing real work on this corpus) — TAKING-OVER and RETENTION-INTERPRETATION
+  and RECOVERY-PROGRAMME recall each returned to 1.0. Both findings are
+  documented in `evidence_narrowing.py`/`evidence_narrowing_config.py`'s
+  own docstrings, not just here.
+
+  **Validation** (dataset/scripts/validate_evidence_narrowing.py, real
+  project_id=2 data plus controlled fixtures, 24/24 checks passed): a real
+  ~59-item evidence set narrows to exactly 15 (within the 8-15 target);
+  determinism verified (identical output across repeated calls on the same
+  real evidence); merge verified on real adjacent chunks (content from
+  both chunks present, overlap not duplicated); decisive evidence
+  confirmed never dropped for low confidence; per-document and total caps
+  verified in isolation with hand-built fixtures.
+
+  **Real benchmark comparison** (dataset/scripts/run_benchmarks_narrowed.py,
+  same 9 questions, real Gemini calls):
+
+  | Metric | Old (single-pass, Sprint 7) | Loop, unnarrowed (Task 07) | Narrowed (this task) |
+  |---|---|---|---|
+  | Average recall | 0.65 | 0.806 | **0.706** |
+  | Benchmarks passing (recall ≥ 0.5) | 7/9 | 8/9 | **8/9** |
+  | Average citations | 10.0 | 59.2 | **15.0** |
+  | Average user_prompt_chars | 16,778 | 35,460 | 19,278 |
+  | Average latency | 2.36s | 3.16s | 2.39s |
+
+  Narrowing reduces citations by ~75% (59.2→15.0, hitting the top of the
+  8-15 target on all 9 real investigations) and roughly halves prompt size,
+  while average recall (0.706) still exceeds the pre-loop baseline (0.65)
+  and the pass count matches the unnarrowed loop's own (8/9) — the one
+  scenario below 0.5 recall in both (NCR-001-QUALITY) is unaffected by
+  narrowing: confirmed its 3 missing documents never entered
+  `state.evidence` in the first place (the already-documented Task 07
+  iteration-budget finding), so there was nothing for the narrower to have
+  kept. Answers reviewed manually remained grounded and, in most cases,
+  more confident/concise with fewer, higher-signal citations.
+
+  Regression: GET /health, GET /search, and POST /investigate (project_id=2,
+  EOT-01 question) all re-verified — same response shape, `/investigate`
+  now returns 15 citations (down from ~59) with a correct, well-grounded
+  answer; confirmed `evidence_narrowing.py`/`evidence_narrowing_config.py`
+  are referenced only from `app/agent/service.py`.
 
 ---
 
 ## 🚧 Current Milestone
 
-Milestone 1 – Single-Tool Agent (search + read) — Investigation Engine
-foundation, LLM integration, and an HTTP entry point are all done and
-verified against a real Gemini API over real HTTP requests. The actual
-tool-calling agent loop (the "search → read → follow references → decide
-when to stop" loop from PROJECT_PLAN.md Part C step 7) has not been built
-yet. ReasoningEngine today answers from evidence gathered in one shot, not
-iteratively — and, per the finding above, sometimes weaves in evidence that
-isn't actually relevant to the question asked. A separate, not-yet-wired-up
-Investigation Planning subsystem (app/investigation/) is being built
-alongside it — investigation_type classification is real now, everything
-else on the plan is still placeholder.
+Dataset V2 evaluation and backend hardening (post Sprint 7) — the
+Investigation Engine has now been proven end-to-end against a second, much
+larger and more procedurally complex fictional dataset (Dataset V2: 71
+documents across 9 investigation scenarios plus a 4-document Contract
+Package, alongside the original 17-document Dataset V1), via a 9-question
+benchmark suite run with real embeddings and real Gemini calls, twice
+(before and after Sprint 7's fixes). The single-shot (non-iterative)
+ReasoningEngine architecture, the Contract Intelligence subsystem, and the
+Timeline subsystem all held up against the new corpus without needing any
+change. Sprint 7 closed the concrete, benchmark-proven gaps that showed up
+in that evaluation: cross-project retrieval contamination, single-document
+over-representation in retrieval results, two dataset-format-brittle
+metadata extractors, and classifier coverage gaps for Dataset V2's question
+vocabulary. The multi-turn tool-calling agent loop from PROJECT_PLAN.md
+Part D is still not built — ReasoningEngine still answers from one
+evidence-gathering pass, not an iterative search/read/follow-references
+loop — and that gap is now the best-evidenced explanation for the
+benchmark's remaining failures (a document that exists in the corpus but
+doesn't survive one retrieval pass can't be found by a second, targeted
+look the way an iterative agent could).
 
 ---
 
 ## 🎯 Next Task
 
-Either: (a) build the real multi-turn agent loop per PROJECT_PLAN.md Part D,
-(b) give InvestigationPlanner a real (likely LLM-backed) implementation and
-decide how/whether InvestigationService consumes its output, or (c) build
-citation/fact verification (§19) — still the most-flagged missing integrity
-control across every audit so far.
+Ranked by what the Dataset V2 benchmark evidence now most directly
+supports: (a) the real multi-turn agent loop per PROJECT_PLAN.md Part D —
+the remaining benchmark failures are retrieval-completeness problems an
+iterative "look again, more specifically" loop is the natural fix for, more
+than any further single-pass retrieval tuning; (b) intra-document chunk
+diversity (e.g. MMR reranking within a document's own chunks, or a
+paragraph-type-aware retrieval bonus) to address the residual finding
+above; (c) extend _EVIDENCE_SOURCES_BY_TYPE and ContractContextBuilder's
+topic mapping for Sprint 7's five new investigation categories, deferred
+this sprint as out of stated scope; (d) citation/fact verification (§19) —
+still the most-flagged missing integrity control across every audit so far.
 
 ---
 
