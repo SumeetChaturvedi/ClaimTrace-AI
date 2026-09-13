@@ -1,8 +1,18 @@
-# ClaimTrace Backend v1.0
+# ClaimTrace Backend v1.0.1
 
-Status: **Complete**
+Status: **Complete — Released**
 Scope: Backend only (FastAPI + SQLAlchemy + PostgreSQL/pgvector + Google Gemini)
-This document is the technical closure record for ClaimTrace Backend Version 1.0.
+This document is the technical architecture record for the ClaimTrace
+Backend, current as of v1.0.1. For a concise summary of what changed
+between v1.0 and v1.0.1, see `RELEASE_NOTES_v1.0.1.md`. For the full,
+chronological development history, see `IMPLEMENTATION_LOG.md`.
+
+> This document originally closed out v1.0 (single-project, Dataset V2, 9
+> benchmark questions). It has been updated in place to reflect v1.0.1:
+> project-scoped Contract Intelligence, a 3-project / 134-document dataset,
+> and a 12-question benchmark suite. The architecture described in §2–§3
+> is unchanged between v1.0 and v1.0.1 except where §2's Contract
+> Intelligence entry notes the project-scoping fix.
 
 ---
 
@@ -68,12 +78,19 @@ the pre-formatted text block the reasoning prompt's "Project Timeline"
 section carries.
 
 **Contract Intelligence** (`app/contracts/`)
-Parses the project's contract package once per process (Contract Data,
-Employer's Requirements, General Conditions, Particular Conditions — 10
-parsed clauses in the current package) and retrieves the clauses relevant to
-an investigation's contract-topic context. Fully separate from document
-retrieval; clauses are matched by topic, not by semantic search over
-narrative text.
+Parses each project's own contract package (Contract Data, Employer's
+Requirements, General Conditions, Particular Conditions) and retrieves the
+clauses relevant to an investigation's contract-topic context. Fully
+separate from document retrieval; clauses are matched by topic, not by
+semantic search over narrative text. **As of v1.0.1, contract clause
+loading is project-scoped**: each project resolves clauses only from its
+own `storage/contracts/{project_id}/` package (`get_clause_repository
+(project_id)`, memoized per project), resolved per-request from
+`InvestigationAgent.run()`. Prior to v1.0.1, a single process-wide
+repository was built from every contract package on disk, which could leak
+one project's clauses into another project's investigation — fixed as a
+targeted patch (Sprint 8 Task 03) without changing `ClauseParser`,
+`ClauseRepository`, `ClauseRetriever`, or any parsing/retrieval algorithm.
 
 **Investigation State** (`app/agent/investigation_state.py`)
 The single, reused working-memory container for one investigation: the
@@ -202,24 +219,34 @@ step; nothing upstream of it depends on an LLM decision.
 
 ## 4. Dataset Summary
 
+Three independent projects, each with its own contract package, now exist
+in the database:
+
+| Project | Description | Documents | Contract package |
+|---|---|---|---|
+| **Project 1** | Delhi Metro Viaduct, Package DMV-7 (fictional) — the original V0/Dataset V1 scenario, frozen | 17 | None |
+| **Project 2** | Nandira River Bridge Project, Package NRB-4 (fictional) — Dataset V2, 11 investigation scenarios | 99 | NRB4 (13 parsed clauses) |
+| **Project 3** | Kestrel Flyover Interchange Project, Package KFI-2 (fictional) — Scenario 12, a genuinely independent second project used to validate project isolation | 18 | KFI2 (4 parsed clauses) |
+
+**134 documents total.** Project 2's 11 scenarios span extension-of-time
+disputes, variation valuation, interim payment certification, retention
+interpretation, notice-of-dissatisfaction validity, quality
+non-conformance, recovery-programme credibility, practical-completion/
+taking-over, concurrent delay, and defects-notification-period concrete
+defects. Project 3's scenario covers employer termination and final
+account — a distinct claim category (procedural termination validity,
+liquidated damages, final account reconciliation) exercised on a project
+with no shared documents, contract clauses, or identifiers with Project 2.
+
 | | |
 |---|---|
-| **Dataset V1** | Delhi Metro Viaduct, Package DMV-7 (fictional) — 17 documents, frozen reference dataset |
-| **Dataset V2** | Nandira River Bridge Project, Package NRB-4 (fictional) — 71 documents, 232 indexed chunks, across 9 investigation scenarios |
-| **Contract package** | 4 documents (Contract Data, Employer's Requirements, General Conditions, Particular Conditions) — 10 parsed contract clauses, auto-ingested once per process |
-| **Benchmark corpus** | 9 approved benchmark questions (`dataset/scripts/benchmarks.py`), one per Dataset V2 scenario, each with a documented expected outcome, expected decisive documents, and expected clause hints |
-
-Dataset V2 scenarios span extension-of-time disputes, variation valuation,
-interim payment certification, retention interpretation, notice-of-
-dissatisfaction validity, quality non-conformance, recovery-programme
-credibility, and practical-completion/taking-over — a deliberately varied
-set of construction-claims question types.
+| **Benchmark corpus** | 12 approved benchmark questions (`dataset/scripts/benchmarks.py`), one per scenario across all 3 projects, each with a documented expected outcome, expected decisive documents, and expected clause hints |
 
 ---
 
 ## 5. Benchmark Results
 
-Real Gemini calls, same 9 questions, three architecture states:
+**v1.0 baseline** (real Gemini calls, 9 questions, three architecture states):
 
 | Metric | Original single-pass | Investigation Loop (unnarrowed) | **v1.0 (Loop + Narrowing)** |
 |---|---|---|---|
@@ -231,24 +258,29 @@ Real Gemini calls, same 9 questions, three architecture states:
 | Average latency per investigation | 2.36 s | 3.16 s | 2.39 s |
 | Average loop iterations | 1 (no loop) | 5.0 | 5.0 |
 
-**Improvements over the original architecture:**
-- Recall improved from 0.65 to 0.706 (+0.056) and pass count from 7/9 to
-  8/9, with the Investigation Loop's raw, unnarrowed retrieval reaching
-  0.806 before Evidence Narrowing traded some of that back for a ~75%
-  citation-volume reduction.
-- Citation volume reduced from a peak of ~59 (the Loop's raw evidence
-  output) to a consistent 15 — within the intended 8–15 target — without
-  regressing below the *original* pre-Loop baseline's recall or pass rate.
-- Prompt size roughly halved relative to the unnarrowed Loop output (35,460
-  → 19,278 chars), and latency returned to essentially the original
-  single-pass level (2.39s vs. 2.36s) despite five retrieval iterations
-  running underneath it.
+**v1.0.1 — full 12-question suite** (Dataset V2's original 9 + Scenario 10
+concurrent delay + Scenario 11 defects liability + Scenario 12 termination/
+final account on the independent Project 3), real Gemini, RC1 validation run:
 
-One benchmark (quality non-conformance, NCR-001-QUALITY) remains below the
-0.5 recall threshold in both the Loop and v1.0 configurations; this is a
-confirmed iteration-budget effect (see §7), not a narrowing or retrieval
-defect — the same three missing documents are found reliably when the
-iteration budget is raised for that scenario.
+| Metric | v1.0.1 |
+|---|---|
+| Total benchmark questions | 12 |
+| Average recall | 0.696 |
+| Pass rate (recall ≥ 0.5) | 10 / 12 |
+| Gemini errors / exceptions | 0 / 0 |
+| Average / max latency | 2.16 s / 8.3 s |
+| Citations before → after narrowing | 82–85 → 15 (Project 2); 31 → 15 (Project 3) |
+| Cross-project contract clause leakage | 0 / 12 (was present in 8 / 12 prior to the Sprint 8 Task 03 fix) |
+
+The two sub-0.5 cases (NCR-001-QUALITY 0.25, CONCURRENT-DELAY-P4 0.4) are
+the same confirmed iteration-budget effect described below (see §7) — the
+same missing documents are found reliably when `max_iterations` is raised
+for those scenarios — not a regression or a new defect. Extending the
+corpus from 1 to 3 projects and fixing Contract Intelligence's project
+scoping produced **no change** to any of the original 9 questions' recall,
+citation counts, or iteration behaviour; the only measured effect was the
+elimination of cross-project clause leakage. See `RELEASE_NOTES_v1.0.1.md`
+for the full v1.0 → v1.0.1 change summary.
 
 ---
 
@@ -354,16 +386,23 @@ ClaimTrace Backend v1.0 can:
 - **Architecturally complete**: every component named in the approved
   Investigation Agent architecture is implemented and wired into the
   production path, with the single, disclosed exception of Clause Top-up
-  (§7/§8).
-- **Benchmark validated**: the full 9-question Dataset V2 benchmark has
-  been run against real embeddings, real retrieval, and real Gemini calls
-  at each major architectural milestone (original single-pass, integrated
-  Loop, Loop + Evidence Narrowing), with results compared and reported at
-  every stage.
+  (§7/§8). Independently reconfirmed component-by-component during the
+  v1.0.1 Release Candidate (RC1) validation.
+- **Benchmark validated**: a 12-question suite spanning 3 independent
+  projects has been run against real embeddings, real retrieval, and real
+  Gemini calls, with results compared and reported at every architectural
+  milestone from the original single-pass design through v1.0.1.
 - **Regression tested**: `GET /health`, `GET /search`, and
-  `POST /investigate` were verified after every change across this entire
-  development arc, most recently after Evidence Narrowing's integration;
-  the API response contract has not changed.
+  `POST /investigate` were verified live after every change across this
+  entire development arc, most recently during RC1; the API response
+  contract has not changed since v1.0.
+- **Project isolation validated bidirectionally** across all 3 projects on
+  every axis — document retrieval, contract clause retrieval, search, and
+  full investigation — including under real singleton-service,
+  sequential-request conditions (the exact shape that caused the v1.0
+  contract-clause leakage, fixed in Sprint 8 Task 03).
+- **Released**: ClaimTrace Backend v1.0.1 passed full RC1 sign-off with a
+  READY FOR RELEASE recommendation. See `RELEASE_NOTES_v1.0.1.md`.
 - **Suitable for internal production use**, with the known limitations in
   §7 understood and accepted: default iteration tuning and the absence of
   Clause Top-up are disclosed, non-blocking gaps rather than defects.
@@ -376,13 +415,22 @@ ClaimTrace Backend v1.0 can:
 
 ## 10. Future Roadmap
 
-**Phase 4 — Dataset Completion**
-Expand or diversify the benchmark corpus beyond Dataset V1/V2 as needed to
-continue validating backend behaviour against new claim types.
+**Phase 4 — Dataset Completion** — ✅ Complete
+Expanded the benchmark corpus from 1 project / 9 scenarios (Dataset V2) to
+3 projects / 12 scenarios / 134 documents, including a genuinely
+independent second project (Project 3 / KFI-2) used to validate project
+isolation under a different claim category (termination and final
+account).
 
-**Phase 5 — Frontend**
+**Sprint 8 — Backend Patch v1.0.1** — ✅ Complete
+Fixed the cross-project contract clause leakage that Phase 4's Project 3
+work surfaced. Released as ClaimTrace Backend v1.0.1 after full RC1
+validation.
+
+**Phase 5 — Frontend** — ⬅ Next
 Build the user-facing application against the existing, stable
-`POST /investigate` / `GET /search` API contract.
+`POST /investigate` / `GET /search` API contract. Not yet started —
+`frontend/` is currently empty.
 
 **Phase 6 — Authentication & User Management**
 Introduce user accounts, access control, and project-level permissions

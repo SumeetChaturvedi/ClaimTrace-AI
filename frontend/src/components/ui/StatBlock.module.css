@@ -1,0 +1,25 @@
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: var(--space-6);
+  border-right: var(--border-width) solid var(--border-color);
+}
+
+.stat:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.value {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

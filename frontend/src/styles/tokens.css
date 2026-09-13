@@ -1,0 +1,112 @@
+/*
+ * ClaimTrace design tokens — single source of truth for the visual system.
+ *
+ * This is a first-pass MVP token set (light theme only, per the current
+ * task's scope). Components should reference these variables rather than
+ * hardcoding colors/sizes, so the visual system can be refined later
+ * without restructuring the application.
+ */
+
+:root {
+  /* ---- Typography ---- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 1.875rem;
+  /* Editorial/display scale — cinematic Home sections and the Workspace's
+     investigation question, never used for ordinary UI text. */
+  --text-3xl: 2.375rem;
+  --text-4xl: 3rem;
+  --text-5xl: 3.75rem;
+  --text-6xl: 4.75rem;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  /* ---- Spacing scale ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---- Borders / radii / shadows ---- */
+  --border-color: #dcd8d0;
+  --border-color-strong: #b9b2a4;
+  --border-width: 1px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --shadow-sm: 0 1px 2px rgba(30, 26, 20, 0.06);
+  --shadow-md: 0 4px 16px rgba(30, 26, 20, 0.10);
+
+  /* ---- Surfaces ---- */
+  --color-page-bg: #f6f4f0;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f0eee8;
+  --color-overlay-scrim: rgba(24, 21, 16, 0.35);
+
+  /* ---- Text ---- */
+  --color-text-primary: #1c1a16;
+  --color-text-secondary: #514c42;
+  --color-text-muted: #857e70;
+  --color-text-inverse: #f6f4f0;
+  --color-link: #2a5a6b;
+
+  /* ---- Brand / accent ---- */
+  --color-accent: #2a5a6b;
+  --color-accent-strong: #1e424f;
+  /* Construction-inspired secondary accent — used sparingly (a rule, a
+     kicker, a hover edge) on Home only, never for interactive UI controls
+     inside the application itself. */
+  --color-rust: #a05a2c;
+
+  /* ---- Ink (dark) surfaces — Home's alternating dark sections only ---- */
+  --color-ink-bg: #17140f;
+  --color-ink-surface: #201b14;
+  --color-ink-border: #38322a;
+  --color-ink-text: #f3efe6;
+  --color-ink-muted: #a99e8d;
+
+  /* ---- Semantic status ---- */
+  --color-amber-bg: #fbf1dd;
+  --color-amber-border: #e0b968;
+  --color-amber-text: #7a5a12;
+
+  --color-red-bg: #fbeae8;
+  --color-red-border: #d98a80;
+  --color-red-text: #8a2c1f;
+
+  --color-green-bg: #eaf3e8;
+  --color-green-border: #96c08c;
+  --color-green-text: #2f5c26;
+
+  --color-neutral-bg: #eeece6;
+  --color-neutral-border: var(--border-color-strong);
+  --color-neutral-text: var(--color-text-secondary);
+
+  /* ---- Layout ---- */
+  --shell-nav-width: 220px;
+  --shell-inspector-width: 380px;
+  --shell-header-height: 56px;
+  --z-inspector-overlay: 40;
+  --z-drawer: 50;
+}

@@ -1,3 +1,13 @@
+> **ARCHIVED — pre-implementation planning document.** This is the original
+> V0 plan written before any code existed. It is kept for historical
+> reference only and does **not** describe the system as built: the actual
+> backend uses a custom deterministic Investigation Loop (not a single
+> Claude Agent SDK reasoning loop), Google Gemini as the reasoning LLM (not
+> Claude), and a dataset that grew to 3 projects / 12 scenarios / 134
+> documents (not the single 18-document Pier P-42 set below). For the
+> current architecture and status, see `BACKEND_V1_COMPLETE.md`,
+> `RELEASE_NOTES_v1.0.1.md`, and `README.md` in the repository root.
+
 # Construction Claims Evidence Investigator — V0 Planning Document
 
 ---

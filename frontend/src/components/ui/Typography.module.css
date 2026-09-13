@@ -1,0 +1,30 @@
+.pageTitle {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.sectionLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.prose {
+  font-size: var(--text-md);
+}
+
+.notAvailable {
+  font-style: italic;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  border-bottom: 1px dotted var(--color-text-muted);
+  cursor: help;
+}

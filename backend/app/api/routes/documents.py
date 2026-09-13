@@ -25,7 +25,10 @@ class DocumentSummary(BaseModel):
     doc_type: str | None
     doc_date: date | None
     referenced_ids: list[str] | None
+    status: str
+    processing_error: str | None = None
     uploaded_at: datetime
+    updated_at: datetime
 
 
 class UploadResult(BaseModel):
@@ -70,6 +73,10 @@ async def upload_documents(
                 content=content,
             )
         except IngestionError as exc:
+            # Pre-flight validation only now (unsupported file type, empty, oversized) —
+            # ingest_document() itself persists a 'failed' Document for any
+            # failure past that point, so this file couldn't be accepted at
+            # all rather than having failed while processing.
             results.append(UploadResult(filename=name, status="error", error=str(exc)))
             continue
         except SQLAlchemyError as exc:
@@ -77,11 +84,15 @@ async def upload_documents(
             results.append(UploadResult(filename=name, status="error", error=f"database error: {exc}"))
             continue
 
+        # document.status is 'ready' or 'failed' — reflected honestly here
+        # rather than hardcoding "success", since ingest_document() no
+        # longer raises for a processing (as opposed to validation) failure.
         results.append(
             UploadResult(
                 filename=name,
-                status="success",
+                status=document.status,
                 document=DocumentSummary.model_validate(document),
+                error=document.processing_error,
             )
         )
 

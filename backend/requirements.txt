@@ -10,6 +10,13 @@ pydantic-settings
 # Document ingestion (Milestone 0B)
 pymupdf
 
+# DOCX ingestion (Phase 7: Multi-Format Evidence) — python-docx is the
+# established, actively maintained, MIT-licensed OOXML parser for .docx
+# files (pulls in lxml, itself a mature, ubiquitous XML library already a
+# transitive dependency of much of the Python ecosystem). No custom XML
+# parsing is implemented here.
+python-docx
+
 # Chunking & embeddings (Milestone 0C)
 sentence-transformers
 

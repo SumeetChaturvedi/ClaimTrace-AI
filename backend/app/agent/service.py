@@ -104,7 +104,7 @@ from typing import TYPE_CHECKING
 
 from app.agent import tools
 from app.agent.investigation_package import InvestigationPackageBuilder
-from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse
+from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse, TimelineEntry
 from app.agent.reasoning import ReasoningEngine
 from app.contracts.clause_retrieval import ClauseRetriever
 from app.contracts.context_builder import ContractContextBuilder
@@ -112,7 +112,7 @@ from app.contracts.ingestion import get_clause_repository
 from app.contracts.repository import ClauseRepository
 from app.contracts.search import ClauseSearchService
 from app.investigation import InvestigationPlanner
-from app.investigation.timeline import TimelineBuilder, TimelineFormatter
+from app.investigation.timeline import TimelineBuilder, TimelineEvent, TimelineFormatter
 
 if TYPE_CHECKING:
     # Type-checking only, to avoid the module-level circular import
@@ -267,10 +267,20 @@ class InvestigationService:
         # Timeline refresh (see module docstring): state.timeline_context
         # reflects only InvestigationAgent's initial pass. Rebuild it from
         # the loop's complete, final evidence set using the existing,
-        # unmodified _build_timeline_context() — not a new implementation,
-        # just called again with a fuller citation list. Built from the
-        # FULL evidence, before narrowing (see docstring above).
-        final_timeline_context = self._build_timeline_context([item.citation for item in state.evidence])
+        # unmodified _build_timeline() — not a new implementation, just
+        # called again with a fuller citation list. Built from the FULL
+        # evidence, before narrowing (see docstring above).
+        #
+        # Phase 4 (Timeline Productization): the same final_events list also
+        # becomes InvestigationResponse.timeline, via _build_timeline_entries,
+        # which attaches each event's own real citations from this same
+        # final_citations list — no second retrieval, no fabricated data,
+        # just the structured TimelineEvent list this module already builds,
+        # exposed instead of being thrown away after formatting to text.
+        final_citations = [item.citation for item in state.evidence]
+        final_events = self._build_timeline(final_citations)
+        final_timeline_context = self._timeline_formatter.format(final_events)
+        final_timeline = self._build_timeline_entries(final_events, final_citations)
 
         narrowing_result = self._evidence_narrower.narrow(state.evidence)
 
@@ -287,6 +297,14 @@ class InvestigationService:
             answer=result.answer,
             citations=result.supporting_evidence,
             reasoning_steps=result.reasoning_steps,
+            timeline=final_timeline,
+            # Phase 5 (Contract Intelligence Productization): state.retrieved_clauses
+            # is the same list already handed to the package builder above (and,
+            # via PromptBuilder, already shown to Gemini) — exposed here instead of
+            # being discarded, same "capture what already exists" approach as
+            # Phase 4's timeline. Never narrowed (narrowing is an evidence/citation
+            # concern only — see the module docstring), never re-retrieved.
+            contract_clauses=list(state.retrieved_clauses),
         )
 
     def _build_evidence(self, citations: list[Citation]) -> list[Evidence]:
@@ -328,18 +346,45 @@ class InvestigationService:
 
         return evidence
 
-    def _build_timeline_context(self, citations: list[Citation]) -> str:
-        """Build a formatted chronology from the documents behind
-        `citations` only — never the whole corpus. Fetches the (deduplicated)
-        Document rows for citations' document ids, hands them to
-        TimelineBuilder (which sorts by document_date, unchanged from
-        Sprint 5 Task 01), then TimelineFormatter (unchanged from Sprint 5
-        Task 04). Returns "" if there are no citations, same as
-        TimelineFormatter already does for an empty timeline."""
+    def _build_timeline(self, citations: list[Citation]) -> list[TimelineEvent]:
+        """Fetch the (deduplicated) Document rows behind `citations` only —
+        never the whole corpus — and hand them to TimelineBuilder (which
+        sorts by document_date, unchanged from Sprint 5 Task 01). The shared
+        first step behind both _build_timeline_context (LLM prompt text,
+        used by InvestigationAgent's initial pass) and _build_timeline_entries
+        (the structured, citation-linked timeline exposed on
+        InvestigationResponse — Phase 4)."""
         document_ids = sorted({citation.document_id for citation in citations})
         documents = tools.get_documents(document_ids)
-        timeline = self._timeline_builder.build(documents)
-        return self._timeline_formatter.format(timeline)
+        return self._timeline_builder.build(documents)
+
+    def _build_timeline_context(self, citations: list[Citation]) -> str:
+        """Build a formatted chronology from the documents behind
+        `citations` via TimelineFormatter (unchanged from Sprint 5 Task 04).
+        Returns "" if there are no citations, same as TimelineFormatter
+        already does for an empty timeline."""
+        return self._timeline_formatter.format(self._build_timeline(citations))
+
+    def _build_timeline_entries(self, events: list[TimelineEvent], citations: list[Citation]) -> list[TimelineEntry]:
+        """Phase 4 (Timeline Productization): attach each event's own real
+        citations — the same `citations` list its document came from, never a
+        new lookup — so the frontend can drill from a timeline event straight
+        into the exact cited passage via the existing Inspector/Source Viewer.
+        A document with multiple citations in this investigation keeps all of
+        them; nothing is fabricated for a document with none (can't happen by
+        construction, since `events` is itself built only from these same
+        citations' document ids, but this doesn't assume that and simply
+        returns an empty list for such a case rather than erroring)."""
+        return [
+            TimelineEntry(
+                document_id=event.document_id,
+                document_date=event.document_date,
+                document_type=event.document_type,
+                event_label=event.event_label,
+                citations=[c for c in citations if c.document_id == event.document_id],
+            )
+            for event in events
+        ]
 
     def _validate(self, request: InvestigationRequest) -> None:
         """Defense-in-depth beyond pydantic's own field constraints on

@@ -80,21 +80,8 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "11.1",
-        "11.2",
-        "13.1",
-        "13.3",
-        "14.3",
-        "14.7",
-        "20.1",
-        "3.3",
-        "4.1",
-        "4.12",
-        "8.4",
-        "8.7"
-      ],
-      "clause_count": 12,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "8.4",
         "20.1"
@@ -102,21 +89,15 @@
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 32601
+      "user_prompt_chars": 7024
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, the provided documents indicate that an Engineer's Determination regarding Extension of Time (EOT-01) for the Pier P3 Utility Conflict was issued (Document Reference: ENG-NRB4-0019), and the Contractor submitted a supplementary claim to dispute that assessment (Document Reference: CTR-NRB4-0052). \n\nHowever, the supplied evidence does not contain the specific duration of the extension granted or the exact determination details from ENG-NRB4-0019. Therefore, the evidence is insufficient to state definitively whether the Contractor was entitled to an extension of time for the Pier 3 utility conflict and for how long.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 8.3
+    "elapsed_seconds": 6.5
   },
   {
     "scenario": 2,
@@ -197,42 +178,23 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "11.1",
-        "11.2",
-        "13.1",
-        "13.3",
-        "14.3",
-        "14.7",
-        "20.1",
-        "3.3",
-        "4.1",
-        "4.12",
-        "8.4",
-        "8.7"
-      ],
-      "clause_count": 12,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "8.4"
       ]
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 32645
+      "user_prompt_chars": 7068
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, the ordinary Monsoon Period defined at Particular Conditions Part D.1 (1 June to 30 September) is expressly not independently compensable [3].",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.3
+    "elapsed_seconds": 0.1
   },
   {
     "scenario": 3,
@@ -313,22 +275,8 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "1.3",
-        "11.1",
-        "11.2",
-        "13.1",
-        "13.3",
-        "14.3",
-        "14.7",
-        "20.1",
-        "3.3",
-        "4.1",
-        "4.12",
-        "8.4",
-        "8.7"
-      ],
-      "clause_count": 13,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "13.1",
         "13.3"
@@ -336,21 +284,15 @@
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 34823
+      "user_prompt_chars": 7105
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, Variation VO-NRB4-004 was assessed by the Engineer (summarized in document ENG-NRB4-0031) at a recommended valuation of VTD 590,700 against the Contractor's quoted VTD 687,400, and this approved value of VTD 590,700 was subsequently approved and utilized in subsequent documentation (such as CTR-NRB4-0084 and NHIA-NRB4-APR-006). \n\nHowever, the provided evidence is insufficient to perform a technical or contractual audit of the underlying rate calculations to determine if the Engineer's valuation was fully reasonable and contractually justified beyond the fact that it was assessed, approved at VTD 590,700, and later disputed primarily regarding its treatment for retention purposes rather than its baseline evaluation.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.9
+    "elapsed_seconds": 0.1
   },
   {
     "scenario": 4,
@@ -431,12 +373,8 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "13.1",
-        "13.3",
-        "3.3"
-      ],
-      "clause_count": 3,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "14.3",
         "14.7"
@@ -444,21 +382,15 @@
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 13784
+      "user_prompt_chars": 7038
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, Variation VO-NRB4-004 was included in Interim Payment Certificate No. 11 (document QMS-NRB4-011.pdf) at its approved value following the Engineer's assessment and Employer approval (NHIA-NRB4-APR-006 / ENG-NRB4-0031). \n\nHowever, the provided evidence is insufficient to fully determine whether payment was made in accordance with the Contract, as the text does not contain records verifying the exact execution or receipt of the corresponding financial transfer relative to IPC No. 11's payment provisions.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.6
+    "elapsed_seconds": 0.1
   },
   {
     "scenario": 5,
@@ -538,12 +470,8 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "13.1",
-        "13.3",
-        "3.3"
-      ],
-      "clause_count": 3,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "13.3",
         "14.3"
@@ -551,21 +479,15 @@
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 13751
+      "user_prompt_chars": 7005
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, retention was correctly applied under IPC-11 (including the value of Variation VO-NRB4-004) and no interest is due, as stated in the Employer's correspondence: retention forms part of the retention base under Contract Data Section 6 at 5 per cent \"of each amount otherwise due\" without carve-out for Variations, and no repayment or interest is due under IPC-NRB4-011.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.5
+    "elapsed_seconds": 0.1
   },
   {
     "scenario": 6,
@@ -644,42 +566,23 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "11.1",
-        "11.2",
-        "13.1",
-        "13.3",
-        "14.3",
-        "14.7",
-        "20.1",
-        "3.3",
-        "4.1",
-        "4.12",
-        "8.4",
-        "8.7"
-      ],
-      "clause_count": 12,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "20.1"
       ]
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 32562
+      "user_prompt_chars": 6985
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, the Legal and Contracts Memorandum (`LCM-NRB4-001.pdf`) specifically addresses the validity and merits of the Contractor's Notice of Dissatisfaction (`CTR-NRB4-0098`). However, the complete text and detailed findings of `LCM-NRB4-001.pdf` and `CTR-NRB4-0098` are not provided within the evidence text. \n\nTherefore, the supplied evidence is insufficient to determine whether the Contractor's Notice of Dissatisfaction is procedurally valid or likely to succeed on the merits.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.6
+    "elapsed_seconds": 0.1
   },
   {
     "scenario": 7,
@@ -769,18 +672,12 @@
       "user_prompt_chars": 7057
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the provided evidence:\n\n* **Legitimacy of the non-conformance:** The supplied evidence contains documents regarding Non-Conformance Report NCR-NRB4-001 concerning Pier P5 pier shaft concrete strength (Set B) (Document [9]), but the provided excerpts do not explicitly state whether the non-conformance was legitimate. \n* **Structural acceptability:** The evidence states that the affected portion of the Pier P5 pier shaft is structurally adequate, and no demolition or reconstruction is required (Document [11]). \n\nThe evidence is otherwise insufficient to provide further details regarding the legitimacy determination of the non-conformance.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.7
+    "elapsed_seconds": 0.2
   },
   {
     "scenario": 8,
@@ -860,40 +757,21 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "11.1",
-        "11.2",
-        "13.1",
-        "13.3",
-        "14.3",
-        "14.7",
-        "20.1",
-        "3.3",
-        "4.1",
-        "4.12",
-        "8.4",
-        "8.7"
-      ],
-      "clause_count": 12,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": []
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 32568
+      "user_prompt_chars": 6991
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, the evidence is insufficient to fully answer whether the Contractor's Recovery Programme is credible and supports the revised completion strategy. \n\nWhile the evidence references a Recovery Programme and Narrative (`RPN-NRB4-001`) [12], and mentions an underperformance of one measure within the Recovery Programme alongside general completion of approach road and finishing works consistent with the recovery [9, 13], it lacks the necessary data to perform an engineering assessment of its overall credibility and support for the revised completion strategy.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.7
+    "elapsed_seconds": 0.2
   },
   {
     "scenario": 9,
@@ -980,18 +858,12 @@
       "user_prompt_chars": 7040
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the provided evidence, the outstanding punch-list items do not prevent Practical Completion (or beneficial use) of the Works. Specifically:\n\n- The Joint Inspection Report (`JIR-NRB4-001.pdf`) states that none of the four identified outstanding items are assessed as critical or as preventing beneficial use/Practical Completion of the Works.\n- Punch List `PL-NRB4-001.pdf` explicitly states that no item on the list is assessed as preventing the beneficial use of the Works.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.4
+    "elapsed_seconds": 0.1
   },
   {
     "scenario": 10,
@@ -1074,21 +946,8 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "11.1",
-        "11.2",
-        "13.1",
-        "13.3",
-        "14.3",
-        "14.7",
-        "20.1",
-        "3.3",
-        "4.1",
-        "4.12",
-        "8.4",
-        "8.7"
-      ],
-      "clause_count": 12,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "8.4",
         "4.12"
@@ -1096,21 +955,15 @@
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 32703
+      "user_prompt_chars": 7126
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, the provided documents do not contain sufficient specific details regarding the Engineer's final determination or apportionment on the Pier P4 ground condition delay versus the concurrent plant breakdown to explicitly state whether the entitlement should be reduced. \n\nHowever, under Contract Clause 4.12 and Clause 8.4, where a delay results partly from an unforeseeable physical condition and partly from a cause for which the Contractor is responsible, the Engineer is required to apportion the resulting delay between the two causes to the extent reasonably practicable, and grant an extension only in respect of the portion attributable to the unforeseeable physical condition.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.7
+    "elapsed_seconds": 0.1
   },
   {
     "scenario": 11,
@@ -1191,21 +1044,8 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "11.1",
-        "11.2",
-        "13.1",
-        "13.3",
-        "14.3",
-        "14.7",
-        "20.1",
-        "3.3",
-        "4.1",
-        "4.12",
-        "8.4",
-        "8.7"
-      ],
-      "clause_count": 12,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "11.1",
         "11.2"
@@ -1213,21 +1053,15 @@
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 32673
+      "user_prompt_chars": 7096
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, documents relevant to the Engineer's determination regarding root cause and liability for the Pier P2 pier cap cracking are referenced (e.g., `ENG-NRB4-0083`), but the specific textual content or conclusions of that determination are not provided in the excerpts. Therefore, the supplied evidence is insufficient to determine whether the map cracking at the Pier P2 pier cap is attributable to the Contractor or whether the Contractor should bear the cost of rectification.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.6
+    "elapsed_seconds": 0.2
   },
   {
     "scenario": 12,
@@ -1307,13 +1141,8 @@
       "timeline_nonempty": true
     },
     "contract_clauses": {
-      "clause_numbers_retrieved": [
-        "15.1",
-        "15.2",
-        "15.3",
-        "15.4"
-      ],
-      "clause_count": 4,
+      "clause_numbers_retrieved": [],
+      "clause_count": 0,
       "expected_clause_hint": [
         "15.1",
         "15.2",
@@ -1323,20 +1152,14 @@
     },
     "prompt": {
       "system_prompt_chars": 359,
-      "user_prompt_chars": 10736
+      "user_prompt_chars": 6390
     },
     "gemini": {
-      "error": null,
-      "answer": "Based on the supplied evidence, the provided excerpts contain the relevant contract clauses (Clauses 15.1, 15.2, 15.3, and 15.4) and document references regarding termination, valuation, and payment after termination. However, the specific facts, notices, calculations, and determinations from the documents (such as `NOT-KFI2-001`, `ETC-KFI2-001`, `EFA-KFI2-001`, `CFC-KFI2-001`, `LDA-KFI2-001`, and `RET-KFI2-001`) are not detailed within the text excerpts provided. \n\nTherefore, the evidence is insufficient to conclusively determine whether the Employer was contractually entitled to terminate the Contract, or how the Contractor's financial claim, liquidated damages, and retention should be resolved in the Final Account.",
-      "citation_count_returned": 15,
-      "reasoning_steps": [
-        "Retrieved relevant evidence.",
-        "Ranked evidence by confidence.",
-        "Selected the highest-confidence supporting evidence.",
-        "Generated an answer using the configured language model, grounded in that evidence.",
-        "Verified each citation against the database before returning it."
-      ]
+      "error": "No LLM is configured — set GEMINI_API_KEY in backend/.env to enable LLM-backed reasoning.",
+      "answer": null,
+      "citation_count_returned": 0,
+      "reasoning_steps": []
     },
-    "elapsed_seconds": 1.6
+    "elapsed_seconds": 0.1
   }
 ]

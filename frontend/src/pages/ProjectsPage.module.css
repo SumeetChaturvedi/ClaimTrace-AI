@@ -1,0 +1,101 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.createForm {
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.createRow {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.createInput {
+  flex: 1;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--border-color-strong);
+  border-radius: var(--radius-sm);
+}
+
+.createError {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-red-text);
+}
+
+.register {
+  list-style: none;
+  margin: var(--space-8) 0 0;
+  padding: 0;
+  border-top: var(--border-width) solid var(--border-color);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-color);
+  text-decoration: none;
+  color: inherit;
+}
+
+.row:hover {
+  background: var(--color-surface-sunken);
+}
+
+.row:hover .rowName {
+  color: var(--color-accent-strong);
+}
+
+.rowName {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: var(--leading-tight);
+  min-width: 0;
+}
+
+.rowAction {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.rowArrow {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-2);
+  }
+}

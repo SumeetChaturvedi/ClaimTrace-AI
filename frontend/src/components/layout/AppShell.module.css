@@ -1,0 +1,51 @@
+.shell {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+}
+
+.mainColumn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.contentRow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* Establishes the workspace's actual composition: a contained, centered
+   column with a generous but bounded width, so wide monitors read as a
+   deliberate workspace rather than a narrow strip pinned against the nav
+   rail with empty space trailing off to one side. Wide content (Evidence,
+   Documents, the PDF viewer) uses this full width; narrower content
+   (Finding text, forms) caps itself further inside it via its own
+   max-width, matching the "different content types, different widths"
+   principle already used across the app. */
+.contentInner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--space-8);
+}
+
+.contentInnerWide {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: var(--space-8);
+}
+
+@media (max-width: 640px) {
+  .contentInner,
+  .contentInnerWide {
+    padding: var(--space-4);
+  }
+}
