@@ -35,12 +35,36 @@
   max-width: 1180px;
   margin: 0 auto;
   padding: var(--space-8);
+  animation: contentEnter 420ms ease-out;
 }
 
 .contentInnerWide {
   max-width: 1560px;
   margin: 0 auto;
   padding: var(--space-8);
+  animation: contentEnter 420ms ease-out;
+}
+
+/* Every page routes through here, so a single subtle fade+rise on mount —
+   fired naturally each time React Router swaps the route element and this
+   whole tree remounts — gives the product one consistent, calm transition
+   between screens without touching every page individually. */
+@keyframes contentEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contentInner,
+  .contentInnerWide {
+    animation: none;
+  }
 }
 
 @media (max-width: 640px) {

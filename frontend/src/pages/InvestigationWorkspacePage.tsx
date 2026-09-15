@@ -182,7 +182,7 @@ export function InvestigationWorkspacePage() {
 
           <div className={styles.body}>
             <WorkspaceNav active={tab} onChange={setTab} />
-            <div className={styles.tabContent}>
+            <div className={styles.tabContent} key={tab}>
               {tab === 'finding' && (
                 <FindingPanel
                   response={response}

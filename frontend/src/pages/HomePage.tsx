@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '../components/ui/Badge'
 import { useApiQuery } from '../api/useApi'
 import { getHealth, listProjects } from '../api/client'
+import { useRevealRefs } from '../lib/useRevealOnScroll'
 import styles from './HomePage.module.css'
 
 const FLOW_STAGES = [
@@ -23,6 +24,7 @@ export function HomePage() {
   const health = useApiQuery(getHealth, [])
   const projects = useApiQuery(listProjects, [])
   const heroArtRef = useRef<HTMLDivElement>(null)
+  const revealRef = useRevealRefs<HTMLDivElement>(3, styles.revealVisible)
 
   // Subtle scroll-linked parallax on the hero art: the backdrop drifts and
   // fades slightly slower than the page scrolls, so leaving the hero feels
@@ -84,7 +86,7 @@ export function HomePage() {
       </section>
 
       <section className={styles.recordSection}>
-        <div className={styles.sectionInner}>
+        <div className={`${styles.sectionInner} ${styles.reveal}`} ref={revealRef(0)}>
           <p className={styles.sectionKicker}>The Record</p>
           <h2 className={styles.sectionHeading}>Every document, in one investigation.</h2>
           <p className={styles.sectionBody}>
@@ -97,7 +99,7 @@ export function HomePage() {
       </section>
 
       <section id="how-it-works" className={styles.flowSection}>
-        <div className={styles.sectionInner}>
+        <div className={`${styles.sectionInner} ${styles.reveal}`} ref={revealRef(1)}>
           <p className={styles.sectionKicker}>How Investigation Works</p>
           <h2 className={styles.sectionHeading}>From question to source, every step traceable.</h2>
           <ol className={styles.flowList}>
@@ -115,7 +117,7 @@ export function HomePage() {
       </section>
 
       <section className={styles.ctaSection}>
-        <div className={styles.sectionInner}>
+        <div className={`${styles.sectionInner} ${styles.reveal}`} ref={revealRef(2)}>
           <p className={styles.sectionKicker}>Get Started</p>
           <h2 className={styles.sectionHeadingLight}>Choose a project to begin.</h2>
           {projects.status === 'success' && (
@@ -149,54 +151,63 @@ export function HomePage() {
   )
 }
 
-/** Purely decorative brand backdrop for the hero: a blueprint-style grid
- * plus a simple crane/skyline silhouette, drawn as inline SVG so the hero
- * needs no external image asset (no licensing, no network dependency, no
- * new package, and no risk of a slow/broken external video load). A dark
- * gradient overlay sits on top for the "cinematic dark overlay" effect the
- * design direction calls for.
+/** Cinematic hero backdrop (Homepage Cinematic Video Pass): a real,
+ * locally-hosted construction video — an aerial drone shot of a concrete
+ * rail viaduct under construction, spanning a misty valley at sunrise,
+ * mountains behind it — replacing the previous inline-SVG illustration.
+ * See frontend/public/videos/home-hero.mp4 (Mixkit Stock Video Free
+ * License — free for commercial use, no attribution required; source:
+ * mixkit.co/free-stock-video/train-bridge-under-construction-2088) and
+ * frontend/public/images/home-hero-poster.jpg, a frame extracted directly
+ * from that same video so there is no visual jump between poster and
+ * first frame. A dark gradient overlay sits on top for text readability
+ * (see .heroOverlay) — the same treatment the previous SVG hero used.
  *
- * Motion (the "cinematic" requirement, in place of an actual video):
- * the crane's jib carries a slow, continuous CSS drift (craneSway,
- * ~26s) and the whole art layer has a very slow ambient breathing scale
- * (heroBreathe, ~40s) — both subtle enough that the typography stays the
- * clear focus. `artRef` is written to directly (see HomePage's scroll
- * effect) for the scroll-linked parallax/fade, kept separate from the CSS
- * animations so the two don't fight over the `transform` property; the JS
- * effect already no-ops under prefers-reduced-motion, and the CSS
- * animations are disabled by the same media query below — a fully static
- * hero is the graceful fallback in both cases. */
+ * This is atmosphere and product identity, not evidence: it doesn't depict
+ * any of ClaimTrace's actual projects.
+ *
+ * Final fallback: if even the poster image fails, the empty-alt <img>
+ * renders nothing and the dark .hero section background (already the same
+ * ink tone the old SVG was drawn on) shows through it — no broken-image
+ * icon, no extra code needed for that last-resort case.
+ *
+ * Reduced motion / fallback: under prefers-reduced-motion, or if the video
+ * element itself errors, this renders the poster image as a plain <img>
+ * instead of an autoplaying <video> — no moving media is ever forced on a
+ * user who has asked not to see it, and a failed video load never shows a
+ * broken-media icon. `artRef` is written to directly (see HomePage's
+ * scroll effect) for the existing scroll-linked parallax/fade, unchanged
+ * from before and applied identically to whichever media element is
+ * actually rendered inside it.
+ *
+ * No additional motion is layered on top of the video itself (no scale
+ * drift, no pan) — the footage's own slow, natural movement is the entire
+ * "cinematic" effect, per the explicit "one cinematic video is enough"
+ * direction. */
 function HeroArt({ artRef }: { artRef: React.RefObject<HTMLDivElement | null> }) {
+  const [prefersReducedMotion] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+  const [videoFailed, setVideoFailed] = useState(false)
+  const showVideo = !prefersReducedMotion && !videoFailed
+
   return (
     <div ref={artRef} className={styles.heroArt} aria-hidden="true">
-      <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" className={styles.heroSvg}>
-        <defs>
-          <pattern id="blueprint-grid" width="64" height="64" patternUnits="userSpaceOnUse">
-            <path d="M 64 0 L 0 0 0 64" fill="none" stroke="#3a3427" strokeWidth="1" />
-          </pattern>
-        </defs>
-        <rect width="1600" height="900" fill="url(#blueprint-grid)" opacity="0.35" />
-
-        {/* Skyline */}
-        <g fill="#241f17">
-          <rect x="60" y="560" width="140" height="340" />
-          <rect x="220" y="460" width="110" height="440" />
-          <rect x="1180" y="500" width="130" height="400" />
-          <rect x="1330" y="600" width="150" height="300" />
-        </g>
-
-        {/* Crane */}
-        <g stroke="#4a4232" strokeWidth="6" fill="none" strokeLinecap="round">
-          <line x1="700" y1="900" x2="700" y2="220" />
-          <g className={styles.craneJib}>
-            <line x1="700" y1="240" x2="1040" y2="240" />
-            <line x1="700" y1="240" x2="560" y2="270" />
-            <line x1="700" y1="220" x2="1000" y2="300" />
-            <line x1="700" y1="220" x2="600" y2="300" />
-            <line x1="960" y1="240" x2="960" y2="420" />
-          </g>
-        </g>
-      </svg>
+      {showVideo ? (
+        <video
+          className={styles.heroMedia}
+          autoPlay
+          muted
+          loop
+          playsInline
+          poster="/images/home-hero-poster.jpg"
+          onError={() => setVideoFailed(true)}
+        >
+          <source src="/videos/home-hero.mp4" type="video/mp4" />
+        </video>
+      ) : (
+        <img src="/images/home-hero-poster.jpg" alt="" className={styles.heroMedia} />
+      )}
       <div className={styles.heroOverlay} />
     </div>
   )

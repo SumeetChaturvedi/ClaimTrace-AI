@@ -13,11 +13,13 @@
   text-align: left;
   background: none;
   border: none;
+  border-left: 2px solid transparent;
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
 .item:hover {

@@ -84,7 +84,10 @@ export function InvestigationsPage() {
       </p>
 
       <Panel className={styles.askPanel}>
-        <SectionLabel>Ask a question</SectionLabel>
+        <div className={styles.askHeading}>
+          <SectionLabel>Start an Investigation</SectionLabel>
+          <p className={styles.askPrompt}>What do you need to establish?</p>
+        </div>
         <form
           className={styles.form}
           onSubmit={(e) => {
@@ -101,7 +104,7 @@ export function InvestigationsPage() {
             disabled={submitting}
           />
           <Button type="submit" variant="primary" disabled={!query.trim() || submitting}>
-            {submitting ? 'Investigating…' : 'Ask ClaimTrace'}
+            {submitting ? 'Investigating…' : 'Start Investigation'}
           </Button>
           {submitting && (
             <Muted>ClaimTrace is investigating the project record. This usually takes a few seconds.</Muted>
@@ -129,7 +132,7 @@ export function InvestigationsPage() {
       </Panel>
 
       <div className={styles.recentHeader}>
-        <SectionLabel>Investigations</SectionLabel>
+        <SectionLabel>Investigation History</SectionLabel>
       </div>
 
       {investigations.status === 'loading' && <LoadingState label="Loading investigations…" />}

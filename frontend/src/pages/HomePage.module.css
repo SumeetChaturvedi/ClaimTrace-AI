@@ -50,44 +50,12 @@
   will-change: transform, opacity;
 }
 
-.heroSvg {
+.heroMedia {
   width: 100%;
   height: 100%;
+  object-fit: cover;
+  object-position: center 40%;
   display: block;
-  transform-origin: center;
-  animation: heroBreathe 40s ease-in-out infinite;
-}
-
-.craneJib {
-  transform-origin: 700px 240px;
-  animation: craneSway 26s ease-in-out infinite;
-}
-
-@keyframes heroBreathe {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.035);
-  }
-}
-
-@keyframes craneSway {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-  50% {
-    transform: rotate(1.2deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .heroSvg,
-  .craneJib {
-    animation: none;
-  }
 }
 
 .heroOverlay {
@@ -166,6 +134,27 @@
 
 .secondaryAction:hover {
   border-color: var(--color-ink-text);
+}
+
+/* ---- Scroll reveal (Phase 8A) ---- */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 700ms ease, transform 700ms ease;
+}
+
+.revealVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 /* ---- Shared section layout ---- */

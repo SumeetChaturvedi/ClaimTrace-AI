@@ -32,6 +32,20 @@
   gap: var(--space-4);
 }
 
+.askHeading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.askPrompt {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
 .form {
   display: flex;
   flex-direction: column;
@@ -71,10 +85,12 @@
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
 .exampleChip:hover {
   border-color: var(--border-color-strong);
+  background: var(--color-surface);
 }
 
 .exampleChip:disabled {
@@ -121,6 +137,7 @@
   padding: var(--space-3);
   cursor: pointer;
   text-align: left;
+  transition: background-color 150ms ease, border-color 150ms ease;
 }
 
 .recentRow:hover {

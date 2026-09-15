@@ -5,6 +5,24 @@
   gap: var(--space-6);
 }
 
+.kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-rust);
+  margin: 0 0 var(--space-2);
+}
+
+.headline {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: var(--text-4xl);
+  line-height: 1.12;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-3);
+}
+
 .createForm {
   margin-top: var(--space-6);
   padding: var(--space-5);
@@ -31,11 +49,69 @@
   border-radius: var(--radius-sm);
 }
 
+.createHint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 .createError {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--color-red-text);
 }
+
+/* ---- Cinematic identity band ---- */
+
+.art {
+  position: relative;
+  margin: var(--space-8) 0;
+  height: 320px;
+  overflow: hidden;
+  /* Elegant fallback if the photo fails to load (see onError in
+     ProjectsPage.tsx): the same dark ink surface Home's hero sits on, so
+     the band still reads as an intentional dark divider, never a broken
+     image icon on a blank rectangle. */
+  background: var(--color-ink-bg);
+}
+
+.artImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 35%;
+  display: block;
+  animation: artDrift 48s ease-in-out infinite;
+}
+
+/* The smallest motion treatment that gives the photo a sense of life: a
+   single, very slow, subtle scale drift — no parallax, no pan, nothing
+   that reads as "animated for its own sake." */
+@keyframes artDrift {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artImage {
+    animation: none;
+  }
+}
+
+.artOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(23, 20, 15, 0.15) 0%, rgba(23, 20, 15, 0.55) 100%);
+}
+
+/* ---- Register ---- */
 
 .register {
   list-style: none;
@@ -47,12 +123,12 @@
 .row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
+  gap: var(--space-5);
   padding: var(--space-6) var(--space-2);
   border-bottom: var(--border-width) solid var(--border-color);
   text-decoration: none;
   color: inherit;
+  transition: background-color 150ms ease;
 }
 
 .row:hover {
@@ -63,6 +139,27 @@
   color: var(--color-accent-strong);
 }
 
+.row:hover .rowArrow {
+  transform: translateX(3px);
+  color: var(--color-accent-strong);
+}
+
+.rowIndex {
+  flex-shrink: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  color: var(--color-text-muted);
+  min-width: 2.5ch;
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 .rowName {
   font-family: var(--font-serif);
   font-size: var(--text-2xl);
@@ -70,6 +167,13 @@
   color: var(--color-text-primary);
   line-height: var(--leading-tight);
   min-width: 0;
+  margin: 0;
+  transition: color 150ms ease;
+}
+
+.rowMeta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .rowAction {
@@ -85,6 +189,8 @@
 
 .rowArrow {
   color: var(--color-text-muted);
+  display: inline-block;
+  transition: transform 150ms ease, color 150ms ease;
 }
 
 @media (max-width: 640px) {
@@ -92,10 +198,26 @@
     flex-direction: column;
     align-items: stretch;
   }
+  .headline {
+    font-size: var(--text-3xl);
+  }
+  .art {
+    height: 180px;
+    margin: var(--space-6) 0;
+  }
   .row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-3);
+    flex-wrap: wrap;
+    gap: var(--space-2);
     padding: var(--space-5) var(--space-2);
+  }
+  .rowIndex {
+    order: 1;
+  }
+  .rowMain {
+    order: 2;
+    width: 100%;
+  }
+  .rowAction {
+    order: 3;
   }
 }

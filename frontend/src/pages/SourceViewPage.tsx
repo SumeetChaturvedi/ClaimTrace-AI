@@ -225,7 +225,7 @@ export function SourceViewPage() {
 
   return (
     <AppShell breadcrumb={[...workspaceBreadcrumb, investigationCrumb, { label: documentLabel }]} wide>
-      <p className={styles.kicker}>Source Document</p>
+      <p className={styles.kicker}>Evidence Source — Inspecting Citation</p>
       <h1 className={styles.title}>{documentLabel}</h1>
       <p className={styles.intro}>
         {isDocx

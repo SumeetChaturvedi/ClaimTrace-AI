@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
 import { SectionLabel, Muted } from '../components/ui/Typography'
 import { LinkButton } from '../components/ui/LinkButton'
@@ -8,9 +8,9 @@ import { Badge } from '../components/ui/Badge'
 import { ErrorState, LoadingState } from '../components/ui/StateViews'
 import { parseProjectId } from '../lib/projectDirectory'
 import { useProject } from '../lib/useProject'
-import { ApiError, listProjectDocuments, uploadProjectDocuments } from '../api/client'
+import { ApiError, listInvestigations, listProjectDocuments, uploadProjectDocuments } from '../api/client'
 import { useApiQuery } from '../api/useApi'
-import type { DocumentSummary } from '../api/types'
+import type { DocumentSummary, InvestigationRecord, InvestigationStatus } from '../api/types'
 import styles from './ProjectPage.module.css'
 
 /**
@@ -25,11 +25,20 @@ import styles from './ProjectPage.module.css'
 export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const id = parseProjectId(projectId)
+  const navigate = useNavigate()
 
   const projectQuery = useProject(id)
   const [refreshToken, setRefreshToken] = useState(0)
   const documentsQuery = useApiQuery(
     () => (id === null ? Promise.resolve<DocumentSummary[]>([]) : listProjectDocuments(id)),
+    [id, refreshToken],
+  )
+  // Real, already-persisted investigation history (Phase 2) — reused here,
+  // not re-fetched or re-derived, so the project record can show "how much
+  // investigation has actually happened" without inventing an activity
+  // metric the backend doesn't provide.
+  const investigationsQuery = useApiQuery(
+    () => (id === null ? Promise.resolve<InvestigationRecord[]>([]) : listInvestigations(id)),
     [id, refreshToken],
   )
 
@@ -78,6 +87,10 @@ export function ProjectPage() {
   }
 
   const projectName = projectQuery.status === 'success' ? projectQuery.data.name : undefined
+  const projectCreatedAt = projectQuery.status === 'success' ? projectQuery.data.created_at : undefined
+  const investigations = investigationsQuery.status === 'success' ? investigationsQuery.data : []
+  const recentInvestigations = investigations.slice(0, 3)
+  const documentCount = documentsQuery.status === 'success' ? documentsQuery.data.length : undefined
 
   return (
     <AppShell
@@ -89,23 +102,55 @@ export function ProjectPage() {
     >
       <p className={styles.kicker}>Project Record</p>
       <h1 className={styles.title}>{projectName ?? `Project ${id}`}</h1>
-      <Muted>This is the project record ClaimTrace will investigate.</Muted>
+      <div className={styles.headerMeta}>
+        <Muted>This is the project record ClaimTrace will investigate.</Muted>
+        {projectCreatedAt && <span className={styles.headerDate}>Created {formatDate(projectCreatedAt)}</span>}
+      </div>
 
       <div className={styles.sections}>
         <div className={styles.section}>
-          <SectionLabel>Investigations</SectionLabel>
+          <div className={styles.sectionHeaderRow}>
+            <SectionLabel>
+              Investigations{investigations.length > 0 ? ` (${investigations.length})` : ''}
+            </SectionLabel>
+            <LinkButton to={`/projects/${id}/investigations`} variant="primary">
+              Start Investigation
+            </LinkButton>
+          </div>
           <p className={styles.sectionBody}>
-            Ask a question about this project's record, or revisit one from this session.
+            Ask a question about this project's record, or revisit one already asked.
           </p>
-          <LinkButton to={`/projects/${id}/investigations`} variant="primary">
-            Start Investigation
-          </LinkButton>
+
+          {investigationsQuery.status === 'loading' && <LoadingState label="Loading investigations…" />}
+          {recentInvestigations.length > 0 && (
+            <ul className={styles.recentList}>
+              {recentInvestigations.map((inv) => (
+                <li key={inv.id}>
+                  <button
+                    className={styles.recentRow}
+                    onClick={() => navigate(`/projects/${id}/investigations/${inv.id}`)}
+                  >
+                    <span className={styles.recentQuestion}>{inv.query}</span>
+                    <span className={styles.recentTrailing}>
+                      <Muted>{formatDate(inv.created_at)}</Muted>
+                      <InvestigationStatusBadge status={inv.status} />
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {investigations.length > 3 && (
+            <Link to={`/projects/${id}/investigations`} className={styles.viewAllLink}>
+              View all {investigations.length} investigations →
+            </Link>
+          )}
         </div>
       </div>
 
       <div className={styles.documentsSection}>
         <div className={styles.documentsHeader}>
-          <SectionLabel>Documents</SectionLabel>
+          <SectionLabel>Documents{documentCount !== undefined ? ` (${documentCount})` : ''}</SectionLabel>
           <input
             ref={fileInputRef}
             type="file"
@@ -195,4 +240,18 @@ function DocumentStatusBadge({ status }: { status: DocumentSummary['status'] }) 
   if (status === 'ready') return <Badge tone="green">Ready</Badge>
   if (status === 'failed') return <Badge tone="red">Failed</Badge>
   return <Badge tone="neutral">Processing…</Badge>
+}
+
+function InvestigationStatusBadge({ status }: { status: InvestigationStatus }) {
+  if (status === 'completed') return <Badge tone="green">Complete</Badge>
+  if (status === 'failed') return <Badge tone="red">Not completed</Badge>
+  return <Badge tone="neutral">In progress</Badge>
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  } catch {
+    return iso
+  }
 }
