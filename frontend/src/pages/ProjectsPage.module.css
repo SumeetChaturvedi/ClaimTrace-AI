@@ -1,8 +1,43 @@
+.hero {
+  position: relative;
+}
+
+.ghostWord {
+  position: absolute;
+  top: -0.3em;
+  left: -0.02em;
+  z-index: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(4.5rem, 11vw, 8.5rem);
+  line-height: 1;
+  color: var(--color-text-primary);
+  opacity: 0.045;
+  user-select: none;
+  pointer-events: none;
+}
+
 .header {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-6);
+}
+
+.kickerRule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.kickerNode {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-rust);
 }
 
 .kicker {
@@ -11,7 +46,22 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--color-rust);
-  margin: 0 0 var(--space-2);
+  margin: 0;
+}
+
+.createButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.btnArrow {
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+.createButton:hover .btnArrow {
+  transform: translateX(3px);
 }
 
 .headline {
@@ -111,11 +161,62 @@
   background: linear-gradient(180deg, rgba(23, 20, 15, 0.15) 0%, rgba(23, 20, 15, 0.55) 100%);
 }
 
+/* Small registration marks — the same forensic/drafting-corner idiom used
+   on the Investigation Workspace header — a quiet nod that this photo is
+   part of an editorial system, not a stray decorative image. */
+.artMark {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  /* Reads as a registration mark against any part of the photograph,
+     light steel or dark sky alike, the way a real print/photography
+     registration mark always stays visible regardless of what's behind it. */
+  mix-blend-mode: difference;
+}
+
+.artMarkTL {
+  top: var(--space-4);
+  left: var(--space-4);
+  border-right: none;
+  border-bottom: none;
+}
+
+.artMarkBR {
+  bottom: var(--space-4);
+  right: var(--space-4);
+  border-left: none;
+  border-top: none;
+}
+
+/* ---- Editorial section rule ---- */
+
+.sectionRule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-8) 0 var(--space-2);
+}
+
+.sectionRuleNode {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-rust);
+}
+
+.sectionRuleLine {
+  flex: 1;
+  height: var(--border-width);
+  background: var(--border-color);
+}
+
 /* ---- Register ---- */
 
 .register {
   list-style: none;
-  margin: var(--space-8) 0 0;
+  margin: 0;
   padding: 0;
   border-top: var(--border-width) solid var(--border-color);
 }
@@ -128,15 +229,20 @@
   border-bottom: var(--border-width) solid var(--border-color);
   text-decoration: none;
   color: inherit;
-  transition: background-color 150ms ease;
+  transition: background-color 200ms ease, border-color 200ms ease;
 }
 
 .row:hover {
   background: var(--color-surface-sunken);
+  border-bottom-color: var(--border-color-strong);
 }
 
 .row:hover .rowName {
   color: var(--color-accent-strong);
+}
+
+.row:hover .rowIndex {
+  color: var(--color-rust);
 }
 
 .row:hover .rowArrow {
@@ -150,6 +256,7 @@
   font-size: var(--text-lg);
   color: var(--color-text-muted);
   min-width: 2.5ch;
+  transition: color 200ms ease;
 }
 
 .rowMain {
@@ -194,6 +301,9 @@
 }
 
 @media (max-width: 640px) {
+  .ghostWord {
+    display: none;
+  }
   .header {
     flex-direction: column;
     align-items: stretch;

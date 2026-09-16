@@ -34,6 +34,15 @@
   flex-wrap: wrap;
 }
 
+.clauseOrdinal {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  padding-top: 4px;
+  order: -1;
+}
+
 .clauseTitle {
   margin: 0;
   font-family: var(--font-serif);

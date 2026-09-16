@@ -62,6 +62,7 @@ export function ContractPanel({ clauses }: { clauses: ContractClause[] }) {
           <ClauseRow
             key={`${clause.clause_number}-${i}`}
             clause={clause}
+            index={i}
             onInspect={() => open({ kind: 'contractClause', clause })}
           />
         ))}
@@ -70,7 +71,7 @@ export function ContractPanel({ clauses }: { clauses: ContractClause[] }) {
   )
 }
 
-function ClauseRow({ clause, onInspect }: { clause: ContractClause; onInspect: () => void }) {
+function ClauseRow({ clause, index, onInspect }: { clause: ContractClause; index: number; onInspect: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = clause.text.length > COLLAPSE_CHARS
   const displayText = expanded || !isLong ? clause.text : `${clause.text.slice(0, COLLAPSE_CHARS).trimEnd()}…`
@@ -78,6 +79,7 @@ function ClauseRow({ clause, onInspect }: { clause: ContractClause; onInspect: (
   return (
     <li className={styles.clause}>
       <div className={styles.clauseHeader}>
+        <span className={styles.clauseOrdinal}>{String(index + 1).padStart(2, '0')}</span>
         <h3 className={styles.clauseTitle}>
           <span className={styles.clauseNumber}>{clause.clause_number}</span> {clause.title}
         </h3>

@@ -1,50 +1,94 @@
 .nav {
-  width: 160px;
+  width: 188px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  border-right: var(--border-width) solid var(--border-color);
-  padding-right: var(--space-3);
 }
 
 .item,
 .activeItem {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
   text-align: left;
   background: none;
   border: none;
+  border-top: var(--border-width) solid var(--border-color);
   border-left: 2px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
+  border-radius: 0;
+  padding: var(--space-3) var(--space-3);
   cursor: pointer;
-  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  transition: background-color 180ms ease, border-color 180ms ease, padding-left 180ms ease;
+}
+
+.nav > .item:last-child,
+.nav > .activeItem:last-child {
+  border-bottom: var(--border-width) solid var(--border-color);
+}
+
+.itemOrdinal {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  transition: color 180ms ease;
+}
+
+.itemLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  transition: color 180ms ease;
 }
 
 .item:hover {
   background: var(--color-surface-sunken);
+  padding-left: var(--space-4);
+}
+
+.item:hover .itemOrdinal {
+  color: var(--color-rust);
 }
 
 .activeItem {
   background: var(--color-surface-sunken);
-  color: var(--color-text-primary);
-  font-weight: var(--weight-medium);
-  border-left: 2px solid var(--color-accent);
+  border-left-color: var(--color-rust);
 }
 
-@media (max-width: 900px) {
+.activeItem .itemOrdinal {
+  color: var(--color-rust);
+}
+
+.activeItem .itemLabel {
+  color: var(--color-text-primary);
+  font-weight: var(--weight-semibold);
+}
+
+@media (max-width: 1024px) {
   .nav {
     flex-direction: row;
     width: 100%;
     overflow-x: auto;
-    border-right: none;
     border-bottom: var(--border-width) solid var(--border-color);
-    padding-right: 0;
-    padding-bottom: var(--space-2);
+    padding-bottom: var(--space-1);
+  }
+  .item,
+  .activeItem {
+    flex-shrink: 0;
+    border-top: none;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+  }
+  .nav > .item:last-child,
+  .nav > .activeItem:last-child {
+    border-bottom: 2px solid transparent;
   }
   .activeItem {
-    border-left: none;
-    border-bottom: 2px solid var(--color-accent);
+    border-bottom-color: var(--color-rust);
+  }
+  .item:hover {
+    padding-left: var(--space-3);
   }
 }

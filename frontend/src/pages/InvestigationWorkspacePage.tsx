@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
+import { useInspector } from '../components/layout/InspectorContext'
 import { Badge } from '../components/ui/Badge'
 import { LinkButton } from '../components/ui/LinkButton'
 import { StatBlock } from '../components/ui/StatBlock'
@@ -10,7 +11,7 @@ import { parseInvestigationId } from '../lib/investigationId'
 import { useInvestigationRecord } from '../lib/useInvestigationRecord'
 import { useProject } from '../lib/useProject'
 import { listAllDocuments, retryInvestigation } from '../api/client'
-import type { DocumentSummary, InvestigationResponse } from '../api/types'
+import type { DocumentSummary, InvestigationRecord, InvestigationResponse } from '../api/types'
 import { WorkspaceNav } from './workspace/WorkspaceNav'
 import type { WorkspaceTab } from './workspace/types'
 import { FindingPanel } from './workspace/FindingPanel'
@@ -40,6 +41,7 @@ export function InvestigationWorkspacePage() {
   const projectQuery = useProject(id)
   const projectName = projectQuery.status === 'success' ? projectQuery.data.name : undefined
   const navigate = useNavigate()
+  const { isOpen: inspectorOpen } = useInspector()
 
   const { state, refetch } = useInvestigationRecord(id, parsedInvestigationId)
   const [tab, setTab] = useState<WorkspaceTab>('finding')
@@ -141,91 +143,182 @@ export function InvestigationWorkspacePage() {
   }
 
   return (
-    <AppShell breadcrumb={workspaceBreadcrumb(id, projectName)} wide>
-      <div className={styles.header}>
-        <p className={styles.kicker}>Investigation</p>
+    <AppShell breadcrumb={workspaceBreadcrumb(id, projectName)} fluid>
+      <div className={styles.page}>
+        <WorkspaceHeader record={record} projectId={id} citationCount={citationCount} citedDocumentCount={citedDocumentCount} />
+
+        {record.status === 'running' && (
+          <LoadingState label="Reviewing the project record and preparing a finding…" />
+        )}
+
+        {record.status === 'failed' && (
+          <ErrorState
+            title="We could not complete this investigation"
+            message={retrying ? 'Retrying…' : 'Something went wrong while investigating this question. Please try again.'}
+            onRetry={retrying ? undefined : () => void handleRetry()}
+          />
+        )}
+
+        {record.status === 'completed' && (
+          <div className={styles.workspaceGrid}>
+            <WorkspaceNav active={tab} onChange={setTab} />
+            <div className={styles.main}>
+              <div className={styles.tabContent} key={tab}>
+                {tab === 'finding' && (
+                  <FindingPanel
+                    response={response}
+                    documentNames={documentNames}
+                    documents={documents}
+                    projectId={id}
+                    investigationId={record.id}
+                  />
+                )}
+                {tab === 'evidence' && (
+                  <EvidencePanel
+                    citations={response.citations}
+                    documents={documents}
+                    documentNames={documentNames}
+                    projectId={id}
+                    investigationId={record.id}
+                  />
+                )}
+                {tab === 'documents' && (
+                  <DocumentsPanel citations={response.citations} documents={documents} documentNames={documentNames} />
+                )}
+                {tab === 'trace' && <TracePanel steps={response.reasoning_steps} />}
+                {tab === 'timeline' && (
+                  <TimelinePanel
+                    timeline={response.timeline}
+                    documents={documents}
+                    documentNames={documentNames}
+                    projectId={id}
+                    investigationId={record.id}
+                  />
+                )}
+                {tab === 'contract' && <ContractPanel clauses={response.contract_clauses} />}
+              </div>
+            </div>
+            {!inspectorOpen && (
+              <TraceRail citationCount={citationCount} citedDocumentCount={citedDocumentCount} />
+            )}
+          </div>
+        )}
+
+        <p className={styles.backLink}>
+          <button className={styles.linkButton} onClick={() => navigate(`/projects/${id}/investigations`)}>
+            ← Back to Investigations
+          </button>
+        </p>
+      </div>
+    </AppShell>
+  )
+}
+
+function WorkspaceHeader({
+  record,
+  projectId,
+  citationCount,
+  citedDocumentCount,
+}: {
+  record: InvestigationRecord
+  projectId: number
+  citationCount: number
+  citedDocumentCount: number
+}) {
+  const recordMark = record.id.slice(0, 8).toUpperCase()
+
+  return (
+    <div className={styles.header}>
+      <HeaderArt />
+      <span className={styles.ghostMark} aria-hidden="true">{recordMark}</span>
+      <div className={styles.headerContent}>
+        <div className={styles.headerRule}>
+          <span className={styles.headerRuleNode} aria-hidden="true" />
+          <p className={styles.kicker}>Investigation</p>
+          <span className={styles.headerRuleLine} aria-hidden="true" />
+          <span className={styles.headerMark}>Record {recordMark}</span>
+        </div>
+
         <h1 className={styles.question}>{record.query}</h1>
+
         <div className={styles.statusRow}>
           {record.status === 'running' && <Badge tone="neutral">Investigating…</Badge>}
           {record.status === 'completed' && <Badge tone="green">Investigation complete</Badge>}
           {record.status === 'failed' && <Badge tone="red">Investigation not completed</Badge>}
-          {record.status === 'completed' && (
-            <LinkButton variant="secondary" to={`/projects/${id}/investigations/${record.id}/record`}>
+        </div>
+
+        {record.status === 'completed' && (
+          <div className={styles.headerFooter}>
+            <div className={styles.statStrip}>
+              <StatBlock label="Evidence items" value={citationCount} />
+              <StatBlock label="Cited documents" value={citedDocumentCount} />
+            </div>
+            <LinkButton variant="secondary" to={`/projects/${projectId}/investigations/${record.id}/record`}>
               View Investigation Record
             </LinkButton>
-          )}
-        </div>
-      </div>
-
-      {record.status === 'running' && (
-        <LoadingState label="Reviewing the project record and preparing a finding…" />
-      )}
-
-      {record.status === 'failed' && (
-        <ErrorState
-          title="We could not complete this investigation"
-          message={retrying ? 'Retrying…' : 'Something went wrong while investigating this question. Please try again.'}
-          onRetry={retrying ? undefined : () => void handleRetry()}
-        />
-      )}
-
-      {record.status === 'completed' && (
-        <>
-          <div className={styles.statStrip}>
-            <StatBlock label="Evidence items" value={citationCount} />
-            <StatBlock label="Cited documents" value={citedDocumentCount} />
           </div>
+        )}
+        {record.status === 'completed' && (
           <p className={styles.statNote}>
-            Evidence-gap analysis and conflict detection aren't part of this investigation view
-            yet.
+            Evidence-gap analysis and conflict detection aren't part of this investigation view yet.
           </p>
+        )}
+      </div>
+    </div>
+  )
+}
 
-          <div className={styles.body}>
-            <WorkspaceNav active={tab} onChange={setTab} />
-            <div className={styles.tabContent} key={tab}>
-              {tab === 'finding' && (
-                <FindingPanel
-                  response={response}
-                  documentNames={documentNames}
-                  documents={documents}
-                  projectId={id}
-                  investigationId={record.id}
-                />
-              )}
-              {tab === 'evidence' && (
-                <EvidencePanel
-                  citations={response.citations}
-                  documents={documents}
-                  documentNames={documentNames}
-                  projectId={id}
-                  investigationId={record.id}
-                />
-              )}
-              {tab === 'documents' && (
-                <DocumentsPanel citations={response.citations} documents={documents} documentNames={documentNames} />
-              )}
-              {tab === 'trace' && <TracePanel steps={response.reasoning_steps} />}
-              {tab === 'timeline' && (
-                <TimelinePanel
-                  timeline={response.timeline}
-                  documents={documents}
-                  documentNames={documentNames}
-                  projectId={id}
-                  investigationId={record.id}
-                />
-              )}
-              {tab === 'contract' && <ContractPanel clauses={response.contract_clauses} />}
-            </div>
+/** Static, low-opacity forensic/technical decoration — registration ticks
+ * and a partial drafting line, not a chart or diagram of real data. Purely
+ * ambient identity for the header, matching the architectural line-art
+ * already established on the Project Overview redesign. */
+function HeaderArt() {
+  return (
+    <svg
+      className={styles.headerArt}
+      viewBox="0 0 1200 240"
+      preserveAspectRatio="xMaxYMid slice"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d="M700 210 L900 40 L1200 40" stroke="currentColor" strokeWidth="1" />
+      <path d="M760 210 L940 90 L1200 90" stroke="currentColor" strokeWidth="1" />
+      {Array.from({ length: 9 }, (_, i) => (
+        <line key={i} x1={860 + i * 40} y1={10} x2={860 + i * 40} y2={26} stroke="currentColor" strokeWidth="1" />
+      ))}
+      <rect x="1160" y="10" width="16" height="16" stroke="currentColor" strokeWidth="1" />
+      <rect x="1160" y="214" width="16" height="16" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  )
+}
+
+/** The Question → Evidence → Finding → Source motif, oriented vertically
+ * and rendered as a decorative right-hand rail in the space the real
+ * Inspector would otherwise occupy. Purely a brand/structural motif (see
+ * task brief section 14) — it does not claim the counts shown next to
+ * "Evidence" / "Source" are a causal breakdown, only the investigation's
+ * own real evidence/document totals for scale. Hidden entirely once the
+ * real Inspector opens, and below the width where it would crowd the main
+ * workspace. */
+function TraceRail({ citationCount, citedDocumentCount }: { citationCount: number; citedDocumentCount: number }) {
+  const stages = [
+    { label: 'Question' },
+    { label: 'Evidence', hint: `${citationCount} item${citationCount === 1 ? '' : 's'}` },
+    { label: 'Finding' },
+    { label: 'Source', hint: `${citedDocumentCount} document${citedDocumentCount === 1 ? '' : 's'}` },
+  ]
+  return (
+    <div className={styles.traceRail} aria-hidden="true">
+      <div className={styles.traceRailInner}>
+        {stages.map((stage, i) => (
+          <div key={stage.label} className={styles.traceRailStage}>
+            <span className={styles.traceRailLabel}>{stage.label}</span>
+            {stage.hint && <span className={styles.traceRailHint}>{stage.hint}</span>}
+            {i < stages.length - 1 && <span className={styles.traceRailConnector} />}
           </div>
-        </>
-      )}
-
-      <p className={styles.backLink}>
-        <button className={styles.linkButton} onClick={() => navigate(`/projects/${id}/investigations`)}>
-          ← Back to Investigations
-        </button>
-      </p>
-    </AppShell>
+        ))}
+      </div>
+    </div>
   )
 }
 

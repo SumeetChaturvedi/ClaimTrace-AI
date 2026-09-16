@@ -45,6 +45,15 @@
   animation: contentEnter 420ms ease-out;
 }
 
+/* Investigation Workspace redesign: no width cap at all — the workspace's
+   own nav/main/decorative-rail layout uses this full space, so it expands
+   when the Inspector is closed and yields naturally when it opens. */
+.contentInnerFull {
+  width: 100%;
+  padding: var(--space-8);
+  animation: contentEnter 420ms ease-out;
+}
+
 /* Every page routes through here, so a single subtle fade+rise on mount —
    fired naturally each time React Router swaps the route element and this
    whole tree remounts — gives the product one consistent, calm transition
@@ -62,14 +71,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .contentInner,
-  .contentInnerWide {
+  .contentInnerWide,
+  .contentInnerFull {
     animation: none;
   }
 }
 
 @media (max-width: 640px) {
   .contentInner,
-  .contentInnerWide {
+  .contentInnerWide,
+  .contentInnerFull {
     padding: var(--space-4);
   }
 }

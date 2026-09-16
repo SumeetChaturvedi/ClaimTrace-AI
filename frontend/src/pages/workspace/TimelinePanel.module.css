@@ -19,17 +19,50 @@
 
 .event {
   display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: var(--space-5);
+  grid-template-columns: 140px 20px 1fr;
+  gap: var(--space-4);
   padding: var(--space-5) 0;
   border-bottom: var(--border-width) solid var(--border-color);
 }
 
 .eventDate {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 500;
+  color: var(--color-text-primary);
   white-space: nowrap;
-  padding-top: 2px;
+  padding-top: 1px;
+}
+
+.eventNode {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.eventNode::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: calc((var(--space-5) + var(--space-5)) * -1);
+  left: 50%;
+  width: var(--border-width);
+  background: var(--border-color);
+  transform: translateX(-50%);
+}
+
+.event:last-child .eventNode::before {
+  display: none;
+}
+
+.eventNode::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-rust);
 }
 
 .eventMain {

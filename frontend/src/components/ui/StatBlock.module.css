@@ -12,14 +12,16 @@
 }
 
 .value {
+  font-family: var(--font-mono);
   font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .label {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }

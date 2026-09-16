@@ -27,8 +27,13 @@ export function FindingPanel({
   return (
     <div className={styles.panel}>
       <div>
-        <h2 className={styles.findingHeading}>Finding</h2>
-        <Prose>{response.answer}</Prose>
+        <div className={styles.findingRule}>
+          <span className={styles.findingRuleNode} aria-hidden="true" />
+          <h2 className={styles.findingHeading}>Finding</h2>
+        </div>
+        <div className={styles.findingText}>
+          <Prose>{response.answer}</Prose>
+        </div>
       </div>
 
       <p className={styles.disclaimer}>
@@ -41,6 +46,10 @@ export function FindingPanel({
         <Muted>No supporting citations were returned for this finding.</Muted>
       ) : (
         <>
+          <div className={styles.findingConnector} aria-hidden="true">
+            <span className={styles.findingConnectorLine} />
+            <span className={styles.findingConnectorNode} />
+          </div>
           <CitationList
             citations={response.citations}
             documentNames={documentNames}

@@ -201,6 +201,7 @@ export function EvidencePanel({
                   <EvidenceRow
                     key={rowKey(item, i)}
                     item={item}
+                    index={i}
                     active={item.citation.chunk_id === activeChunkId}
                     onOpen={() => openCitation(item)}
                   />
@@ -215,6 +216,7 @@ export function EvidencePanel({
             <EvidenceRow
               key={rowKey(item, i)}
               item={item}
+              index={i}
               active={item.citation.chunk_id === activeChunkId}
               onOpen={() => openCitation(item)}
             />
@@ -225,26 +227,40 @@ export function EvidencePanel({
   )
 }
 
-function EvidenceRow({ item, active, onOpen }: { item: EnrichedEvidence; active: boolean; onOpen: () => void }) {
+function EvidenceRow({
+  item,
+  index,
+  active,
+  onOpen,
+}: {
+  item: EnrichedEvidence
+  index: number
+  active: boolean
+  onOpen: () => void
+}) {
   const { citation, document, documentLabel } = item
   return (
     <li>
       <button className={`${styles.row} ${active ? styles.rowActive : ''}`} onClick={onOpen} aria-pressed={active}>
-        <div className={styles.rowHeader}>
-          <span className={styles.docName}>{documentLabel}</span>
-          {citation.page != null && (
-            <span className={styles.metaBit}>{citationLocationShort(documentLabel, citation.page)}</span>
-          )}
-          {document?.doc_date && <span className={styles.metaBit}>{document.doc_date}</span>}
+        <span className={styles.rowOrdinal}>{String(index + 1).padStart(2, '0')}</span>
+        <div className={styles.rowBody}>
+          <div className={styles.rowHeader}>
+            <span className={styles.docName}>{documentLabel}</span>
+            {citation.page != null && (
+              <span className={styles.metaBit}>{citationLocationShort(documentLabel, citation.page)}</span>
+            )}
+            {document?.doc_date && <span className={styles.metaBit}>{document.doc_date}</span>}
+          </div>
+          <p className={styles.excerpt}>
+            {citation.chunk_text ?? <Muted>No excerpt text was returned for this citation.</Muted>}
+          </p>
+          <div className={styles.rowFooter}>
+            <span>Passage {citation.chunk_id}</span>
+            <span>Relevance {citation.relevance_score.toFixed(2)}</span>
+            {document?.doc_type && <Badge tone="neutral">{document.doc_type}</Badge>}
+          </div>
         </div>
-        <p className={styles.excerpt}>
-          {citation.chunk_text ?? <Muted>No excerpt text was returned for this citation.</Muted>}
-        </p>
-        <div className={styles.rowFooter}>
-          <span>Passage {citation.chunk_id}</span>
-          <span>Relevance {citation.relevance_score.toFixed(2)}</span>
-          {document?.doc_type && <Badge tone="neutral">{document.doc_type}</Badge>}
-        </div>
+        <span className={styles.rowArrow} aria-hidden="true">→</span>
       </button>
     </li>
   )

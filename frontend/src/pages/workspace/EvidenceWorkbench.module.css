@@ -63,34 +63,75 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  border-top: var(--border-width) solid var(--border-color);
 }
 
 .row {
   width: 100%;
   text-align: left;
-  background: var(--color-surface);
-  border: var(--border-width) solid var(--border-color);
-  border-left: 3px solid transparent;
-  border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) - 2px);
+  background: none;
+  border: none;
+  border-bottom: var(--border-width) solid var(--border-color);
+  border-right: 3px solid transparent;
+  padding: var(--space-4) var(--space-3) var(--space-4) var(--space-1);
   cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  transition: border-color 200ms ease, background-color 200ms ease;
+}
+
+.rowOrdinal {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  padding-top: 3px;
+  min-width: 2ch;
+  transition: color 200ms ease;
+}
+
+.rowBody {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
+.rowArrow {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  padding-top: 3px;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 200ms ease, transform 200ms ease, color 200ms ease;
+}
+
+/* Right-side accent + arrow: the row visually "points" toward the
+   Inspector, which opens on the right, when it's selected/hovered. */
 .rowActive {
-  border-left-color: var(--color-accent);
+  border-right-color: var(--color-rust);
   background: var(--color-surface-sunken);
+}
+
+.rowActive .rowOrdinal {
+  color: var(--color-rust);
+}
+
+.rowActive .rowArrow,
+.row:hover .rowArrow {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .row:hover {
-  border-color: var(--border-color-strong);
   background: var(--color-surface-sunken);
+  border-right-color: var(--border-color-strong);
+}
+
+.row:hover .rowOrdinal {
+  color: var(--color-rust);
 }
 
 .rowHeader {

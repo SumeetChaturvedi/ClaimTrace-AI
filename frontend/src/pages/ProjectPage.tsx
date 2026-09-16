@@ -8,19 +8,27 @@ import { Badge } from '../components/ui/Badge'
 import { ErrorState, LoadingState } from '../components/ui/StateViews'
 import { parseProjectId } from '../lib/projectDirectory'
 import { useProject } from '../lib/useProject'
+import { useRevealRefs } from '../lib/useRevealOnScroll'
 import { ApiError, listInvestigations, listProjectDocuments, uploadProjectDocuments } from '../api/client'
 import { useApiQuery } from '../api/useApi'
 import type { DocumentSummary, InvestigationRecord, InvestigationStatus } from '../api/types'
 import styles from './ProjectPage.module.css'
 
 /**
- * Project workspace front sheet (Phase 3: Project + Document Foundation).
- * Documents shown here are real, project-scoped rows from
- * GET /projects/{id}/documents — including ones still processing or that
- * failed — and "Add Documents" uploads through the real ingestion pipeline
- * (extract, chunk, embed, index; see backend/app/ingestion/pipeline.py),
- * the same one the investigation engine already reads from. A document
- * only becomes citable once its status reaches 'ready'.
+ * Project Overview (Phase 3 origin; "Elegantly Decorative" editorial
+ * redesign). Every fact shown — project name, created date, investigation
+ * questions/status/dates, document filenames/types/dates/status — is real
+ * data from GET /projects/{id}, GET /projects/{id}/investigations, and
+ * GET /projects/{id}/documents; nothing here is fetched or computed
+ * differently than before this visual pass. The only new "value" on the
+ * page is the project's own real id, reused honestly as both the rail's
+ * and header's ghosted numeral/reference mark — never a fabricated index.
+ *
+ * Decorative elements (header line art, rail line art, the evidence-trace
+ * motif, the ghosted numeral) are all deterministic and marked
+ * aria-hidden — they carry no information a screen reader user would
+ * lose, and they never imply a metric, count, or fact beyond what the
+ * page's real text already states.
  */
 export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -33,14 +41,11 @@ export function ProjectPage() {
     () => (id === null ? Promise.resolve<DocumentSummary[]>([]) : listProjectDocuments(id)),
     [id, refreshToken],
   )
-  // Real, already-persisted investigation history (Phase 2) — reused here,
-  // not re-fetched or re-derived, so the project record can show "how much
-  // investigation has actually happened" without inventing an activity
-  // metric the backend doesn't provide.
   const investigationsQuery = useApiQuery(
     () => (id === null ? Promise.resolve<InvestigationRecord[]>([]) : listInvestigations(id)),
     [id, refreshToken],
   )
+  const motifRef = useRevealRefs<HTMLDivElement>(1, styles.motifVisible)
 
   const [uploading, setUploading] = useState(false)
   const [uploadSummary, setUploadSummary] = useState<string | null>(null)
@@ -99,58 +104,67 @@ export function ProjectPage() {
         { label: 'Projects', to: '/projects' },
         { label: projectName ?? `Project ${id}` },
       ]}
+      navProject={{
+        id,
+        name: projectName ?? `Project ${id}`,
+        investigationCount: investigationsQuery.status === 'success' ? investigations.length : undefined,
+        documentCount,
+        active: 'overview',
+      }}
+      wide
     >
-      <p className={styles.kicker}>Project Record</p>
-      <h1 className={styles.title}>{projectName ?? `Project ${id}`}</h1>
-      <div className={styles.headerMeta}>
-        <Muted>This is the project record ClaimTrace will investigate.</Muted>
-        {projectCreatedAt && <span className={styles.headerDate}>Created {formatDate(projectCreatedAt)}</span>}
-      </div>
+      <div className={styles.page}>
+      <ProjectHeader id={id} name={projectName} createdAt={projectCreatedAt} />
 
-      <div className={styles.sections}>
-        <div className={styles.section}>
-          <div className={styles.sectionHeaderRow}>
-            <SectionLabel>
-              Investigations{investigations.length > 0 ? ` (${investigations.length})` : ''}
-            </SectionLabel>
-            <LinkButton to={`/projects/${id}/investigations`} variant="primary">
-              Start Investigation
-            </LinkButton>
-          </div>
-          <p className={styles.sectionBody}>
-            Ask a question about this project's record, or revisit one already asked.
-          </p>
-
-          {investigationsQuery.status === 'loading' && <LoadingState label="Loading investigations…" />}
-          {recentInvestigations.length > 0 && (
-            <ul className={styles.recentList}>
-              {recentInvestigations.map((inv) => (
-                <li key={inv.id}>
-                  <button
-                    className={styles.recentRow}
-                    onClick={() => navigate(`/projects/${id}/investigations/${inv.id}`)}
-                  >
-                    <span className={styles.recentQuestion}>{inv.query}</span>
-                    <span className={styles.recentTrailing}>
-                      <Muted>{formatDate(inv.created_at)}</Muted>
-                      <InvestigationStatusBadge status={inv.status} />
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {investigations.length > 3 && (
-            <Link to={`/projects/${id}/investigations`} className={styles.viewAllLink}>
-              View all {investigations.length} investigations →
-            </Link>
-          )}
+      <section className={styles.investigationsSection}>
+        <div className={styles.sectionRule}>
+          <span className={styles.sectionRuleNode} aria-hidden="true" />
+          <SectionLabel>
+            Investigations{investigations.length > 0 ? ` (${investigations.length})` : ''}
+          </SectionLabel>
+          <span className={styles.sectionRuleLine} aria-hidden="true" />
+          <LinkButton to={`/projects/${id}/investigations`} variant="primary">
+            Start Investigation
+          </LinkButton>
         </div>
+        <p className={styles.sectionBody}>
+          Ask a question about this project's record, or revisit one already asked.
+        </p>
+
+        {investigationsQuery.status === 'loading' && <LoadingState label="Loading investigations…" />}
+        {investigationsQuery.status === 'success' && investigations.length === 0 && (
+          <Muted>No investigations have been run for this project yet.</Muted>
+        )}
+        {recentInvestigations.length > 0 && (
+          <ol className={styles.investigationRegister}>
+            {recentInvestigations.map((inv, i) => (
+              <InvestigationRow
+                key={inv.id}
+                inv={inv}
+                index={i}
+                onOpen={() => navigate(`/projects/${id}/investigations/${inv.id}`)}
+              />
+            ))}
+          </ol>
+        )}
+        {investigations.length > 3 && (
+          <Link to={`/projects/${id}/investigations`} className={styles.viewAllLink}>
+            View all {investigations.length} investigations →
+          </Link>
+        )}
+      </section>
+
+      <div className={styles.motif} ref={motifRef(0)} aria-hidden="true">
+        <EvidenceMotif />
       </div>
 
-      <div className={styles.documentsSection}>
-        <div className={styles.documentsHeader}>
-          <SectionLabel>Documents{documentCount !== undefined ? ` (${documentCount})` : ''}</SectionLabel>
+      <section className={styles.documentsSection}>
+        <div className={styles.sectionRule}>
+          <span className={styles.sectionRuleNodeAlt} aria-hidden="true" />
+          <SectionLabel>
+            Document Register{documentCount !== undefined ? ` · ${String(documentCount).padStart(2, '0')}` : ''}
+          </SectionLabel>
+          <span className={styles.sectionRuleLine} aria-hidden="true" />
           <input
             ref={fileInputRef}
             type="file"
@@ -181,14 +195,93 @@ export function ProjectPage() {
           </p>
         )}
         {documentsQuery.status === 'success' && documentsQuery.data.length > 0 && (
-          <ul className={styles.docList}>
-            {documentsQuery.data.map((doc) => (
-              <DocumentRow key={doc.id} doc={doc} projectId={id} />
+          <ol className={styles.documentRegister}>
+            {documentsQuery.data.map((doc, i) => (
+              <DocumentRow key={doc.id} doc={doc} projectId={id} index={i} />
             ))}
-          </ul>
+          </ol>
         )}
+      </section>
       </div>
     </AppShell>
+  )
+}
+
+/** The project record header: real title/date, plus three deterministic
+ * decorative elements — a large ghosted numeral (the project's own real
+ * id, never a fabricated index), a low-opacity architectural line drawing
+ * cropped behind the content, and two small technical annotations
+ * ("Project Record" / "Ref. 0N", the second also the real id). */
+function ProjectHeader({ id, name, createdAt }: { id: number; name?: string; createdAt?: string }) {
+  const ref = String(id).padStart(2, '0')
+  return (
+    <header className={styles.recordHeader}>
+      <HeaderArt />
+      <span className={styles.ghostNumeral} aria-hidden="true">
+        {ref}
+      </span>
+      <div className={styles.headerContent}>
+        <div className={styles.headerAnnotations}>
+          <span className={styles.headerKicker}>Project Record</span>
+          <span className={styles.headerAnnotationDivider} aria-hidden="true" />
+          <span className={styles.headerAnnotation}>Ref. {ref}</span>
+        </div>
+        <h1 className={styles.title}>{name ?? `Project ${id}`}</h1>
+        <div className={styles.headerMeta}>
+          <Muted>This is the project record ClaimTrace will investigate.</Muted>
+          {createdAt && <span className={styles.headerDate}>Created {formatDate(createdAt)}</span>}
+        </div>
+      </div>
+    </header>
+  )
+}
+
+/** Low-opacity architectural line drawing behind the header — a partial
+ * bridge elevation (deck, one pier, diagonal bracing) extending past the
+ * header's own edges, cropped by its container's overflow: hidden. Purely
+ * decorative and static: it never animates, never competes with the real
+ * title text sitting above it. */
+function HeaderArt() {
+  return (
+    <svg className={styles.headerArt} viewBox="0 0 1200 320" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
+      <g stroke="currentColor" strokeWidth="1" fill="none">
+        <line x1="500" y1="150" x2="1300" y2="150" />
+        <line x1="500" y1="164" x2="1300" y2="164" />
+        <path d="M 500 164 L 560 118 L 620 164 L 680 118 L 740 164 L 800 118 L 860 164 L 920 118 L 980 164 L 1040 118 L 1100 164 L 1160 118 L 1220 164" />
+        <line x1="620" y1="164" x2="620" y2="300" strokeWidth="3" />
+        <line x1="980" y1="164" x2="980" y2="300" strokeWidth="3" />
+      </g>
+    </svg>
+  )
+}
+
+/** The QUESTION → EVIDENCE → FINDING → SOURCE motif (Section 14): a
+ * deterministic, purely decorative brand graphic describing ClaimTrace's
+ * fixed investigation methodology — not a rendering of this project's
+ * actual data, and not a second explanation of it (the real text already
+ * describing this flow lives in the surrounding real copy). Reveals once
+ * on scroll into view via the `motifVisible` class (see
+ * useRevealOnScroll's existing one-shot IntersectionObserver — reused
+ * unchanged, not reimplemented) and never animates again; under
+ * prefers-reduced-motion the hook marks it visible immediately. */
+function EvidenceMotif() {
+  const steps = ['Question', 'Evidence', 'Finding', 'Source']
+  return (
+    <>
+      <svg className={styles.motifSvg} viewBox="0 0 800 30" preserveAspectRatio="none" aria-hidden="true">
+        <line x1="20" y1="15" x2="780" y2="15" className={styles.motifLine} />
+        {steps.map((_, i) => (
+          <circle key={i} cx={20 + i * (760 / 3)} cy="15" r="5" className={styles.motifNode} />
+        ))}
+      </svg>
+      <div className={styles.motifLabels}>
+        {steps.map((step) => (
+          <span key={step} className={styles.motifLabel}>
+            {step}
+          </span>
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -198,16 +291,19 @@ export function ProjectPage() {
  * extracted-text path, which is only ever set once extraction succeeds).
  * A processing/failed row keeps its status badge but isn't made to look
  * openable, rather than linking to a viewer that can only fail. */
-function DocumentRow({ doc, projectId }: { doc: DocumentSummary; projectId: number }) {
+function DocumentRow({ doc, projectId, index }: { doc: DocumentSummary; projectId: number; index: number }) {
   const isOpenable = doc.status === 'ready'
+  const ordinal = String(index + 1).padStart(3, '0')
 
   const body = (
     <>
+      <span className={styles.registerOrdinal}>{ordinal}</span>
       <div className={styles.docMain}>
         <span className={styles.docName}>{doc.filename}</span>
         <div className={styles.docMeta}>
-          {doc.doc_type ? <Badge tone="neutral">{doc.doc_type}</Badge> : <Muted>Type not recorded</Muted>}
-          <span className={styles.docDate}>{doc.doc_date ?? <Muted>Date not recorded</Muted>}</span>
+          {doc.doc_type ? <span className={styles.docMetaText}>{doc.doc_type}</span> : <Muted>Type not recorded</Muted>}
+          <span className={styles.docMetaDot} aria-hidden="true" />
+          <span className={styles.docMetaText}>{doc.doc_date ?? 'Date not recorded'}</span>
         </div>
         {doc.status === 'failed' && doc.processing_error && (
           <p className={styles.docError}>{doc.processing_error}</p>
@@ -215,23 +311,44 @@ function DocumentRow({ doc, projectId }: { doc: DocumentSummary; projectId: numb
       </div>
       <div className={styles.docTrailing}>
         <DocumentStatusBadge status={doc.status} />
-        {isOpenable && <span className={styles.docOpenHint}>Open source →</span>}
+        {isOpenable && <span className={styles.registerArrow}>→</span>}
       </div>
     </>
   )
 
   if (!isOpenable) {
-    return <li className={styles.docRow}>{body}</li>
+    return <li className={styles.registerRow}>{body}</li>
   }
 
   return (
     <li>
       <Link
         to={`/projects/${projectId}/documents/${doc.id}/source`}
-        className={`${styles.docRow} ${styles.docRowOpenable}`}
+        className={`${styles.registerRow} ${styles.registerRowOpenable}`}
       >
         {body}
       </Link>
+    </li>
+  )
+}
+
+/** One row of the investigation register — ordinal, question (serif,
+ * primary typography per the editorial direction), status + date. */
+function InvestigationRow({ inv, index, onOpen }: { inv: InvestigationRecord; index: number; onOpen: () => void }) {
+  const ordinal = String(index + 1).padStart(2, '0')
+  return (
+    <li>
+      <button className={`${styles.registerRow} ${styles.investigationRow}`} onClick={onOpen}>
+        <span className={styles.registerOrdinal}>{ordinal}</span>
+        <div className={styles.investigationMain}>
+          <p className={styles.investigationQuestion}>{inv.query}</p>
+          <div className={styles.investigationMeta}>
+            <InvestigationStatusBadge status={inv.status} />
+            <span className={styles.investigationDate}>{formatDate(inv.created_at)}</span>
+          </div>
+        </div>
+        <span className={styles.registerArrow}>→</span>
+      </button>
     </li>
   )
 }

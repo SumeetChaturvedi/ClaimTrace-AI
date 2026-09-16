@@ -23,7 +23,7 @@ export function TracePanel({ steps }: { steps: string[] }) {
         <ol className={styles.traceFlow}>
           {steps.map((step, i) => (
             <li key={i} className={styles.traceStep}>
-              <span className={styles.traceMarker}>{i + 1}</span>
+              <span className={styles.traceMarker}>{String(i + 1).padStart(2, '0')}</span>
               <span className={styles.traceText}>{step}</span>
             </li>
           ))}

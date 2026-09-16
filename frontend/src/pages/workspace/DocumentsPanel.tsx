@@ -57,11 +57,11 @@ export function DocumentsPanel({
       {entries.length === 0 ? (
         <Muted>No documents were cited.</Muted>
       ) : (
-        <ul className={styles.docList}>
-          {entries.map((entry) => (
-            <DocumentRow key={entry.documentId} entry={entry} documentNames={documentNames} />
+        <ol className={styles.docList}>
+          {entries.map((entry, i) => (
+            <DocumentRow key={entry.documentId} entry={entry} index={i} documentNames={documentNames} />
           ))}
-        </ul>
+        </ol>
       )}
     </div>
   )
@@ -69,9 +69,11 @@ export function DocumentsPanel({
 
 function DocumentRow({
   entry,
+  index,
   documentNames,
 }: {
   entry: DocumentEntry
+  index: number
   documentNames: Record<number, string>
 }) {
   const { documentId, document, citationCount } = entry
@@ -80,6 +82,7 @@ function DocumentRow({
 
   return (
     <li className={styles.docRow}>
+      <span className={styles.docOrdinal}>{String(index + 1).padStart(2, '0')}</span>
       <div className={styles.docMain}>
         <span className={styles.docName}>{filename}</span>
         <div className={styles.docMeta}>

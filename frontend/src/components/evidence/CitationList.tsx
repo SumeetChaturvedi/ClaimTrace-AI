@@ -55,7 +55,7 @@ export function CitationList({ citations, documentNames, documents, projectId, i
                   })
                 }
               >
-                <span className={styles.index}>{i + 1}</span>
+                <span className={styles.index}>{String(i + 1).padStart(2, '0')}</span>
                 <span className={styles.rowBody}>
                   <span className={styles.docName}>
                     {documentName ?? `Document #${citation.document_id}`}

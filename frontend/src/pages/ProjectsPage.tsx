@@ -46,19 +46,31 @@ export function ProjectsPage() {
 
   return (
     <AppShell breadcrumb={[{ label: 'Home', to: '/' }, { label: 'Projects' }]} wide>
-      <div className={styles.header}>
-        <div>
-          <p className={styles.kicker}>Projects</p>
-          <h1 className={styles.headline}>
-            Your claims work,
-            <br />
-            in one place.
-          </h1>
-          <Muted>Choose a project record to open, review, or investigate.</Muted>
+      <div className={styles.hero}>
+        <span className={styles.ghostWord} aria-hidden="true">Projects</span>
+        <div className={styles.header}>
+          <div>
+            <div className={styles.kickerRule}>
+              <span className={styles.kickerNode} aria-hidden="true" />
+              <p className={styles.kicker}>Projects</p>
+            </div>
+            <h1 className={styles.headline}>
+              Your claims work,
+              <br />
+              in one place.
+            </h1>
+            <Muted>Choose a project record to open, review, or investigate.</Muted>
+          </div>
+          <Button variant="primary" className={styles.createButton} onClick={() => setShowForm((v) => !v)}>
+            {showForm ? (
+              'Cancel'
+            ) : (
+              <>
+                Create Project <span className={styles.btnArrow} aria-hidden="true">→</span>
+              </>
+            )}
+          </Button>
         </div>
-        <Button variant="primary" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cancel' : 'Create Project'}
-        </Button>
       </div>
 
       {showForm && (
@@ -91,6 +103,14 @@ export function ProjectsPage() {
       )}
 
       <ProjectsArt />
+
+      <div className={styles.sectionRule}>
+        <span className={styles.sectionRuleNode} aria-hidden="true" />
+        <SectionLabel>
+          Project Register{projects.status === 'success' ? ` (${projects.data.length})` : ''}
+        </SectionLabel>
+        <span className={styles.sectionRuleLine} aria-hidden="true" />
+      </div>
 
       {projects.status === 'loading' && <LoadingState label="Loading projects…" />}
       {projects.status === 'error' && (
@@ -169,6 +189,8 @@ function ProjectsArt() {
         />
       )}
       <div className={styles.artOverlay} />
+      <span className={`${styles.artMark} ${styles.artMarkTL}`} />
+      <span className={`${styles.artMark} ${styles.artMarkBR}`} />
     </div>
   )
 }

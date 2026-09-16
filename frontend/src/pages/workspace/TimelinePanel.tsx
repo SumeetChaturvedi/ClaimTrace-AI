@@ -113,6 +113,7 @@ function TimelineEventRow({
       <div className={styles.eventDate}>
         {entry.document_date ?? <Muted>Date unknown</Muted>}
       </div>
+      <div className={styles.eventNode} aria-hidden="true" />
       <div className={styles.eventMain}>
         <div className={styles.eventTitleRow}>
           <h3 className={styles.eventTitle}>{entry.event_label}</h3>
