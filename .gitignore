@@ -26,6 +26,15 @@ __pycache__/
 # Storage
 storage/
 
+# Phase 8B.1 event-evaluation harness: event_eval_results.json is a fully
+# deterministic, trivially-regeneratable output of a fixture-only run (no
+# Gemini call, no extractor yet) — see dataset/event_eval/README.md's
+# "Results file" section for the full rationale. Unlike
+# dataset/scripts/benchmark_results*.json (real Gemini output, tracked
+# deliberately as a comparison baseline), this file carries no unique
+# information beyond what test_scorer.py already asserts precisely.
+dataset/event_eval/event_eval_results.json
+
 # Node
 node_modules/
 .next/
