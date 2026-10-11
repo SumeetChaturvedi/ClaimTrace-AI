@@ -11,7 +11,8 @@ import { useProject } from '../lib/useProject'
 import { useApiQuery } from '../api/useApi'
 import { getProjectDocument, fetchDocumentFileBlobUrl, getDocumentFileUrl } from '../api/client'
 import type { DocumentSummary } from '../api/types'
-import { isDocxFilename } from '../lib/documentFormat'
+import { isDocxFilename, isEmailFilename } from '../lib/documentFormat'
+import { EmailMessagePanel } from '../components/evidence/EmailMessagePanel'
 import styles from './SourceViewPage.module.css'
 
 type PdfState = { status: 'checking' } | { status: 'available'; blobUrl: string } | { status: 'unavailable' }
@@ -134,19 +135,64 @@ export function DocumentSourceViewPage() {
   }
 
   const document = documentQuery.data
+  if (document.id !== docId) {
+    // React Router reuses this same component instance across navigations
+    // between two /documents/:documentId/source URLs (the route pattern
+    // doesn't change, only the param) — so for one render after `docId`
+    // changes, `documentQuery.data` can still be the PREVIOUS document
+    // while `docId` has already updated (useApiQuery's own reset to
+    // 'loading' happens in an effect, which only runs after this render
+    // commits). Treating that one stale render as still-loading, rather
+    // than trusting mismatched data, is what stops a transient wrong
+    // isEmail/isDocx branch from firing a request for the wrong document
+    // (e.g. GET .../emails/messages/{new id} for a document that isn't
+    // actually an email).
+    return (
+      <AppShell breadcrumb={[...breadcrumbBase, projectCrumb, { label: 'Document' }]}>
+        <LoadingState label="Loading document…" />
+      </AppShell>
+    )
+  }
   const isDocx = isDocxFilename(document.filename)
+  const isEmail = isEmailFilename(document.filename)
   const pdfHref = pdfState.status === 'available' ? pdfState.blobUrl : null
 
   return (
-    <AppShell breadcrumb={[...breadcrumbBase, projectCrumb, { label: document.filename }]} wide>
-      <p className={styles.kicker}>Source Document</p>
+    <AppShell key={docId} breadcrumb={[...breadcrumbBase, projectCrumb, { label: document.filename }]} wide>
+      <p className={styles.kicker}>{isEmail ? 'Email Message' : 'Source Document'}</p>
       <h1 className={styles.title}>{document.filename}</h1>
       <p className={styles.intro}>
-        {isDocx
-          ? "This is a Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view it."
-          : "This is the original document as stored in this project's record, opened at its first page. There is no cited passage here — this document was opened directly from the project's document register, not from an investigation's evidence."}
+        {isEmail
+          ? 'This email message was imported into this project and indexed as evidence, including any attachments ClaimTrace could process.'
+          : isDocx
+            ? "This is a Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view it."
+            : "This is the original document as stored in this project's record, opened at its first page. There is no cited passage here — this document was opened directly from the project's document register, not from an investigation's evidence."}
       </p>
 
+      {isEmail ? (
+        <div className={styles.grid}>
+          <Panel className={styles.pdfPanel}>
+            <EmailMessagePanel projectId={id} documentId={docId} />
+          </Panel>
+          <Panel className={styles.metaPanel}>
+            <SectionLabel>Document</SectionLabel>
+            <dl className={styles.metaList}>
+              <div>
+                <dt>Status</dt>
+                <dd>
+                  <DocumentStatusBadge status={document.status} />
+                </dd>
+              </div>
+            </dl>
+            <LinkButton to={getDocumentFileUrl(id, docId)} variant="secondary" reloadDocument>
+              Download original .eml
+            </LinkButton>
+            <LinkButton to={`/projects/${id}`} variant="secondary" className={styles.backLink}>
+              ← Back to project
+            </LinkButton>
+          </Panel>
+        </div>
+      ) : (
       <div className={styles.grid}>
         <Panel className={styles.pdfPanel}>
           {isDocx ? (
@@ -206,6 +252,7 @@ export function DocumentSourceViewPage() {
           </LinkButton>
         </Panel>
       </div>
+      )}
     </AppShell>
   )
 }

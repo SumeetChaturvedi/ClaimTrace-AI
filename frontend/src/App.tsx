@@ -8,6 +8,7 @@ import { InvestigationWorkspacePage } from './pages/InvestigationWorkspacePage'
 import { SourceViewPage } from './pages/SourceViewPage'
 import { DocumentSourceViewPage } from './pages/DocumentSourceViewPage'
 import { InvestigationRecordPage } from './pages/InvestigationRecordPage'
+import { EmailThreadPage } from './pages/EmailThreadPage'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:projectId" element={<ProjectPage />} />
           <Route path="/projects/:projectId/documents/:documentId/source" element={<DocumentSourceViewPage />} />
+          <Route path="/projects/:projectId/emails/:threadId" element={<EmailThreadPage />} />
           <Route path="/projects/:projectId/investigations" element={<InvestigationsPage />} />
           <Route
             path="/projects/:projectId/investigations/:investigationId"

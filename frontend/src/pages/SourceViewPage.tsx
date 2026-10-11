@@ -12,7 +12,8 @@ import { useInvestigationRecord } from '../lib/useInvestigationRecord'
 import { useProject } from '../lib/useProject'
 import { listAllDocuments, fetchDocumentFileBlobUrl, getDocumentFileUrl } from '../api/client'
 import type { DocumentSummary } from '../api/types'
-import { isDocxFilename, citationLocationLabel } from '../lib/documentFormat'
+import { isDocxFilename, isEmailFilename, citationLocationLabel } from '../lib/documentFormat'
+import { EmailMessagePanel } from '../components/evidence/EmailMessagePanel'
 import styles from './SourceViewPage.module.css'
 
 type PdfState = { status: 'checking' } | { status: 'available'; blobUrl: string } | { status: 'unavailable' }
@@ -212,6 +213,7 @@ export function SourceViewPage() {
   const document = documents?.find((d) => d.id === citation.document_id)
   const documentLabel = document?.filename ?? `Document #${citation.document_id}`
   const isDocx = isDocxFilename(document?.filename)
+  const isEmail = isEmailFilename(document?.filename)
 
   // The page-position fragment is appended to the local blob URL, not the
   // network URL — Chrome/Firefox/Safari's native PDF viewer honors
@@ -228,11 +230,39 @@ export function SourceViewPage() {
       <p className={styles.kicker}>Evidence Source — Inspecting Citation</p>
       <h1 className={styles.title}>{documentLabel}</h1>
       <p className={styles.intro}>
-        {isDocx
-          ? 'This is the extracted passage ClaimTrace indexed from the original Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view its full formatted content.'
-          : 'This is the original source document for the cited evidence. It opens at the page ClaimTrace cited, where known.'}
+        {isEmail
+          ? "This is the email message ClaimTrace indexed as evidence, including the exact cited passage from its body."
+          : isDocx
+            ? 'This is the extracted passage ClaimTrace indexed from the original Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view its full formatted content.'
+            : 'This is the original source document for the cited evidence. It opens at the page ClaimTrace cited, where known.'}
       </p>
 
+      {isEmail ? (
+        <div className={styles.grid}>
+          <Panel className={styles.pdfPanel}>
+            <EmailMessagePanel projectId={id} documentId={citation.document_id} highlightExcerpt={citation.chunk_text} />
+          </Panel>
+          <Panel className={styles.metaPanel}>
+            <SectionLabel>Source</SectionLabel>
+            <dl className={styles.metaList}>
+              <div>
+                <dt>Passage reference</dt>
+                <dd>{citation.chunk_id}</dd>
+              </div>
+              <div>
+                <dt>Relevance score</dt>
+                <dd>{citation.relevance_score.toFixed(2)}</dd>
+              </div>
+            </dl>
+            <LinkButton to={getDocumentFileUrl(id, citation.document_id)} variant="secondary" reloadDocument>
+              Download original .eml
+            </LinkButton>
+            <LinkButton to={`/projects/${id}/investigations/${investigationId}`} variant="secondary" className={styles.backLink}>
+              ← Back to investigation
+            </LinkButton>
+          </Panel>
+        </div>
+      ) : (
       <div className={styles.grid}>
         <Panel className={styles.pdfPanel}>
           {isDocx ? (
@@ -319,6 +349,7 @@ export function SourceViewPage() {
           </LinkButton>
         </Panel>
       </div>
+      )}
     </AppShell>
   )
 }

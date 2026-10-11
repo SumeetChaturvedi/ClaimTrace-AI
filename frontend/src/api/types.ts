@@ -144,3 +144,86 @@ export interface InvestigationRecord {
   contract_clauses: ContractClause[]
   error: string | null
 }
+
+// backend/app/api/routes/project_emails.py (Phase 8A: Email Thread
+// Intelligence). An email message's body is an ordinary Document
+// (doc_type: 'EMAIL') whose chunks are ordinary citations — these types
+// are only for the richer email-specific metadata (sender/recipients/
+// thread/attachments) fetched separately when actually opening a message,
+// exactly how doc_type/doc_date are already resolved separately from
+// Citation rather than embedded in it (see lib/documentFormat.ts).
+
+export interface EmailImportResult {
+  source_name: string
+  status: 'imported' | 'duplicate' | 'rejected'
+  document_id: number | null
+  thread_id: number | null
+  subject: string | null
+  message_id: string | null
+  error: string | null
+}
+
+export interface EmailImportResponse {
+  results: EmailImportResult[]
+}
+
+export interface EmailThreadSummary {
+  id: number
+  subject: string | null
+  message_count: number
+  first_sent_at: string | null
+  last_sent_at: string | null
+}
+
+export interface EmailMessageSummary {
+  document_id: number
+  message_id: string | null
+  subject: string | null
+  sender_name: string | null
+  sender_email: string | null
+  sent_at: string | null
+  sent_at_timezone_unknown: boolean
+  status: 'uploaded' | 'processing' | 'ready' | 'failed'
+  attachment_count: number
+}
+
+export interface EmailThreadDetail {
+  id: number
+  subject: string | null
+  messages: EmailMessageSummary[]
+}
+
+export interface EmailAttachmentSummary {
+  id: number
+  filename: string
+  content_type: string | null
+  size_bytes: number
+  // 'processed' (a real PDF/DOCX document was created) | 'unsupported_format'
+  // (format not indexed; bytes not stored) | 'rejected' (empty/oversized) |
+  // 'failed' (accepted but extraction/indexing failed — document_id is
+  // still set, a real 'failed' Document, never silently dropped)
+  status: 'processed' | 'unsupported_format' | 'rejected' | 'failed'
+  document_id: number | null
+  processing_error: string | null
+}
+
+export interface EmailMessageDetail {
+  document_id: number
+  thread_id: number
+  message_id: string | null
+  in_reply_to: string | null
+  references: string | null
+  sender_name: string | null
+  sender_email: string | null
+  to_recipients: string[]
+  cc_recipients: string[]
+  subject: string | null
+  sent_at: string | null
+  sent_at_timezone_unknown: boolean
+  status: 'uploaded' | 'processing' | 'ready' | 'failed'
+  processing_error: string | null
+  doc_date: string | null
+  plain_body: string | null
+  has_html_body: boolean
+  attachments: EmailAttachmentSummary[]
+}
