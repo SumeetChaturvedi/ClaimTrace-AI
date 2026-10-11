@@ -62,6 +62,23 @@ def save_docx(storage_root: Path, project_id: int, storage_key: str, content: by
     return destination
 
 
+def email_storage_dir(storage_root: Path, project_id: int) -> Path:
+    path = storage_root / "emails" / str(project_id)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def save_eml(storage_root: Path, project_id: int, storage_key: str, content: bytes) -> Path:
+    """Persist raw .eml bytes (Phase 8A: Email Thread Intelligence). Mirrors
+    save_pdf()/save_docx() exactly, in its own emails/ tree, so the
+    existing generic file-serving endpoint (app/api/routes/document_file.py)
+    can serve the original message with one added dict entry, no new
+    file-serving code path."""
+    destination = email_storage_dir(storage_root, project_id) / f"{storage_key}.eml"
+    destination.write_bytes(content)
+    return destination
+
+
 def save_extracted_text(storage_root: Path, project_id: int, storage_key: str, full_text: str) -> Path:
     """Persist a document's extracted text (pages joined with form-feed
     separators so a later chunking step can recover page boundaries)."""

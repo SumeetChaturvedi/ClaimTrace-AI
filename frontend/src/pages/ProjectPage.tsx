@@ -9,9 +9,16 @@ import { ErrorState, LoadingState } from '../components/ui/StateViews'
 import { parseProjectId } from '../lib/projectDirectory'
 import { useProject } from '../lib/useProject'
 import { useRevealRefs } from '../lib/useRevealOnScroll'
-import { ApiError, listInvestigations, listProjectDocuments, uploadProjectDocuments } from '../api/client'
+import {
+  ApiError,
+  importProjectEmails,
+  listEmailThreads,
+  listInvestigations,
+  listProjectDocuments,
+  uploadProjectDocuments,
+} from '../api/client'
 import { useApiQuery } from '../api/useApi'
-import type { DocumentSummary, InvestigationRecord, InvestigationStatus } from '../api/types'
+import type { DocumentSummary, EmailThreadSummary, InvestigationRecord, InvestigationStatus } from '../api/types'
 import styles from './ProjectPage.module.css'
 
 /**
@@ -45,12 +52,21 @@ export function ProjectPage() {
     () => (id === null ? Promise.resolve<InvestigationRecord[]>([]) : listInvestigations(id)),
     [id, refreshToken],
   )
+  const emailThreadsQuery = useApiQuery(
+    () => (id === null ? Promise.resolve<EmailThreadSummary[]>([]) : listEmailThreads(id)),
+    [id, refreshToken],
+  )
   const motifRef = useRevealRefs<HTMLDivElement>(1, styles.motifVisible)
 
   const [uploading, setUploading] = useState(false)
   const [uploadSummary, setUploadSummary] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [emailImporting, setEmailImporting] = useState(false)
+  const [emailImportSummary, setEmailImportSummary] = useState<string | null>(null)
+  const [emailImportError, setEmailImportError] = useState<string | null>(null)
+  const emailFileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -77,6 +93,36 @@ export function ProjectPage() {
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleEmailFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (id === null || !files || files.length === 0) return
+
+    setEmailImporting(true)
+    setEmailImportSummary(null)
+    setEmailImportError(null)
+    try {
+      const result = await importProjectEmails(id, Array.from(files))
+      const importedCount = result.results.filter((r) => r.status === 'imported').length
+      const duplicateCount = result.results.filter((r) => r.status === 'duplicate').length
+      const rejectedCount = result.results.filter((r) => r.status === 'rejected').length
+
+      const parts: string[] = []
+      if (importedCount > 0) parts.push(`${importedCount} message${importedCount === 1 ? '' : 's'} imported`)
+      if (duplicateCount > 0) parts.push(`${duplicateCount} already imported`)
+      if (rejectedCount > 0) {
+        parts.push(`${rejectedCount} rejected (${result.results.filter((r) => r.status === 'rejected').map((r) => r.error).join('; ')})`)
+      }
+      setEmailImportSummary(parts.length > 0 ? parts.join(', ') : 'No messages were imported.')
+
+      setRefreshToken((t) => t + 1)
+    } catch (err) {
+      setEmailImportError(err instanceof ApiError ? err.message : 'Something went wrong during import.')
+    } finally {
+      setEmailImporting(false)
+      if (emailFileInputRef.current) emailFileInputRef.current.value = ''
     }
   }
 
@@ -198,6 +244,55 @@ export function ProjectPage() {
           <ol className={styles.documentRegister}>
             {documentsQuery.data.map((doc, i) => (
               <DocumentRow key={doc.id} doc={doc} projectId={id} index={i} />
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <section className={styles.documentsSection}>
+        <div className={styles.sectionRule}>
+          <span className={styles.sectionRuleNodeAlt} aria-hidden="true" />
+          <SectionLabel>
+            Email Correspondence
+            {emailThreadsQuery.status === 'success' && emailThreadsQuery.data.length > 0
+              ? ` · ${String(emailThreadsQuery.data.length).padStart(2, '0')}`
+              : ''}
+          </SectionLabel>
+          <span className={styles.sectionRuleLine} aria-hidden="true" />
+          <input
+            ref={emailFileInputRef}
+            type="file"
+            accept=".eml,.zip,message/rfc822,application/zip"
+            multiple
+            className={styles.hiddenInput}
+            onChange={(e) => void handleEmailFileChange(e)}
+            disabled={emailImporting}
+          />
+          <Button variant="primary" onClick={() => emailFileInputRef.current?.click()} disabled={emailImporting}>
+            {emailImporting ? 'Importing…' : 'Import Email'}
+          </Button>
+        </div>
+        <p className={styles.sectionBody}>
+          Import .eml files, or a ZIP of .eml files, to bring email correspondence into this
+          project's record as searchable, citable evidence. Messages are reconstructed into
+          threads from their own Message-ID / In-Reply-To / References headers.
+        </p>
+        {emailImportSummary && <p className={styles.uploadSummary}>{emailImportSummary}</p>}
+        {emailImportError && <p className={styles.uploadError}>{emailImportError}</p>}
+
+        {emailThreadsQuery.status === 'loading' && <LoadingState label="Loading email threads…" />}
+        {emailThreadsQuery.status === 'error' && (
+          <ErrorState message={`Could not load email threads for this project: ${emailThreadsQuery.error}`} />
+        )}
+        {emailThreadsQuery.status === 'success' && emailThreadsQuery.data.length === 0 && (
+          <p className={styles.emptyDocuments}>
+            <Muted>No email correspondence has been imported into this project yet.</Muted>
+          </p>
+        )}
+        {emailThreadsQuery.status === 'success' && emailThreadsQuery.data.length > 0 && (
+          <ol className={styles.documentRegister}>
+            {emailThreadsQuery.data.map((thread, i) => (
+              <EmailThreadRow key={thread.id} thread={thread} projectId={id} index={i} />
             ))}
           </ol>
         )}
@@ -330,6 +425,51 @@ function DocumentRow({ doc, projectId, index }: { doc: DocumentSummary; projectI
       </Link>
     </li>
   )
+}
+
+/** One reconstructed email thread — real subject/message-count/last-activity
+ * from GET /projects/{id}/emails/threads, in the same register visual
+ * language as DocumentRow above. Always openable: a thread with at least
+ * one message always has something to show, even if every message in it
+ * is still processing. */
+function EmailThreadRow({ thread, projectId, index }: { thread: EmailThreadSummary; projectId: number; index: number }) {
+  const ordinal = String(index + 1).padStart(3, '0')
+
+  return (
+    <li>
+      <Link
+        to={`/projects/${projectId}/emails/${thread.id}`}
+        className={`${styles.registerRow} ${styles.registerRowOpenable}`}
+      >
+        <span className={styles.registerOrdinal}>{ordinal}</span>
+        <div className={styles.docMain}>
+          <span className={styles.docName}>{thread.subject ?? '(no subject)'}</span>
+          <div className={styles.docMeta}>
+            <span className={styles.docMetaText}>
+              {thread.message_count} message{thread.message_count === 1 ? '' : 's'}
+            </span>
+            {thread.last_sent_at && (
+              <>
+                <span className={styles.docMetaDot} aria-hidden="true" />
+                <span className={styles.docMetaText}>{formatThreadDate(thread.last_sent_at)}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className={styles.docTrailing}>
+          <span className={styles.registerArrow}>→</span>
+        </div>
+      </Link>
+    </li>
+  )
+}
+
+function formatThreadDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  } catch {
+    return iso
+  }
 }
 
 /** One row of the investigation register — ordinal, question (serif,

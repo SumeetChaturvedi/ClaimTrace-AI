@@ -5,6 +5,10 @@
  * vite.config.ts) to avoid needing CORS support on the backend.
  */
 import type {
+  EmailImportResponse,
+  EmailMessageDetail,
+  EmailThreadDetail,
+  EmailThreadSummary,
   HealthResponse,
   InvestigationCreateRequest,
   InvestigationRecord,
@@ -227,4 +231,53 @@ export async function fetchDocumentFileBlobUrl(projectId: number, documentId: nu
   } catch {
     return null
   }
+}
+
+// Phase 8A: Email Thread Intelligence — project-scoped email import and
+// inspection. Mirrors uploadProjectDocuments()'s FormData pattern exactly:
+// a real multipart upload (each file an .eml or a .zip of .eml files),
+// processed synchronously through the real import pipeline.
+export async function importProjectEmails(projectId: number, files: File[]): Promise<EmailImportResponse> {
+  const formData = new FormData()
+  for (const file of files) formData.append('files', file)
+
+  let res: Response
+  try {
+    res = await fetch(`/api/projects/${projectId}/emails/import`, { method: 'POST', body: formData })
+  } catch {
+    throw new ApiError(0, 'Could not reach the backend. Is it running?')
+  }
+
+  if (!res.ok) {
+    let detail = res.statusText
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string') detail = body.detail
+    } catch {
+      // response body wasn't JSON — fall back to statusText
+    }
+    throw new ApiError(res.status, detail)
+  }
+
+  return res.json() as Promise<EmailImportResponse>
+}
+
+// GET /projects/{project_id}/emails/threads — every email thread
+// reconstructed for this project, most recently active first.
+export function listEmailThreads(projectId: number): Promise<EmailThreadSummary[]> {
+  return request<EmailThreadSummary[]>(`/projects/${projectId}/emails/threads`)
+}
+
+// GET /projects/{project_id}/emails/threads/{thread_id} — one thread's
+// ordered messages. 404s (project-scoped) exactly like every other
+// project-scoped lookup in this app.
+export function getEmailThread(projectId: number, threadId: number): Promise<EmailThreadDetail> {
+  return request<EmailThreadDetail>(`/projects/${projectId}/emails/threads/${threadId}`)
+}
+
+// GET /projects/{project_id}/emails/messages/{document_id} — full message
+// detail, keyed by the SAME document_id a Citation already carries, so
+// tracing a citation back to its message needs no second lookup table.
+export function getEmailMessage(projectId: number, documentId: number): Promise<EmailMessageDetail> {
+  return request<EmailMessageDetail>(`/projects/${projectId}/emails/messages/${documentId}`)
 }

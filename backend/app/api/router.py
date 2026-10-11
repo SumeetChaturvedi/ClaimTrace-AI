@@ -7,6 +7,7 @@ from app.api.routes import (
     investigate,
     investigations,
     project_documents,
+    project_emails,
     projects,
     search,
 )
@@ -20,3 +21,4 @@ api_router.include_router(investigate.router)
 api_router.include_router(investigations.router)
 api_router.include_router(projects.router)
 api_router.include_router(project_documents.router)
+api_router.include_router(project_emails.router)

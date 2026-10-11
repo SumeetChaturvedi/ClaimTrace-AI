@@ -32,17 +32,23 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.db.models import Document
 from app.db.session import get_db
-from app.ingestion.storage import docx_storage_dir, pdf_storage_dir
+from app.ingestion.storage import docx_storage_dir, email_storage_dir, pdf_storage_dir
 
 router = APIRouter(prefix="/projects", tags=["documents"])
 
-# Phase 7 (Multi-Format Evidence): storage directory + media type per
-# supported extension. Adding a format means adding one entry here (plus
-# the corresponding entry in pipeline.py's _SUPPORTED_EXTENSIONS) — never a
-# second file-serving code path.
+# Phase 7 (Multi-Format Evidence) / Phase 8A (Email Thread Intelligence):
+# storage directory + media type per supported extension. Adding a format
+# means adding one entry here (plus the corresponding entry in
+# pipeline.py's _SUPPORTED_EXTENSIONS for PDF/DOCX, or
+# app/email_ingestion/pipeline.py for .eml) — never a second file-serving
+# code path. .eml documents are never created via pipeline.py's
+# _SUPPORTED_EXTENSIONS (they're created by app/email_ingestion/pipeline.py
+# instead), but downloading the original message reuses this exact same
+# endpoint for free once the extension is registered here.
 _STORAGE_BY_EXTENSION = {
     ".pdf": (pdf_storage_dir, "application/pdf"),
     ".docx": (docx_storage_dir, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    ".eml": (email_storage_dir, "message/rfc822"),
 }
 
 

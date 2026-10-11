@@ -99,6 +99,29 @@ def ensure_investigation_contract_clauses_column(engine: Engine) -> None:
         connection.commit()
 
 
+def ensure_email_message_content_hash_index(engine: Engine) -> None:
+    """Retrofit the `(project_id, content_hash) WHERE message_id IS NULL`
+    unique index (Phase 8A pre-commit review fix) onto the `email_messages`
+    table for a database where that table was already created without it —
+    same safe, additive, idempotent pattern as the other ensure_* functions
+    in this module: Base.metadata.create_all() only creates a table that
+    doesn't exist yet, it never alters one that already does, so a database
+    that already has `email_messages` (any deployment between this table's
+    introduction and this fix) needs this explicit, idempotent ALTER to
+    pick up the new constraint. No-op in effect on a clean database, where
+    create_all() already creates the index as declared on the model."""
+    with engine.connect() as connection:
+        connection.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "ux_email_messages_project_content_hash_no_message_id "
+                "ON email_messages (project_id, content_hash) "
+                "WHERE message_id IS NULL"
+            )
+        )
+        connection.commit()
+
+
 def ensure_storage_root(storage_root: Path) -> None:
     storage_root.mkdir(parents=True, exist_ok=True)
 
@@ -123,6 +146,7 @@ def initialize_database(engine: Engine, settings: Settings) -> Project:
     ensure_document_lifecycle_columns(engine)
     ensure_investigation_timeline_column(engine)
     ensure_investigation_contract_clauses_column(engine)
+    ensure_email_message_content_hash_index(engine)
     ensure_storage_root(settings.storage_root)
 
     with get_session_factory()() as session:

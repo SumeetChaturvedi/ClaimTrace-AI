@@ -15,6 +15,7 @@ from sqlalchemy import (
     Integer,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -324,3 +325,229 @@ class InvestigationRecordCitation(Base):
     chunk_text: Mapped[Optional[str]] = mapped_column(Text)
 
     investigation: Mapped["InvestigationRecord"] = relationship(back_populates="citations")
+
+
+class EmailThread(Base):
+    """A project-scoped, conservatively-reconstructed email conversation
+    (Phase 8A: Email Thread Intelligence). Built deterministically from
+    Message-ID/In-Reply-To/References headers only (see
+    app/email_ingestion/threading.py) — never from subject-matching alone,
+    so a thread here is never a manufactured relationship the source
+    headers don't actually support. A message with no header linkage to any
+    other message becomes a thread of exactly one message, not merged into
+    anything else.
+
+    New table, not a column added to an existing one — Base.metadata.create_all()
+    (app/db/init_db.py) creates it automatically with no ALTER required,
+    exactly like every other table in this file."""
+
+    __tablename__ = "email_threads"
+    __table_args__ = (Index("ix_email_threads_project_id", "project_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The display subject for the thread — the first message's own Subject
+    # header, kept exactly as imported (not normalized/cleaned), since this
+    # is a label, not a matching key. Threads reconstructed from a message
+    # with no Subject header at all fall back to a generic "(no subject)"
+    # at the API layer, never a fabricated one persisted here.
+    subject: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    project: Mapped["Project"] = relationship()
+    messages: Mapped[list["EmailMessage"]] = relationship(
+        back_populates="thread",
+        order_by="EmailMessage.sent_at",
+    )
+
+
+class EmailMessage(Base):
+    """One imported email message (Phase 8A: Email Thread Intelligence).
+
+    Deliberately keyed 1:1 with its own `Document` row via a shared primary
+    key (document_id is both this table's PK and its FK to documents.id,
+    the same "narrow join table" pattern already used nowhere else in this
+    schema but standard SQLAlchemy practice for a strict 1:1) rather than a
+    redundant surrogate id. The message's plain-text body is the Document's
+    extracted text, chunked/embedded/indexed through the EXISTING,
+    completely unmodified app/ingestion/indexing.py pipeline — this is what
+    lets an email-body citation be an ordinary Citation(document_id,
+    chunk_id, ...) with zero schema change to Citation/TimelineEntry/
+    InvestigationResponse (see app/agent/models.py): the frontend already
+    resolves document_type/filename for a citation via a separate
+    GET /documents lookup rather than embedding them in Citation, exactly
+    the seam DOCX reused (Phase 7) and this reuses again.
+
+    Fields that cannot be reliably populated from an arbitrary .eml import
+    are left nullable and are never fabricated: provider_message_id/
+    provider_thread_id (only ever known if a future live-mailbox connector
+    supplies them — plain .eml files have no such concept), html_body (a
+    plain-text-only message has none), in_reply_to/references (headers that
+    simply may not be present on a given message)."""
+
+    __tablename__ = "email_messages"
+    __table_args__ = (
+        Index("ix_email_messages_project_id", "project_id"),
+        Index("ix_email_messages_thread_id", "thread_id"),
+        # A given RFC 822 Message-ID is unique within a project — this is
+        # the load-bearing uniqueness constraint dedup relies on (see
+        # app/email_ingestion/dedup.py): re-importing a .eml whose
+        # Message-ID already exists for this project is caught here, at
+        # the database level, not just by an application-side check that
+        # could race under concurrent imports. NULL message_ids (an .eml
+        # with no Message-ID header) are not constrained by this index —
+        # Postgres treats NULLs as distinct for a unique index — so those
+        # fall back entirely to the content_hash dedup path instead.
+        Index(
+            "ux_email_messages_project_message_id",
+            "project_id",
+            "message_id",
+            unique=True,
+            postgresql_where=text("message_id IS NOT NULL"),
+        ),
+        # Pre-commit review fix: the content_hash fallback path (used only
+        # when message_id is absent — see dedup.py) had no database-level
+        # backstop at all, unlike the message_id path above. Two concurrent
+        # imports of the same Message-ID-less message could both pass the
+        # application-level dedup pre-check before either commits, each
+        # creating its own fully-indexed, searchable "EMAIL" Document — a
+        # silent, undetected duplicate in the evidence corpus. This partial
+        # unique index closes that race the same way the message_id index
+        # already does, scoped to exactly the rows that actually rely on
+        # content_hash for identity (message_id IS NULL) so it can never
+        # reject two genuinely different messages that merely happen to
+        # share content but have distinct real Message-IDs.
+        Index(
+            "ux_email_messages_project_content_hash_no_message_id",
+            "project_id",
+            "content_hash",
+            unique=True,
+            postgresql_where=text("message_id IS NULL"),
+        ),
+    )
+
+    # Shared primary key with the owning Document row (see class docstring).
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    thread_id: Mapped[int] = mapped_column(
+        ForeignKey("email_threads.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    import_source: Mapped[str] = mapped_column(Text, nullable=False, server_default="eml_import")
+
+    # Original RFC 822 Message-ID header, angle brackets stripped — the
+    # primary deterministic identity for threading and dedup. None for a
+    # message whose .eml genuinely has no Message-ID header (dedup then
+    # falls back to content_hash — see app/email_ingestion/dedup.py).
+    message_id: Mapped[Optional[str]] = mapped_column(Text)
+    # Only ever populated by a future live-connector import path — a plain
+    # .eml file carries no provider-internal id. Kept now so the schema
+    # doesn't need a later migration to add it.
+    provider_message_id: Mapped[Optional[str]] = mapped_column(Text)
+    provider_thread_id: Mapped[Optional[str]] = mapped_column(Text)
+
+    in_reply_to: Mapped[Optional[str]] = mapped_column(Text)
+    # Space-joined References header values, oldest first, exactly as the
+    # header itself orders them — kept as one text field (not a separate
+    # table) since nothing currently queries into individual reference
+    # entries; app/email_ingestion/threading.py splits this at import time
+    # when building the thread graph, from the parsed header list, not by
+    # re-parsing this stored string.
+    references: Mapped[Optional[str]] = mapped_column(Text)
+
+    sender_name: Mapped[Optional[str]] = mapped_column(Text)
+    sender_email: Mapped[Optional[str]] = mapped_column(Text)
+    # Recipient lists stored as Postgres text[] — each entry a real address
+    # (optionally "Name <email>") taken verbatim from the To/Cc header,
+    # never deduplicated or reordered.
+    to_recipients: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
+    cc_recipients: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
+
+    subject: Mapped[Optional[str]] = mapped_column(Text)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # True only when the original Date header carried no parseable
+    # timezone/offset at all (rare, but real exports vary) — surfaced so
+    # the frontend can show "time zone unknown" rather than implying a
+    # false precision on sent_at.
+    sent_at_timezone_unknown: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+    html_body: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Dedup fallback for a message with no Message-ID — see
+    # app/email_ingestion/dedup.py for exactly what goes into this hash.
+    # Always computed (even when message_id is present) so a later
+    # Message-ID-based match and a content-identical duplicate are both
+    # detectable through one consistent mechanism.
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+
+    raw_eml_path: Mapped[Optional[str]] = mapped_column(Text)
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    document: Mapped["Document"] = relationship()
+    project: Mapped["Project"] = relationship()
+    thread: Mapped["EmailThread"] = relationship(back_populates="messages")
+    attachments: Mapped[list["EmailAttachment"]] = relationship(
+        back_populates="message",
+        order_by="EmailAttachment.id",
+        cascade="all, delete-orphan",
+    )
+
+
+class EmailAttachment(Base):
+    """One attachment extracted from an EmailMessage (Phase 8A: Email
+    Thread Intelligence).
+
+    document_id is populated only for a supported attachment type (PDF or
+    DOCX) that was successfully run through the EXISTING, completely
+    unmodified app/ingestion/pipeline.py's ingest_document() — at that
+    point the attachment IS a normal Document, indexed and citable exactly
+    like any other, and this row is purely the provenance link back to the
+    email that supplied it. document_id is NULL for an unsupported format
+    or one that failed pre-flight validation; status explains why, and no
+    second storage/extraction system is built for those — their bytes are
+    deliberately not persisted (see app/email_ingestion/pipeline.py), only
+    their real, observed metadata (filename/content_type/size/hash)."""
+
+    __tablename__ = "email_attachments"
+    __table_args__ = (Index("ix_email_attachments_message_id", "message_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("email_messages.document_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # Set only when this attachment became a real, indexed Document (see
+    # class docstring) — the existing Document row, not a duplicate of its
+    # fields.
+    document_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+    )
+
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[Optional[str]] = mapped_column(Text)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    processing_error: Mapped[Optional[str]] = mapped_column(Text)
+
+    message: Mapped["EmailMessage"] = relationship(back_populates="attachments")
+    document: Mapped[Optional["Document"]] = relationship()
