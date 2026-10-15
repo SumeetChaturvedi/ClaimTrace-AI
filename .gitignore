@@ -35,6 +35,16 @@ storage/
 # information beyond what test_scorer.py already asserts precisely.
 dataset/event_eval/event_eval_results.json
 
+# Phase 8B.2 production evaluation adapter (run_production_eval.py):
+# production_eval_results.json is this run's own generated output — real
+# Gemini output, but produced by a one-off local evaluation run against
+# throwaway projects, not yet adopted as a tracked comparison baseline.
+# Left untracked for now, consistent with the event_eval_results.json
+# policy above, until there's a specific, documented decision to track a
+# given run as the reference baseline (the README's own "Results file"
+# section anticipates this as a future possibility, not a default).
+dataset/event_eval/production_eval_results.json
+
 # Node
 node_modules/
 .next/

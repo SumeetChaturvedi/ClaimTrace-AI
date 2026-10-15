@@ -51,7 +51,12 @@ class GeminiProvider(LLMProvider):
                 contents=prompt.user_prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=prompt.system_prompt,
-                    max_output_tokens=MAX_OUTPUT_TOKENS,
+                    # Per-call override (Phase 8B.2 Quality Remediation) if the
+                    # caller set one (see Prompt.max_output_tokens's own
+                    # docstring) — ReasoningEngine never sets this, so its
+                    # calls are completely unaffected and keep using the
+                    # shared MAX_OUTPUT_TOKENS exactly as before.
+                    max_output_tokens=prompt.max_output_tokens or MAX_OUTPUT_TOKENS,
                 ),
             )
         except APIError as exc:

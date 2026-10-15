@@ -276,6 +276,28 @@ class InvestigationRecord(Base):
     # None (not []) for every investigation that predates this column or
     # genuinely retrieved no clauses; the API layer treats both identically.
     contract_clauses: Mapped[Optional[list[dict]]] = mapped_column(JSONB)
+    # Phase 8B.2 (Backend Event Extractor): the investigation's own
+    # extracted ExtractedEvent list (app/agent/models.py), persisted as-is —
+    # same additive-ALTER pattern as `timeline`/`contract_clauses` above
+    # (see ensure_investigation_events_columns in app/db/init_db.py).
+    # Unlike those two, None here is NOT interchangeable with []: None means
+    # either "predates this column" or "extraction failed for this run"
+    # (see `events_error`); [] means extraction genuinely ran and found no
+    # events. The API layer (app/api/routes/investigations.py) distinguishes
+    # all three cases rather than collapsing them.
+    events: Mapped[Optional[list[dict]]] = mapped_column(JSONB)
+    # Non-None only when event extraction raised for this run and could not
+    # complete — `events` is then also None (there is nothing to show), and
+    # this carries a human-readable reason. Never set merely because
+    # extraction found zero events (a legitimate outcome, not a failure).
+    events_error: Mapped[Optional[str]] = mapped_column(Text)
+    # Phase 8B.2 Quality Remediation: True when the extraction response was
+    # cut off mid-array and some candidates had to be dropped as incomplete
+    # — see InvestigationResponse.events_truncated's own docstring. A plain
+    # boolean with a server default (unlike events/events_error, it has no
+    # "predates this column" ambiguity to represent: an investigation from
+    # before this column existed is correctly described as "not truncated").
+    events_truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     error: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
