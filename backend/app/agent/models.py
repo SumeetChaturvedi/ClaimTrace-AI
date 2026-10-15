@@ -13,13 +13,55 @@ agent's future internals can change without changing this contract.
 """
 
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from app.contracts.models import ContractClause
 
 DEFAULT_TOP_K = 5
+
+# Event-type vocabulary for EventExtractor (app/agent/event_extraction.py,
+# Phase 8B.2). Deliberately mirrors dataset/event_eval/gold_schema.py's own
+# EVENT_TYPES tuple value-for-value, but is NOT imported from there: that
+# package is intentionally independent of backend/app (see its own module
+# docstring) and production code must not reach into it. Documented mapping
+# (Phase 8B.2 report §3): these are the same bottom-up, scenario-derived
+# categories — extend only when a real need demonstrates a genuine new one,
+# never speculatively.
+EVENT_TYPES: tuple[str, ...] = (
+    "CLARIFICATION_REQUESTED",
+    "CLARIFICATION_PROVIDED",
+    "INSTRUCTION_ISSUED",
+    "DRAWING_REVISED",
+    "NOTICE_SUBMITTED",
+    "COMMITMENT_MADE",
+    "FOLLOW_UP_SENT",
+    "SITE_CONDITION_REPORTED",
+    "INSPECTION_RECORDED",
+    "INCIDENT_REPORTED",
+    "CLAIM_ASSERTED",
+)
+
+ASSERTION_TYPES: tuple[str, ...] = (
+    "recorded_action",
+    "request",
+    "instruction",
+    "commitment",
+    "allegation",
+    "interpretation_needed",
+)
+AssertionType = Literal[
+    "recorded_action",
+    "request",
+    "instruction",
+    "commitment",
+    "allegation",
+    "interpretation_needed",
+]
+
+DATE_BASIS_VALUES: tuple[str, ...] = ("explicit", "inferred", "unknown")
+DateBasis = Literal["explicit", "inferred", "unknown"]
 
 
 class InvestigationRequest(BaseModel):
@@ -107,6 +149,37 @@ class TimelineEntry(BaseModel):
     )
 
 
+class ExtractedEvent(BaseModel):
+    """One event candidate produced by EventExtractor (app/agent/event_extraction.py,
+    Phase 8B.2) — a proposed interpretation of a single piece of already-retrieved
+    evidence, never automatically an established fact.
+
+    document_id/chunk_id (never thread_id — see app/agent/event_extraction.py's
+    module docstring) are the stable source locator, exactly the seam
+    Citation already uses; `excerpt` must be a verbatim substring of that
+    chunk's own chunk_text, deterministically verified before this object is
+    ever constructed (see EventExtractor._validate_candidate) — this type
+    carries no raw, unverified model output.
+
+    Maps onto dataset/event_eval/gold_schema.GoldEvent/CandidateEvent's own
+    fields one-for-one (event_type, assertion_type, event_date,
+    event_date_basis, attributed_party, description) except for the source
+    locator itself (message_key there, document_id/chunk_id here — the
+    production equivalent) and the absence of event_id/conflict_group_id,
+    which that schema also deliberately leaves off a candidate. No field
+    here duplicates an existing one merely to satisfy that mapping."""
+
+    document_id: int = Field(description="Stable source document id — never thread_id, which can be reassigned by a later thread merge")
+    chunk_id: int = Field(description="Stable source chunk id within document_id")
+    excerpt: str = Field(description="Verbatim substring of the cited chunk's own text that supports this event")
+    event_type: str | None = Field(default=None, description="One of app.agent.models.EVENT_TYPES, or None if no existing category fits")
+    assertion_type: AssertionType | None = Field(default=None, description="What kind of statement this is — recorded fact vs. request vs. allegation, etc.")
+    description: str = Field(description="Neutral, concise, human-readable description of the event")
+    event_date: date | None = Field(default=None, description="The event's own date, if explicitly or unambiguously supported — never the source document's date")
+    event_date_basis: DateBasis = Field(description="Whether event_date is explicit in the evidence, inferred, or unknown (event_date is None whenever this is 'unknown')")
+    attributed_party: str | None = Field(default=None, description="The party making the statement/taking the action, if the evidence supports attribution")
+
+
 class ReasoningResult(BaseModel):
     """The output of ReasoningEngine.reason() (app/agent/reasoning.py) — an
     answer derived from a set of Evidence, plus the trail of how it was
@@ -145,5 +218,35 @@ class InvestigationResponse(BaseModel):
             "no document_id, chunk_id, or page (see app/contracts/models.py), so unlike "
             "Citation/TimelineEntry there is no source-document or page linkage to expose here; "
             "nothing is fabricated to manufacture one."
+        ),
+    )
+    events: list[ExtractedEvent] = Field(
+        default_factory=list,
+        description=(
+            "Phase 8B.2 (Backend Event Extractor): event candidates extracted from this "
+            "investigation's own evidence, each independently source-verified. Always [] "
+            "(not an error) when extraction ran and genuinely found none, or when there was "
+            "no evidence to extract from — see events_error for the separate 'extraction "
+            "itself failed' case."
+        ),
+    )
+    events_error: str | None = Field(
+        default=None,
+        description=(
+            "Non-None only when event extraction raised and could not complete for this "
+            "investigation — distinguishes 'extraction ran and found zero events' (events=[], "
+            "events_error=None) from 'extraction was unavailable' (events=[], events_error set). "
+            "An extraction failure here never fails the investigation itself; the answer/"
+            "citations/timeline above are unaffected."
+        ),
+    )
+    events_truncated: bool = Field(
+        default=False,
+        description=(
+            "Phase 8B.2 Quality Remediation: True when the model's extraction response was cut "
+            "off mid-array (output token budget) and some candidates had to be dropped as "
+            "incomplete — `events` still holds every candidate that WAS complete and passed "
+            "source verification; this only flags that the true count may be higher. Always "
+            "False when events_error is set (there's nothing partial about a hard failure)."
         ),
     )

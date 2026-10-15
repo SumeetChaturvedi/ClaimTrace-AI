@@ -99,6 +99,31 @@ def ensure_investigation_contract_clauses_column(engine: Engine) -> None:
         connection.commit()
 
 
+def ensure_investigation_events_columns(engine: Engine) -> None:
+    """Retrofit the `events`/`events_error` columns (Phase 8B.2: Backend
+    Event Extractor) onto an already-existing, already-populated
+    `investigation_records` table — same safe, additive, idempotent ALTER
+    pattern as ensure_investigation_timeline_column above. No-op in effect
+    on a clean database.
+
+    Every investigation that ran before this phase is left with both
+    columns NULL; the API layer (app/api/routes/investigations.py) reports
+    that identically to "extraction not available for this investigation",
+    never as a failure or a fabricated empty-events success."""
+    with engine.connect() as connection:
+        connection.execute(text("ALTER TABLE investigation_records ADD COLUMN IF NOT EXISTS events JSONB"))
+        connection.execute(text("ALTER TABLE investigation_records ADD COLUMN IF NOT EXISTS events_error TEXT"))
+        # Quality Remediation follow-up: events_truncated gets a real
+        # default (unlike events/events_error, which must stay nullable to
+        # represent "predates this feature" — see the model's own
+        # docstring) since "not truncated" is simply correct for every
+        # investigation that predates this column.
+        connection.execute(
+            text("ALTER TABLE investigation_records ADD COLUMN IF NOT EXISTS events_truncated BOOLEAN NOT NULL DEFAULT false")
+        )
+        connection.commit()
+
+
 def ensure_email_message_content_hash_index(engine: Engine) -> None:
     """Retrofit the `(project_id, content_hash) WHERE message_id IS NULL`
     unique index (Phase 8A pre-commit review fix) onto the `email_messages`
@@ -146,6 +171,7 @@ def initialize_database(engine: Engine, settings: Settings) -> Project:
     ensure_document_lifecycle_columns(engine)
     ensure_investigation_timeline_column(engine)
     ensure_investigation_contract_clauses_column(engine)
+    ensure_investigation_events_columns(engine)
     ensure_email_message_content_hash_index(engine)
     ensure_storage_root(settings.storage_root)
 

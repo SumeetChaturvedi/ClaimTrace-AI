@@ -91,6 +91,7 @@ as the brief requires.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from dataset.event_eval.dataset import EventEvalDataset
@@ -309,6 +310,64 @@ def score(dataset: EventEvalDataset, gold_events: list[GoldEvent], candidates: l
     report.abstention_rate = (report.noise_keys_correctly_abstained / len(noise_keys)) if noise_keys else None
 
     return report
+
+
+_ORG_SUFFIX_PATTERN = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def _strip_org_suffix(value: str) -> str:
+    """Strip one trailing parenthetical, e.g. "Priya Nandan (Sagara "
+    "Contracting)" -> "Priya Nandan". Used only by
+    attribution_accuracy_normalized below — score()'s own
+    attribution_accuracy is untouched and keeps doing exact-string
+    comparison (see that function and Thresholds.min_attribution_accuracy's
+    own "needs calibration" flag in README.md)."""
+    return _ORG_SUFFIX_PATTERN.sub("", value).strip()
+
+
+def attribution_accuracy_normalized(report: EvaluationReport) -> float | None:
+    """Phase 8B.2 Quality Remediation: an alternate attribution_accuracy
+    computed over the SAME matched pairs score() already found, comparing
+    each pair's attributed_party after stripping gold's own trailing
+    "(Organization)" parenthetical from BOTH sides before comparing.
+
+    This exists because the gold dataset's own convention always appends a
+    firm name in parentheses (e.g. "Priya Nandan (Sagara Contracting)") for
+    human readability, but that affiliation is frequently NOT itself
+    explicit anywhere in a scenario's message bodies or sender display
+    names (verified directly against the fixtures before adding this: the
+    firm name is only recoverable from the sender's EMAIL DOMAIN, e.g.
+    priya.nandan@sagara-contracting.example) — synthesizing a human-
+    readable company name out of a domain string is itself a form of
+    inference the Phase 8B.2 brief explicitly warns against ("never invent
+    a party's organization or identity"), so EventExtractor is not asked
+    to do it. A candidate that correctly names "Priya Nandan" and nothing
+    more is not treating a different party as having made the statement
+    — it has simply omitted optional context the gold happens to include.
+
+    This does NOT conflate different parties: stripping only removes a
+    trailing parenthetical, so "Priya Nandan" vs "David Okonkwo (Meridian "
+    "Consult)" still correctly fails to match (different name), and a
+    candidate that attributes to the wrong person, or omits attribution
+    entirely (null), still correctly fails regardless of normalization.
+    Only the OPTIONAL organizational suffix is treated as not required for
+    a match — the person/entity name itself must still match exactly.
+
+    score()'s own `report.attribution_accuracy` is left completely
+    unchanged by this function; callers that want the normalized view call
+    this separately and should report BOTH, never substitute one for the
+    other silently."""
+    total = correct = 0
+    for pair in report.matched_pairs:
+        gold, candidate = pair.gold, pair.candidate
+        if gold.attributed_party is None:
+            continue
+        total += 1
+        if candidate.attributed_party is None:
+            continue
+        if _strip_org_suffix(candidate.attributed_party) == _strip_org_suffix(gold.attributed_party):
+            correct += 1
+    return (correct / total) if total else None
 
 
 @dataclass(frozen=True)

@@ -29,7 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agent import InvestigationService
-from app.agent.models import DEFAULT_TOP_K, Citation, InvestigationRequest, TimelineEntry
+from app.agent.models import DEFAULT_TOP_K, Citation, ExtractedEvent, InvestigationRequest, TimelineEntry
 from app.contracts.models import ContractClause
 from app.agent.reasoning import ReasoningError
 from app.api.routes.investigate import get_investigation_service
@@ -77,6 +77,18 @@ class InvestigationRecordResponse(BaseModel):
         default_factory=list,
         description="Contract clauses retrieved for this investigation (Phase 5); [] for investigations that predate this field or that genuinely retrieved none",
     )
+    events: list[ExtractedEvent] = Field(
+        default_factory=list,
+        description="Event candidates extracted for this investigation (Phase 8B.2); [] for investigations that predate this field, that genuinely found none, or whose extraction failed (see events_error)",
+    )
+    events_error: str | None = Field(
+        default=None,
+        description="Non-None only if event extraction failed for this investigation; events is then also []. None does not imply extraction ran.",
+    )
+    events_truncated: bool = Field(
+        default=False,
+        description="True if the extraction response was cut off mid-array and some candidates had to be dropped as incomplete — events still holds every complete, verified candidate found before the cut-off.",
+    )
     error: str | None = None
 
 
@@ -116,6 +128,9 @@ def _to_response(record: InvestigationRecord) -> InvestigationRecordResponse:
         reasoning_steps=record.reasoning_steps or [],
         timeline=[TimelineEntry.model_validate(entry) for entry in (record.timeline or [])],
         contract_clauses=[ContractClause.model_validate(c) for c in (record.contract_clauses or [])],
+        events=[ExtractedEvent.model_validate(e) for e in (record.events or [])],
+        events_error=record.events_error,
+        events_truncated=record.events_truncated,
         error=record.error,
     )
 
@@ -177,6 +192,15 @@ async def _run_and_persist(
     record.reasoning_steps = response.reasoning_steps
     record.timeline = [entry.model_dump(mode="json") for entry in response.timeline]
     record.contract_clauses = [clause.model_dump(mode="json") for clause in response.contract_clauses]
+    # Phase 8B.2: events=None (not []) specifically when extraction failed
+    # this run (events_error set) — distinct from "ran and found none"
+    # ([], events_error=None). See InvestigationRecord.events's own
+    # docstring for why these are not collapsed into one representation.
+    record.events = (
+        None if response.events_error is not None else [event.model_dump(mode="json") for event in response.events]
+    )
+    record.events_error = response.events_error
+    record.events_truncated = response.events_truncated
     for ordinal, citation in enumerate(response.citations):
         db.add(
             InvestigationRecordCitation(
@@ -268,6 +292,9 @@ async def retry_investigation(
     record.reasoning_steps = None
     record.timeline = None
     record.contract_clauses = None
+    record.events = None
+    record.events_error = None
+    record.events_truncated = False
     record.citations = []
     db.commit()
 

@@ -100,9 +100,11 @@ controlled test/validation run) still overrides this entirely, for every
 project, exactly as before.
 """
 
+import logging
 from typing import TYPE_CHECKING
 
 from app.agent import tools
+from app.agent.event_extraction import EventExtractionError, EventExtractor
 from app.agent.investigation_package import InvestigationPackageBuilder
 from app.agent.models import Citation, Evidence, InvestigationRequest, InvestigationResponse, TimelineEntry
 from app.agent.reasoning import ReasoningEngine
@@ -129,6 +131,8 @@ EXCERPT_CHARS = 280
 # already a bounded unit from chunking.py and isn't truncated further.
 CONTEXT_CHARS = 800
 
+logger = logging.getLogger(__name__)
+
 
 class InvestigationService:
     """Orchestrates an investigation: validate -> search -> build evidence ->
@@ -150,8 +154,10 @@ class InvestigationService:
         contract_context_builder: ContractContextBuilder | None = None,
         investigation_loop: "InvestigationLoop | None" = None,
         evidence_narrower: "EvidenceNarrower | None" = None,
+        event_extractor: EventExtractor | None = None,
     ) -> None:
         self._reasoning_engine = reasoning_engine or ReasoningEngine()
+        self._event_extractor = event_extractor or EventExtractor()
         self._package_builder = package_builder or InvestigationPackageBuilder()
         self._planner = planner or InvestigationPlanner()
         self._timeline_builder = timeline_builder or TimelineBuilder()
@@ -293,6 +299,16 @@ class InvestigationService:
 
         result = self._reasoning_engine.reason(package)
 
+        # Event extraction (Phase 8B.2): supplementary, never a prerequisite
+        # for completing the investigation. Runs against the same narrowed
+        # evidence set already given to the reasoning prompt/citations above
+        # (no new retrieval pass), AFTER reasoning, so an extraction failure
+        # can never prevent the primary answer/citations/timeline from being
+        # produced. Any failure is caught here and reported via events_error
+        # — never allowed to propagate out of investigate(), and never
+        # silently reported as "zero events found".
+        events, events_error, events_truncated = self._extract_events(request.query, narrowing_result.retained_evidence)
+
         return InvestigationResponse(
             answer=result.answer,
             citations=result.supporting_evidence,
@@ -305,7 +321,27 @@ class InvestigationService:
             # Phase 4's timeline. Never narrowed (narrowing is an evidence/citation
             # concern only — see the module docstring), never re-retrieved.
             contract_clauses=list(state.retrieved_clauses),
+            events=events,
+            events_error=events_error,
+            events_truncated=events_truncated,
         )
+
+    def _extract_events(self, question: str, evidence: list[Evidence]) -> tuple[list, str | None, bool]:
+        """Run EventExtractor and translate any failure into (``[]``,
+        error message, False) rather than letting it propagate — see the
+        "Event extraction" comment at its call site above for why this
+        exists as its own isolated step. Returns (events, None, truncated)
+        on success, including the legitimate zero-evidence/zero-event case
+        (truncated is always False then)."""
+        try:
+            result = self._event_extractor.extract(question, evidence)
+            return result.events, None, result.truncated
+        except EventExtractionError as exc:
+            logger.warning("Event extraction failed for this investigation: %s", exc)
+            return [], str(exc), False
+        except Exception:
+            logger.exception("Unexpected error during event extraction")
+            return [], "An unexpected error occurred while extracting events.", False
 
     def _build_evidence(self, citations: list[Citation]) -> list[Evidence]:
         """Build one Evidence object per citation. Prefers the citation's own
