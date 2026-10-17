@@ -17,6 +17,7 @@ import type {
   InvestigationRequest,
   InvestigationResponse,
   DocumentSummary,
+  ProjectDocumentSummary,
   DocumentUploadResponse,
   Project,
   ProjectCreateRequest,
@@ -155,8 +156,8 @@ export function listAllDocuments(): Promise<DocumentSummary[]> {
 // Foundation) — the real, project-scoped document register: every document
 // belonging to this project, including ones still processing or that
 // failed, so the register can show the true current state of each.
-export function listProjectDocuments(projectId: number): Promise<DocumentSummary[]> {
-  return request<DocumentSummary[]>(`/projects/${projectId}/documents`)
+export function listProjectDocuments(projectId: number): Promise<ProjectDocumentSummary[]> {
+  return request<ProjectDocumentSummary[]>(`/projects/${projectId}/documents`)
 }
 
 // GET /projects/{project_id}/documents/{document_id} (Phase 3) — one
@@ -167,8 +168,8 @@ export function listProjectDocuments(projectId: number): Promise<DocumentSummary
 // against the project id in its own URL — the same "never trust the
 // caller, always re-validate via this page's own project id" pattern
 // SourceViewPage already uses for citations.
-export function getProjectDocument(projectId: number, documentId: number): Promise<DocumentSummary> {
-  return request<DocumentSummary>(`/projects/${projectId}/documents/${documentId}`)
+export function getProjectDocument(projectId: number, documentId: number): Promise<ProjectDocumentSummary> {
+  return request<ProjectDocumentSummary>(`/projects/${projectId}/documents/${documentId}`)
 }
 
 // POST /projects/{project_id}/documents — uploads one or more PDFs to this

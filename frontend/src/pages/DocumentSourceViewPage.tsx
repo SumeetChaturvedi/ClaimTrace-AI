@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
 import { SectionLabel, Muted } from '../components/ui/Typography'
 import { Panel } from '../components/ui/Panel'
@@ -10,7 +10,7 @@ import { parseProjectId } from '../lib/projectDirectory'
 import { useProject } from '../lib/useProject'
 import { useApiQuery } from '../api/useApi'
 import { getProjectDocument, fetchDocumentFileBlobUrl, getDocumentFileUrl } from '../api/client'
-import type { DocumentSummary } from '../api/types'
+import type { ProjectDocumentSummary } from '../api/types'
 import { isDocxFilename, isEmailFilename } from '../lib/documentFormat'
 import { EmailMessagePanel } from '../components/evidence/EmailMessagePanel'
 import styles from './SourceViewPage.module.css'
@@ -245,6 +245,16 @@ export function DocumentSourceViewPage() {
                 <DocumentStatusBadge status={document.status} />
               </dd>
             </div>
+            {document.email_source && (
+              <div>
+                <dt>From email</dt>
+                <dd>
+                  <Link to={`/projects/${id}/emails/${document.email_source.thread_id}`}>
+                    {document.email_source.subject ?? '(no subject)'}
+                  </Link>
+                </dd>
+              </div>
+            )}
           </dl>
 
           <LinkButton to={`/projects/${id}`} variant="secondary" className={styles.backLink}>
@@ -257,7 +267,7 @@ export function DocumentSourceViewPage() {
   )
 }
 
-function DocumentStatusBadge({ status }: { status: DocumentSummary['status'] }) {
+function DocumentStatusBadge({ status }: { status: ProjectDocumentSummary['status'] }) {
   if (status === 'ready') return <Badge tone="green">Ready</Badge>
   if (status === 'failed') return <Badge tone="red">Failed</Badge>
   return <Badge tone="neutral">Processing…</Badge>

@@ -46,6 +46,24 @@ export interface DocumentSummary {
   processing_error: string | null
   uploaded_at: string
   updated_at: string
+}
+
+// backend/app/api/routes/project_documents.py. Present only on a document
+// that is itself a successfully-processed email attachment — the covering
+// email it came from. Project-scoped only (not on the global
+// DocumentSummary from backend/app/api/routes/documents.py, which has no
+// project_id to scope the lookup by).
+export interface EmailSourceInfo {
+  message_document_id: number
+  thread_id: number
+  subject: string | null
+  sender_name: string | null
+  sender_email: string | null
+  sent_at: string | null
+}
+
+export interface ProjectDocumentSummary extends DocumentSummary {
+  email_source: EmailSourceInfo | null
   // NOTE: the backend's DocumentSummary does NOT include project_id.
   // GET /documents (unscoped) returns every document in the database; do
   // not assume a result there belongs to any particular project. The

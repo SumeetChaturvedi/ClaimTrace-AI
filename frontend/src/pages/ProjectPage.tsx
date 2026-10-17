@@ -18,7 +18,13 @@ import {
   uploadProjectDocuments,
 } from '../api/client'
 import { useApiQuery } from '../api/useApi'
-import type { DocumentSummary, EmailThreadSummary, InvestigationRecord, InvestigationStatus } from '../api/types'
+import type {
+  DocumentSummary,
+  EmailThreadSummary,
+  InvestigationRecord,
+  InvestigationStatus,
+  ProjectDocumentSummary,
+} from '../api/types'
 import { ConnectedMailboxesSection } from './ConnectedMailboxesSection'
 import styles from './ProjectPage.module.css'
 
@@ -46,7 +52,7 @@ export function ProjectPage() {
   const projectQuery = useProject(id)
   const [refreshToken, setRefreshToken] = useState(0)
   const documentsQuery = useApiQuery(
-    () => (id === null ? Promise.resolve<DocumentSummary[]>([]) : listProjectDocuments(id)),
+    () => (id === null ? Promise.resolve<ProjectDocumentSummary[]>([]) : listProjectDocuments(id)),
     [id, refreshToken],
   )
   const investigationsQuery = useApiQuery(
@@ -142,7 +148,15 @@ export function ProjectPage() {
   const projectCreatedAt = projectQuery.status === 'success' ? projectQuery.data.created_at : undefined
   const investigations = investigationsQuery.status === 'success' ? investigationsQuery.data : []
   const recentInvestigations = investigations.slice(0, 3)
-  const documentCount = documentsQuery.status === 'success' ? documentsQuery.data.length : undefined
+  // An email's own body is indexed as doc_type='EMAIL' (see Document's own
+  // docstring) so it can be cited/searched like any other document — but
+  // it's already shown, organized into threads, in the Email
+  // Correspondence section below, so the Document Register itself shows
+  // only genuine non-email documents (uploads and email attachments),
+  // never the same email body twice in two different sections.
+  const registerDocuments =
+    documentsQuery.status === 'success' ? documentsQuery.data.filter((d) => d.doc_type !== 'EMAIL') : []
+  const documentCount = documentsQuery.status === 'success' ? registerDocuments.length : undefined
 
   return (
     <AppShell
@@ -236,14 +250,14 @@ export function ProjectPage() {
         {documentsQuery.status === 'error' && (
           <ErrorState message={`Could not load documents for this project: ${documentsQuery.error}`} />
         )}
-        {documentsQuery.status === 'success' && documentsQuery.data.length === 0 && (
+        {documentsQuery.status === 'success' && registerDocuments.length === 0 && (
           <p className={styles.emptyDocuments}>
             <Muted>No documents have been added to this project yet.</Muted>
           </p>
         )}
-        {documentsQuery.status === 'success' && documentsQuery.data.length > 0 && (
+        {documentsQuery.status === 'success' && registerDocuments.length > 0 && (
           <ol className={styles.documentRegister}>
-            {documentsQuery.data.map((doc, i) => (
+            {registerDocuments.map((doc, i) => (
               <DocumentRow key={doc.id} doc={doc} projectId={id} index={i} />
             ))}
           </ol>
@@ -389,7 +403,7 @@ function EvidenceMotif() {
  * extracted-text path, which is only ever set once extraction succeeds).
  * A processing/failed row keeps its status badge but isn't made to look
  * openable, rather than linking to a viewer that can only fail. */
-function DocumentRow({ doc, projectId, index }: { doc: DocumentSummary; projectId: number; index: number }) {
+function DocumentRow({ doc, projectId, index }: { doc: ProjectDocumentSummary; projectId: number; index: number }) {
   const isOpenable = doc.status === 'ready'
   const ordinal = String(index + 1).padStart(3, '0')
 

@@ -348,6 +348,38 @@ class EmailIngestionTests(unittest.TestCase):
         self.assertEqual(file_resp.status_code, 200)
         self.assertEqual(file_resp.headers["content-type"], "application/pdf")
 
+    def test_an_attachment_document_carries_its_covering_email_as_email_source(self):
+        """GET /projects/{id}/documents (and the single-document lookup)
+        enrich an attachment's own Document row with which email it came
+        from — reusing the existing EmailAttachment.message_id link, never
+        a new relationship. The covering email's own Document (doc_type
+        'EMAIL') and any ordinary, non-email document must NOT carry this
+        field, so the frontend can reliably distinguish 'this document IS
+        an attachment' from 'this document is something else'."""
+        project_id = self._create_project("Email Test Project M")
+        pdf_bytes = _build_test_pdf("Attachment marker CLAIMTRACE-EMAIL-SOURCE-3001.")
+        raw = _build_eml(
+            headers={"Message-ID": "<m-msg@example.com>", "From": "a@example.com", "Subject": "Email source test", "Date": formatdate()},
+            body="see attached",
+            attachments=[{"filename": "notice.pdf", "content": pdf_bytes, "maintype": "application", "subtype": "pdf"}],
+        )
+        result = self._import(project_id, "m.eml", raw).json()["results"][0]
+        message = self.client.get(f"/projects/{project_id}/emails/messages/{result['document_id']}").json()
+        attachment_document_id = message["attachments"][0]["document_id"]
+
+        docs = {d["id"]: d for d in self.client.get(f"/projects/{project_id}/documents").json()}
+
+        attachment_doc = docs[attachment_document_id]
+        self.assertIsNotNone(attachment_doc["email_source"])
+        self.assertEqual(attachment_doc["email_source"]["subject"], "Email source test")
+        self.assertEqual(attachment_doc["email_source"]["message_document_id"], result["document_id"])
+
+        email_body_doc = docs[result["document_id"]]
+        self.assertIsNone(email_body_doc["email_source"])
+
+        single_resp = self.client.get(f"/projects/{project_id}/documents/{attachment_document_id}").json()
+        self.assertEqual(single_resp["email_source"]["subject"], "Email source test")
+
     def test_docx_attachment_becomes_a_real_indexed_document(self):
         project_id = self._create_project("Email Test Project M")
         docx_bytes = _build_test_docx(["Attachment marker CLAIMTRACE-EMAIL-DOCX-ATTACH-2002."])
