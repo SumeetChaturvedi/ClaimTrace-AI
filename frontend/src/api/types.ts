@@ -106,12 +106,51 @@ export interface ContractClause {
   text: string
 }
 
+// Phase 8B.2 (Backend Event Extractor). Mirrors app.agent.models.ExtractedEvent
+// exactly — an LLM-extracted, source-verified event candidate, never
+// automatically an established fact. event_type/assertion_type are each
+// independently nullable: the backend sets them to null (never a fabricated
+// value) when the evidence doesn't clearly support a category. event_date is
+// null whenever event_date_basis is 'unknown' — the backend never guesses a
+// missing or ambiguous date. document_id/chunk_id are the same stable
+// (document, chunk) locator Citation already uses — never a thread id.
+export type EventDateBasis = 'explicit' | 'inferred' | 'unknown'
+export type AssertionType =
+  | 'recorded_action'
+  | 'request'
+  | 'instruction'
+  | 'commitment'
+  | 'allegation'
+  | 'interpretation_needed'
+
+export interface ExtractedEvent {
+  document_id: number
+  chunk_id: number
+  excerpt: string
+  event_type: string | null
+  assertion_type: AssertionType | null
+  description: string
+  event_date: string | null
+  event_date_basis: EventDateBasis
+  attributed_party: string | null
+}
+
 export interface InvestigationResponse {
   answer: string
   citations: Citation[]
   reasoning_steps: string[]
   timeline: TimelineEntry[]
   contract_clauses: ContractClause[]
+  // Phase 8B.2: events=[] is NOT itself an error — it means extraction ran
+  // and genuinely found none, OR there was no evidence to extract from, OR
+  // (indistinguishably, over this API as it currently stands) this
+  // investigation predates event extraction entirely. events_error is the
+  // ONLY signal that extraction itself failed to run; events_truncated is
+  // the only signal that a real, partial result may be missing further
+  // events. Never treat an empty `events` array as proof extraction ran.
+  events: ExtractedEvent[]
+  events_error: string | null
+  events_truncated: boolean
   // NOTE: this is the entire response shape. There is no separate field for
   // evidence gaps or conflicts — the backend does not return them. Any UI
   // section for those concepts must say so explicitly rather than deriving
@@ -142,6 +181,9 @@ export interface InvestigationRecord {
   reasoning_steps: string[]
   timeline: TimelineEntry[]
   contract_clauses: ContractClause[]
+  events: ExtractedEvent[]
+  events_error: string | null
+  events_truncated: boolean
   error: string | null
 }
 
