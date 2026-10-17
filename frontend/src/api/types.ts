@@ -269,3 +269,31 @@ export interface EmailMessageDetail {
   has_html_body: boolean
   attachments: EmailAttachmentSummary[]
 }
+
+// backend/app/api/routes/project_mailboxes.py (Phase 1: Gmail Integration).
+// NEVER add a token/credential field here — the backend's own response
+// models deliberately never return one; see that module's own docstring.
+export type ConnectedMailboxStatus = 'connected' | 'needs_reauth' | 'disconnected'
+
+export interface ConnectAuthorizationResponse {
+  authorization_url: string
+}
+
+export interface ConnectedMailboxSummary {
+  id: number
+  provider: string
+  external_email: string
+  status: ConnectedMailboxStatus
+  last_synced_at: string | null
+  last_sync_error: string | null
+  connected_at: string
+}
+
+export interface SyncResult {
+  status: 'completed' | 'partial' | 'needs_reauth' | 'error'
+  imported: number
+  duplicate: number
+  rejected: number
+  skipped_not_found: number
+  error: string | null
+}

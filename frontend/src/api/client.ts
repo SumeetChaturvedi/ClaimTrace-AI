@@ -5,6 +5,8 @@
  * vite.config.ts) to avoid needing CORS support on the backend.
  */
 import type {
+  ConnectAuthorizationResponse,
+  ConnectedMailboxSummary,
   EmailImportResponse,
   EmailMessageDetail,
   EmailThreadDetail,
@@ -18,6 +20,7 @@ import type {
   DocumentUploadResponse,
   Project,
   ProjectCreateRequest,
+  SyncResult,
 } from './types'
 
 export class ApiError extends Error {
@@ -280,4 +283,40 @@ export function getEmailThread(projectId: number, threadId: number): Promise<Ema
 // tracing a citation back to its message needs no second lookup table.
 export function getEmailMessage(projectId: number, documentId: number): Promise<EmailMessageDetail> {
   return request<EmailMessageDetail>(`/projects/${projectId}/emails/messages/${documentId}`)
+}
+
+// backend/app/api/routes/project_mailboxes.py (Phase 1: Gmail Integration).
+
+// POST /projects/{project_id}/mailboxes/gmail/connect — returns a Google
+// consent-screen URL. The caller must navigate the real browser to it
+// (window.location.href = ...), never fetch() it: the whole point is for
+// the person's own browser to interact with Google directly.
+export function startGmailConnect(projectId: number): Promise<ConnectAuthorizationResponse> {
+  return request<ConnectAuthorizationResponse>(`/projects/${projectId}/mailboxes/gmail/connect`, {
+    method: 'POST',
+  })
+}
+
+// GET /projects/{project_id}/mailboxes — every mailbox connected to this
+// project. Never includes a token or credential of any kind (see the
+// backend route's own docstring).
+export function listConnectedMailboxes(projectId: number): Promise<ConnectedMailboxSummary[]> {
+  return request<ConnectedMailboxSummary[]>(`/projects/${projectId}/mailboxes`)
+}
+
+// POST /projects/{project_id}/mailboxes/{mailbox_id}/sync — runs one
+// bounded, synchronous sync pass. May take several seconds; there is no
+// background job queue in this phase, so this call's own promise only
+// resolves once the backend has actually finished (or hit its own bound).
+export function syncConnectedMailbox(projectId: number, mailboxId: number): Promise<SyncResult> {
+  return request<SyncResult>(`/projects/${projectId}/mailboxes/${mailboxId}/sync`, { method: 'POST' })
+}
+
+// POST /projects/{project_id}/mailboxes/{mailbox_id}/disconnect —
+// revokes (best-effort) and permanently removes this mailbox's stored
+// credentials; no subsequent sync can use them afterward.
+export function disconnectMailbox(projectId: number, mailboxId: number): Promise<ConnectedMailboxSummary> {
+  return request<ConnectedMailboxSummary>(`/projects/${projectId}/mailboxes/${mailboxId}/disconnect`, {
+    method: 'POST',
+  })
 }

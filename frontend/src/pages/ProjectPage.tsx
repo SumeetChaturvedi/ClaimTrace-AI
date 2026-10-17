@@ -19,6 +19,7 @@ import {
 } from '../api/client'
 import { useApiQuery } from '../api/useApi'
 import type { DocumentSummary, EmailThreadSummary, InvestigationRecord, InvestigationStatus } from '../api/types'
+import { ConnectedMailboxesSection } from './ConnectedMailboxesSection'
 import styles from './ProjectPage.module.css'
 
 /**
@@ -248,6 +249,8 @@ export function ProjectPage() {
           </ol>
         )}
       </section>
+
+      <ConnectedMailboxesSection projectId={id} />
 
       <section className={styles.documentsSection}>
         <div className={styles.sectionRule}>

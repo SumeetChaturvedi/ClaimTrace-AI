@@ -25,5 +25,16 @@ sentence-transformers
 # the only provider implementation today.
 google-genai
 
+# Gmail integration (Phase 1) — raw REST calls via httpx (no
+# google-api-python-client/google-auth-oauthlib: both are already
+# transitively present via fastapi/starlette's own test client and
+# google-genai respectively, but were never a direct, intentional
+# dependency of this app's own code until now, so they're pinned here
+# explicitly rather than relied on as an implicit transitive detail).
+# cryptography backs Fernet symmetric encryption for
+# ConnectedMailbox.encrypted_refresh_token at rest.
+httpx
+cryptography
+
 # Deferred
 # tiktoken

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -573,3 +574,83 @@ class EmailAttachment(Base):
 
     message: Mapped["EmailMessage"] = relationship(back_populates="attachments")
     document: Mapped[Optional["Document"]] = relationship()
+
+
+class ConnectedMailbox(Base):
+    """One external mailbox (Gmail today; Outlook later) connected to a
+    single project for automatic import (Phase 1: Gmail Integration).
+
+    Brand-new table — no ALTER needed, created automatically by
+    Base.metadata.create_all() exactly like EmailThread/EmailMessage/
+    EmailAttachment were when Phase 8A introduced them (see
+    EmailThread's own docstring for why this project's migration
+    convention treats a new table this way).
+
+    Deliberately scoped to `project_id`, never to a "user" — this
+    application has no user/account model at all (confirmed by inspecting
+    the full schema and app/main.py before adding this table: no
+    authentication middleware, no session mechanism, nothing resembling a
+    login). Project scoping is therefore not a deliberately weaker
+    substitute for per-user authorization here, it is the SAME boundary
+    every other endpoint in this app already relies on exclusively
+    (projects.py, project_documents.py, project_emails.py, investigations.py
+    all 404 identically for "doesn't exist" and "belongs to another
+    project," never anything stronger). Anyone with access to this
+    ClaimTrace instance's API can already upload documents, run
+    investigations, or import email for any project; this table inherits
+    that same structural limitation rather than introducing a new one —
+    see the Phase 1 implementation report for the full discussion.
+
+    `provider` is a free-text field, like EmailMessage.import_source,
+    deliberately not a CheckConstraint: Outlook is a known near-term
+    addition and a value this field doesn't yet accept should never need
+    a schema change to permit, only an application-level change.
+
+    `encrypted_refresh_token` is nullable specifically so disconnect can
+    set it to NULL (never merely flip a status flag while leaving the
+    secret recoverable) — see app/api/routes/project_mailboxes.py's
+    disconnect handler. It is never decrypted or returned by any API
+    response; see app/email_sync/token_crypto.py for the only two
+    functions allowed to touch it.
+
+    `sync_cursor` is Gmail's own historyId (a provider-defined opaque
+    string, not a timestamp) once an initial full sync has completed;
+    NULL means "no successful sync yet, or the stored cursor expired and a
+    fresh full sync is required" (see app/email_sync/orchestrator.py)."""
+
+    __tablename__ = "connected_mailboxes"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('connected', 'needs_reauth', 'disconnected')",
+            name="ck_connected_mailboxes_status",
+        ),
+        UniqueConstraint("project_id", "external_email", name="ux_connected_mailboxes_project_email"),
+        Index("ix_connected_mailboxes_project_id", "project_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    external_email: Mapped[str] = mapped_column(Text, nullable=False)
+    encrypted_refresh_token: Mapped[Optional[str]] = mapped_column(Text)
+    granted_scope: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="connected")
+    sync_cursor: Mapped[Optional[str]] = mapped_column(Text)
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_sync_error: Mapped[Optional[str]] = mapped_column(Text)
+    connected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    project: Mapped["Project"] = relationship()
