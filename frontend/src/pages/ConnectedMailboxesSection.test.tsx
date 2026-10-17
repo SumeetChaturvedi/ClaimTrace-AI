@@ -186,6 +186,37 @@ describe('ConnectedMailboxesSection — sync action', () => {
     await waitFor(() => expect(screen.getByText(/sync again to continue/i)).toBeInTheDocument())
   })
 
+  it('still shows a continuation hint for a partial sync result with zero progress this call', async () => {
+    // Regression test: a partial sync that imported/duplicated/rejected/
+    // skipped nothing in this call (e.g. it was cut short on the very
+    // first message) must never be reported identically to a genuinely
+    // complete, up-to-date sync.
+    listConnectedMailboxesMock.mockResolvedValue([mailbox()])
+    syncConnectedMailboxMock.mockResolvedValue(syncResult({ status: 'partial' }))
+    renderSection()
+    await waitFor(() => expect(screen.getByText('person@example.com')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText(/sync again to continue/i)).toBeInTheDocument())
+    expect(screen.queryByText('No new messages.')).not.toBeInTheDocument()
+  })
+
+  it('surfaces the real stop reason for a partial sync result that was cut short by an error', async () => {
+    // Regression test: SyncResult.error carries the real reason a partial
+    // sync stopped early (as opposed to simply hitting the per-call size
+    // bound) — it must reach the user, not be silently dropped.
+    listConnectedMailboxesMock.mockResolvedValue([mailbox()])
+    syncConnectedMailboxMock.mockResolvedValue(
+      syncResult({ status: 'partial', imported: 1, error: 'Gmail API returned a transient error' }),
+    )
+    renderSection()
+    await waitFor(() => expect(screen.getByText('person@example.com')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /sync now/i }))
+    await waitFor(() => expect(screen.getByText('Gmail API returned a transient error')).toBeInTheDocument())
+    expect(screen.getByText(/sync again to continue/i)).toBeInTheDocument()
+  })
+
   it('surfaces a network/API error from the sync call itself', async () => {
     listConnectedMailboxesMock.mockResolvedValue([mailbox()])
     syncConnectedMailboxMock.mockRejectedValue(new ApiError(0, 'Could not reach the backend.'))

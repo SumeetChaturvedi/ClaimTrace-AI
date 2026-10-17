@@ -90,12 +90,19 @@ export function ConnectedMailboxesSection({ projectId }: { projectId: number | n
         setMailboxActionError('Gmail access needs to be reconnected for this mailbox.')
       } else if (result.status === 'error') {
         setMailboxActionError(result.error ?? 'Sync could not complete.')
-      } else {
+      } else if (result.status === 'partial') {
+        // A partial sync never finished this pass — either it hit the
+        // per-call size bound (benign, result.error is null) or it was cut
+        // short by a real failure partway through (result.error is the
+        // reason). Either way this must never be reported the same as a
+        // completed, up-to-date sync, even when zero messages were
+        // imported/duplicated/rejected/skipped in this call.
         setSyncSummary(
-          parts.length > 0
-            ? `${parts.join(', ')}${result.status === 'partial' ? ' (more messages remain — sync again to continue)' : ''}`
-            : 'No new messages.',
+          `${parts.length > 0 ? parts.join(', ') : 'No new messages yet'} (more messages remain — sync again to continue)`,
         )
+        if (result.error) setMailboxActionError(result.error)
+      } else {
+        setSyncSummary(parts.length > 0 ? parts.join(', ') : 'No new messages.')
       }
       setRefreshToken((t) => t + 1)
     } catch (err) {
