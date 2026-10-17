@@ -16,6 +16,7 @@ import { WorkspaceNav } from './workspace/WorkspaceNav'
 import type { WorkspaceTab } from './workspace/types'
 import { FindingPanel } from './workspace/FindingPanel'
 import { EvidencePanel } from './workspace/EvidencePanel'
+import { EventsPanel } from './workspace/EventsPanel'
 import { DocumentsPanel } from './workspace/DocumentsPanel'
 import { TracePanel } from './workspace/TracePanel'
 import { TimelinePanel } from './workspace/TimelinePanel'
@@ -46,6 +47,7 @@ export function InvestigationWorkspacePage() {
   const { state, refetch } = useInvestigationRecord(id, parsedInvestigationId)
   const [tab, setTab] = useState<WorkspaceTab>('finding')
   const [documentNames, setDocumentNames] = useState<Record<number, string>>({})
+  const [documentTypes, setDocumentTypes] = useState<Record<number, string | null>>({})
   const [documents, setDocuments] = useState<DocumentSummary[] | null>(null)
   const [retrying, setRetrying] = useState(false)
 
@@ -55,9 +57,14 @@ export function InvestigationWorkspacePage() {
   useEffect(() => {
     listAllDocuments()
       .then((docs) => {
-        const map: Record<number, string> = {}
-        for (const d of docs) map[d.id] = d.filename
-        setDocumentNames(map)
+        const names: Record<number, string> = {}
+        const types: Record<number, string | null> = {}
+        for (const d of docs) {
+          names[d.id] = d.filename
+          types[d.id] = d.doc_type
+        }
+        setDocumentNames(names)
+        setDocumentTypes(types)
         setDocuments(docs)
       })
       .catch(() => {
@@ -140,6 +147,9 @@ export function InvestigationWorkspacePage() {
     reasoning_steps: record.reasoning_steps,
     timeline: record.timeline,
     contract_clauses: record.contract_clauses,
+    events: record.events,
+    events_error: record.events_error,
+    events_truncated: record.events_truncated,
   }
 
   return (
@@ -178,6 +188,18 @@ export function InvestigationWorkspacePage() {
                     citations={response.citations}
                     documents={documents}
                     documentNames={documentNames}
+                    projectId={id}
+                    investigationId={record.id}
+                  />
+                )}
+                {tab === 'events' && (
+                  <EventsPanel
+                    events={response.events}
+                    eventsError={response.events_error}
+                    eventsTruncated={response.events_truncated}
+                    citations={response.citations}
+                    documentNames={documentNames}
+                    documentTypes={documentTypes}
                     projectId={id}
                     investigationId={record.id}
                   />

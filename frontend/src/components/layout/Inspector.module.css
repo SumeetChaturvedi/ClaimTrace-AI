@@ -107,6 +107,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+.aiNotice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+}
+
+.dateBasis {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+}
+
 /* Tablet/narrow: Inspector becomes an overlay drawer over the content. */
 @media (max-width: 1024px) {
   .inspector {
