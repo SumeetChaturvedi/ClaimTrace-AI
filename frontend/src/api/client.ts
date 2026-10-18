@@ -23,6 +23,10 @@ import type {
   Project,
   ProjectCreateRequest,
   SyncResult,
+  WhatsAppChatDetail,
+  WhatsAppChatSummary,
+  WhatsAppImportResult,
+  WhatsAppMessageDetail,
 } from './types'
 
 export class ApiError extends Error {
@@ -295,6 +299,65 @@ export function getEmailThread(projectId: number, threadId: number): Promise<Ema
 // tracing a citation back to its message needs no second lookup table.
 export function getEmailMessage(projectId: number, documentId: number): Promise<EmailMessageDetail> {
   return request<EmailMessageDetail>(`/projects/${projectId}/emails/messages/${documentId}`)
+}
+
+// Phase W1: WhatsApp Export Ingestion — project-scoped chat export import
+// and inspection. Mirrors importProjectEmails()'s pattern exactly, except
+// a WhatsApp import is always exactly one file (.txt transcript or .zip
+// export) rather than a batch.
+export async function importWhatsAppExport(projectId: number, file: File): Promise<WhatsAppImportResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  let res: Response
+  try {
+    res = await fetch(`/api/projects/${projectId}/whatsapp/import`, { method: 'POST', body: formData })
+  } catch {
+    throw new ApiError(0, 'Could not reach the backend. Is it running?')
+  }
+
+  if (!res.ok) {
+    let detail = res.statusText
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string') detail = body.detail
+    } catch {
+      // response body wasn't JSON — fall back to statusText
+    }
+    throw new ApiError(res.status, detail)
+  }
+
+  return res.json() as Promise<WhatsAppImportResult>
+}
+
+// GET /projects/{project_id}/whatsapp/chats — every imported WhatsApp
+// chat for this project, most recently imported first.
+export function listWhatsAppChats(projectId: number): Promise<WhatsAppChatSummary[]> {
+  return request<WhatsAppChatSummary[]>(`/projects/${projectId}/whatsapp/chats`)
+}
+
+// GET /projects/{project_id}/whatsapp/chats/{chat_id} — one chat's
+// ordered messages. 404s (project-scoped) exactly like every other
+// project-scoped lookup in this app.
+export function getWhatsAppChat(projectId: number, chatId: number): Promise<WhatsAppChatDetail> {
+  return request<WhatsAppChatDetail>(`/projects/${projectId}/whatsapp/chats/${chatId}`)
+}
+
+// GET /projects/{project_id}/whatsapp/messages/{document_id} — full
+// message detail, keyed by the SAME document_id a Citation already
+// carries, so tracing a citation back to its message needs no second
+// lookup table.
+export function getWhatsAppMessage(projectId: number, documentId: number): Promise<WhatsAppMessageDetail> {
+  return request<WhatsAppMessageDetail>(`/projects/${projectId}/whatsapp/messages/${documentId}`)
+}
+
+// GET /projects/{project_id}/whatsapp/attachments/{attachment_id}/file —
+// serves a preserved WhatsApp media original that has no indexed
+// Document (status='stored_pending_processing'). Mirrors
+// getDocumentFileUrl()'s own "plain URL builder for direct browser use"
+// pattern exactly — not a JSON endpoint.
+export function getWhatsAppAttachmentFileUrl(projectId: number, attachmentId: number): string {
+  return `/api/projects/${projectId}/whatsapp/attachments/${attachmentId}/file`
 }
 
 // backend/app/api/routes/project_mailboxes.py (Phase 1: Gmail Integration).

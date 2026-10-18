@@ -747,3 +747,204 @@ class ConnectedMailbox(Base):
     )
 
     project: Mapped["Project"] = relationship()
+
+
+class WhatsAppChat(Base):
+    """One imported WhatsApp chat export (Phase W1: WhatsApp Export
+    Ingestion) -- the project-scoped conversation/group identity, mirroring
+    EmailThread's own role exactly. `title` is derived only from the
+    uploaded export's own filename (see app/whatsapp_ingestion/pipeline.py)
+    -- a WhatsApp text export carries no analogue of an email Subject
+    header naming the conversation, so nothing here is fabricated from
+    message content.
+
+    New table -- Base.metadata.create_all() (app/db/init_db.py) creates it
+    automatically with no ALTER required, exactly like every other table
+    in this file."""
+
+    __tablename__ = "whatsapp_chats"
+    __table_args__ = (Index("ix_whatsapp_chats_project_id", "project_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title: Mapped[Optional[str]] = mapped_column(Text)
+    source_export_filename: Mapped[str] = mapped_column(Text, nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    project: Mapped["Project"] = relationship()
+    messages: Mapped[list["WhatsAppMessage"]] = relationship(
+        back_populates="chat",
+        order_by="WhatsAppMessage.sequence_index",
+    )
+
+
+class WhatsAppMessage(Base):
+    """One imported WhatsApp message (Phase W1: WhatsApp Export Ingestion).
+
+    Deliberately keyed 1:1 with its own `Document` row via a shared primary
+    key, exactly mirroring EmailMessage's own "narrow join table" pattern
+    (see that class's docstring for the full rationale) -- one ordinary
+    Document per message, never a multi-message Document whose chunk
+    boundaries could span more than one message's text. The message's own
+    text is that Document's extracted text, chunked/embedded/indexed
+    through the EXISTING, completely unmodified app/ingestion/indexing.py
+    pipeline -- this is what lets a WhatsApp-message citation be an
+    ordinary Citation(document_id, chunk_id, ...) with zero schema change
+    to Citation/TimelineEntry/InvestigationResponse, the same seam
+    EMAIL/DOCX already reuse.
+
+    content_hash is the ONLY dedup identity (see
+    app/whatsapp_ingestion/dedup.py's own docstring for why -- a WhatsApp
+    export has no Message-ID analogue at all, unlike email's two-tier
+    scheme). sent_at has NO timezone component (DateTime(timezone=False)):
+    a WhatsApp export's timestamp is the device's own local time with no
+    recorded offset, and storing it as timezone-aware would silently
+    imply a precision that was never actually present in the source."""
+
+    __tablename__ = "whatsapp_messages"
+    __table_args__ = (
+        CheckConstraint(
+            "message_type IN ('text', 'system', 'deleted', 'media')",
+            name="ck_whatsapp_messages_message_type",
+        ),
+        Index("ix_whatsapp_messages_project_id", "project_id"),
+        Index("ix_whatsapp_messages_chat_id", "chat_id"),
+        # The only dedup backstop available (see dedup.py) -- always
+        # enforced, never partial/conditional, since there is no stronger
+        # identity tier a WhatsApp export could ever supply for this to
+        # defer to. Scoped to chat_id, not project_id, so two different
+        # chats sharing an identical (sender, timestamp, text) tuple --
+        # an extraordinary coincidence, but not impossible -- are never
+        # wrongly rejected as duplicates of each other.
+        UniqueConstraint("chat_id", "content_hash", name="ux_whatsapp_messages_chat_content_hash"),
+    )
+
+    # Shared primary key with the owning Document row (see class docstring).
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    chat_id: Mapped[int] = mapped_column(
+        ForeignKey("whatsapp_chats.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # 0-based position within this export -- the one ordering signal that
+    # is always reliable, even when sent_at is ambiguous or entirely
+    # unparseable (see app/whatsapp_ingestion/parsing.py).
+    sequence_index: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # None for a system/group-event message -- never a fabricated
+    # attribution (see parsing.py's own sender-detection docstring).
+    sender_name: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Preserved exactly as exported, even when sent_at below is None --
+    # never discarded just because it couldn't be normalized.
+    raw_timestamp_text: Mapped[str] = mapped_column(Text, nullable=False)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False))
+    # True when day/month ordering could not be disambiguated from the
+    # date alone (see parsing.py's own disambiguation rule) -- surfaced so
+    # the frontend can show the uncertainty rather than implying a false
+    # precision on sent_at.
+    sent_at_ambiguous: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+    message_type: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Dedup identity -- see app/whatsapp_ingestion/dedup.py for exactly
+    # what goes into this hash.
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    document: Mapped["Document"] = relationship()
+    project: Mapped["Project"] = relationship()
+    chat: Mapped["WhatsAppChat"] = relationship(back_populates="messages")
+    media_attachments: Mapped[list["WhatsAppMediaAttachment"]] = relationship(
+        back_populates="message",
+        order_by="WhatsAppMediaAttachment.id",
+        cascade="all, delete-orphan",
+    )
+
+
+class WhatsAppMediaAttachment(Base):
+    """One media file referenced by a WhatsAppMessage (Phase W1: WhatsApp
+    Export Ingestion).
+
+    document_id is populated only for a supported document type (PDF or
+    DOCX) successfully run through the EXISTING, completely unmodified
+    app/ingestion/pipeline.py's ingest_document() -- mirrors
+    EmailAttachment's own document_id contract exactly.
+
+    Unlike EmailAttachment, an UNSUPPORTED-for-indexing media file's bytes
+    are NOT discarded here -- the task's own explicit W1 requirement is to
+    preserve original media bytes even when they can't yet be interpreted
+    (the email-attachment precedent of dropping unsupported bytes is
+    deliberately NOT followed for WhatsApp media). `storage_key`/
+    `detected_extension` locate the preserved original on disk (see
+    app/ingestion/storage.py's save_whatsapp_media) whenever `status` is
+    'processed' or 'stored_pending_processing'; both are None only for
+    'rejected' (failed pre-flight validation, e.g. empty/oversized) where
+    nothing was ever written to disk at all.
+
+    `status` deliberately keeps "the original is safely stored" and
+    "whether it has been interpreted" as separate concerns -- a
+    'stored_pending_processing' image is genuinely available to open/
+    download, it is simply not yet OCR'd/described/transcribed (W2-W4,
+    not this phase); nothing here ever claims understanding that hasn't
+    happened."""
+
+    __tablename__ = "whatsapp_media_attachments"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('processed', 'stored_pending_processing', 'unsupported_format', 'rejected', 'failed')",
+            name="ck_whatsapp_media_attachments_status",
+        ),
+        Index("ix_whatsapp_media_attachments_message_id", "message_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("whatsapp_messages.document_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # Set only when this attachment became a real, indexed Document (see
+    # class docstring) -- the existing Document row, not a duplicate of
+    # its fields.
+    document_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+    )
+
+    # The filename as referenced in the chat export text -- metadata only,
+    # NEVER used to build a filesystem path (see storage.py's
+    # save_whatsapp_media, which always uses a fresh, server-generated key).
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[Optional[str]] = mapped_column(Text)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    processing_error: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Where the preserved original lives on disk, in storage-key form (not
+    # a raw path) -- see app/ingestion/storage.py's whatsapp_media_dir/
+    # save_whatsapp_media. None for 'rejected' (nothing was ever stored).
+    storage_key: Mapped[Optional[str]] = mapped_column(Text)
+    detected_extension: Mapped[Optional[str]] = mapped_column(Text)
+
+    message: Mapped["WhatsAppMessage"] = relationship(back_populates="media_attachments")
+    document: Mapped[Optional["Document"]] = relationship()

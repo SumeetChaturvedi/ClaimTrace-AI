@@ -12,9 +12,11 @@ import { useRevealRefs } from '../lib/useRevealOnScroll'
 import {
   ApiError,
   importProjectEmails,
+  importWhatsAppExport,
   listEmailThreads,
   listInvestigations,
   listProjectDocuments,
+  listWhatsAppChats,
   uploadProjectDocuments,
 } from '../api/client'
 import { useApiQuery } from '../api/useApi'
@@ -24,6 +26,7 @@ import type {
   InvestigationRecord,
   InvestigationStatus,
   ProjectDocumentSummary,
+  WhatsAppChatSummary,
 } from '../api/types'
 import { ConnectedMailboxesSection } from './ConnectedMailboxesSection'
 import styles from './ProjectPage.module.css'
@@ -63,6 +66,10 @@ export function ProjectPage() {
     () => (id === null ? Promise.resolve<EmailThreadSummary[]>([]) : listEmailThreads(id)),
     [id, refreshToken],
   )
+  const whatsappChatsQuery = useApiQuery(
+    () => (id === null ? Promise.resolve<WhatsAppChatSummary[]>([]) : listWhatsAppChats(id)),
+    [id, refreshToken],
+  )
   const motifRef = useRevealRefs<HTMLDivElement>(1, styles.motifVisible)
 
   const [uploading, setUploading] = useState(false)
@@ -74,6 +81,11 @@ export function ProjectPage() {
   const [emailImportSummary, setEmailImportSummary] = useState<string | null>(null)
   const [emailImportError, setEmailImportError] = useState<string | null>(null)
   const emailFileInputRef = useRef<HTMLInputElement>(null)
+
+  const [whatsappImporting, setWhatsappImporting] = useState(false)
+  const [whatsappImportSummary, setWhatsappImportSummary] = useState<string | null>(null)
+  const [whatsappImportError, setWhatsappImportError] = useState<string | null>(null)
+  const whatsappFileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -133,6 +145,56 @@ export function ProjectPage() {
     }
   }
 
+  const handleWhatsAppFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (id === null || !files || files.length === 0) return
+    const file = files[0]
+
+    setWhatsappImporting(true)
+    setWhatsappImportSummary(null)
+    setWhatsappImportError(null)
+    try {
+      const result = await importWhatsAppExport(id, file)
+      const parts: string[] = []
+      if (result.imported > 0) parts.push(`${result.imported} new message${result.imported === 1 ? '' : 's'} imported`)
+      if (result.duplicate > 0) parts.push(`${result.duplicate} already imported`)
+      if (result.attachments_processed > 0) {
+        parts.push(`${result.attachments_processed} attachment${result.attachments_processed === 1 ? '' : 's'} indexed`)
+      }
+      if (result.attachments_pending > 0) {
+        parts.push(`${result.attachments_pending} attachment${result.attachments_pending === 1 ? '' : 's'} preserved (not yet processed)`)
+      }
+      if (result.attachments_unsupported > 0) parts.push(`${result.attachments_unsupported} unsupported attachment${result.attachments_unsupported === 1 ? '' : 's'}`)
+      if (result.attachments_rejected > 0) parts.push(`${result.attachments_rejected} attachment${result.attachments_rejected === 1 ? '' : 's'} rejected`)
+      if (result.attachments_failed > 0) parts.push(`${result.attachments_failed} attachment${result.attachments_failed === 1 ? '' : 's'} failed to process`)
+      // Defensive: tolerate an older/partial API response that omits this
+      // field rather than throwing. An ambiguous attachment was never
+      // attached to anything -- this must never read as a success.
+      const attachmentsAmbiguous = result.attachments_ambiguous ?? 0
+      if (attachmentsAmbiguous > 0) {
+        parts.push(
+          `${attachmentsAmbiguous} attachment${attachmentsAmbiguous === 1 ? '' : 's'} could not be matched (multiple archive files shared the same name)`,
+        )
+      }
+      const summary = parts.length > 0 ? parts.join(', ') : 'No messages were imported.'
+      // Parsing warnings (e.g. an ambiguous or unparseable timestamp)
+      // never imply the import itself failed — appended to the same
+      // success-styled summary, not shown as an error.
+      setWhatsappImportSummary(
+        result.parse_warnings.length > 0
+          ? `${summary}. ${result.parse_warnings.length} parsing warning${result.parse_warnings.length === 1 ? '' : 's'}: ${result.parse_warnings.join('; ')}`
+          : summary,
+      )
+
+      setRefreshToken((t) => t + 1)
+    } catch (err) {
+      setWhatsappImportError(err instanceof ApiError ? err.message : 'Something went wrong during import.')
+    } finally {
+      setWhatsappImporting(false)
+      if (whatsappFileInputRef.current) whatsappFileInputRef.current.value = ''
+    }
+  }
+
   if (id === null) {
     return (
       <AppShell breadcrumb={[{ label: 'Home', to: '/' }, { label: 'Projects', to: '/projects' }, { label: 'Invalid project' }]}>
@@ -153,9 +215,13 @@ export function ProjectPage() {
   // it's already shown, organized into threads, in the Email
   // Correspondence section below, so the Document Register itself shows
   // only genuine non-email documents (uploads and email attachments),
-  // never the same email body twice in two different sections.
+  // never the same email body twice in two different sections. A WhatsApp
+  // message's own body (doc_type='WHATSAPP_MESSAGE') is excluded for the
+  // identical reason — it's already shown in the WhatsApp Chats section.
   const registerDocuments =
-    documentsQuery.status === 'success' ? documentsQuery.data.filter((d) => d.doc_type !== 'EMAIL') : []
+    documentsQuery.status === 'success'
+      ? documentsQuery.data.filter((d) => d.doc_type !== 'EMAIL' && d.doc_type !== 'WHATSAPP_MESSAGE')
+      : []
   const documentCount = documentsQuery.status === 'success' ? registerDocuments.length : undefined
 
   return (
@@ -310,6 +376,55 @@ export function ProjectPage() {
           <ol className={styles.documentRegister}>
             {emailThreadsQuery.data.map((thread, i) => (
               <EmailThreadRow key={thread.id} thread={thread} projectId={id} index={i} />
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <section className={styles.documentsSection}>
+        <div className={styles.sectionRule}>
+          <span className={styles.sectionRuleNodeAlt} aria-hidden="true" />
+          <SectionLabel>
+            WhatsApp Chats
+            {whatsappChatsQuery.status === 'success' && whatsappChatsQuery.data.length > 0
+              ? ` · ${String(whatsappChatsQuery.data.length).padStart(2, '0')}`
+              : ''}
+          </SectionLabel>
+          <span className={styles.sectionRuleLine} aria-hidden="true" />
+          <input
+            ref={whatsappFileInputRef}
+            type="file"
+            accept=".txt,.zip,text/plain,application/zip"
+            className={styles.hiddenInput}
+            onChange={(e) => void handleWhatsAppFileChange(e)}
+            disabled={whatsappImporting}
+          />
+          <Button variant="primary" onClick={() => whatsappFileInputRef.current?.click()} disabled={whatsappImporting}>
+            {whatsappImporting ? 'Importing…' : 'Import WhatsApp Chat'}
+          </Button>
+        </div>
+        <p className={styles.sectionBody}>
+          Import a WhatsApp chat export (.txt, or a .zip export including media) to bring that
+          conversation into this project's record as searchable, citable evidence. This is a
+          manually selected export you provide — ClaimTrace never fetches WhatsApp messages on
+          its own.
+        </p>
+        {whatsappImportSummary && <p className={styles.uploadSummary}>{whatsappImportSummary}</p>}
+        {whatsappImportError && <p className={styles.uploadError}>{whatsappImportError}</p>}
+
+        {whatsappChatsQuery.status === 'loading' && <LoadingState label="Loading WhatsApp chats…" />}
+        {whatsappChatsQuery.status === 'error' && (
+          <ErrorState message={`Could not load WhatsApp chats for this project: ${whatsappChatsQuery.error}`} />
+        )}
+        {whatsappChatsQuery.status === 'success' && whatsappChatsQuery.data.length === 0 && (
+          <p className={styles.emptyDocuments}>
+            <Muted>No WhatsApp chat has been imported into this project yet.</Muted>
+          </p>
+        )}
+        {whatsappChatsQuery.status === 'success' && whatsappChatsQuery.data.length > 0 && (
+          <ol className={styles.documentRegister}>
+            {whatsappChatsQuery.data.map((chat, i) => (
+              <WhatsAppChatRow key={chat.id} chat={chat} projectId={id} index={i} />
             ))}
           </ol>
         )}
@@ -469,6 +584,41 @@ function EmailThreadRow({ thread, projectId, index }: { thread: EmailThreadSumma
               <>
                 <span className={styles.docMetaDot} aria-hidden="true" />
                 <span className={styles.docMetaText}>{formatThreadDate(thread.last_sent_at)}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className={styles.docTrailing}>
+          <span className={styles.registerArrow}>→</span>
+        </div>
+      </Link>
+    </li>
+  )
+}
+
+/** One imported WhatsApp chat — real title/message-count/last-activity
+ * from GET /projects/{id}/whatsapp/chats, in the same register visual
+ * language as EmailThreadRow above. */
+function WhatsAppChatRow({ chat, projectId, index }: { chat: WhatsAppChatSummary; projectId: number; index: number }) {
+  const ordinal = String(index + 1).padStart(3, '0')
+
+  return (
+    <li>
+      <Link
+        to={`/projects/${projectId}/whatsapp/${chat.id}`}
+        className={`${styles.registerRow} ${styles.registerRowOpenable}`}
+      >
+        <span className={styles.registerOrdinal}>{ordinal}</span>
+        <div className={styles.docMain}>
+          <span className={styles.docName}>{chat.title ?? chat.source_export_filename}</span>
+          <div className={styles.docMeta}>
+            <span className={styles.docMetaText}>
+              {chat.message_count} message{chat.message_count === 1 ? '' : 's'}
+            </span>
+            {chat.last_sent_at && (
+              <>
+                <span className={styles.docMetaDot} aria-hidden="true" />
+                <span className={styles.docMetaText}>{formatThreadDate(chat.last_sent_at)}</span>
               </>
             )}
           </div>

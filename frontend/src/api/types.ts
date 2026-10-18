@@ -62,8 +62,20 @@ export interface EmailSourceInfo {
   sent_at: string | null
 }
 
+// Mirrors EmailSourceInfo exactly, for a WhatsApp media attachment
+// (Phase W1: WhatsApp Export Ingestion) -- present only on a document
+// that is itself a successfully-processed WhatsApp attachment.
+export interface WhatsAppSourceInfo {
+  message_document_id: number
+  chat_id: number
+  sender_name: string | null
+  sent_at: string | null
+  sent_at_ambiguous: boolean
+}
+
 export interface ProjectDocumentSummary extends DocumentSummary {
   email_source: EmailSourceInfo | null
+  whatsapp_source: WhatsAppSourceInfo | null
   // NOTE: the backend's DocumentSummary does NOT include project_id.
   // GET /documents (unscoped) returns every document in the database; do
   // not assume a result there belongs to any particular project. The
@@ -329,6 +341,94 @@ export interface EmailMessageDetail {
   plain_body: string | null
   has_html_body: boolean
   attachments: EmailAttachmentSummary[]
+}
+
+// backend/app/api/routes/project_whatsapp.py (Phase W1: WhatsApp Export
+// Ingestion). Mirrors the Email types above exactly -- a WhatsApp message
+// body is an ordinary Document (doc_type: 'WHATSAPP_MESSAGE') whose chunks
+// are ordinary citations; these types are only for the richer
+// WhatsApp-specific metadata (sender/timestamp/chat/attachments) fetched
+// separately when actually opening a message.
+
+export interface WhatsAppImportResult {
+  chat_id: number
+  chat_title: string | null
+  imported: number
+  duplicate: number
+  attachments_processed: number
+  attachments_pending: number
+  attachments_unsupported: number
+  attachments_rejected: number
+  attachments_failed: number
+  // Counted separately from attachments_rejected: more than one file in
+  // the archive shared the basename a message referenced, so ClaimTrace
+  // refused to guess which one was actually attached and used none of
+  // them (see backend/app/whatsapp_ingestion/pipeline.py's
+  // _resolve_media_candidate). Never implies a successful attach.
+  attachments_ambiguous: number
+  // Parsing warnings, including ambiguous/unparseable timestamps -- never
+  // silently dropped; a successful import can still carry these.
+  parse_warnings: string[]
+}
+
+export interface WhatsAppChatSummary {
+  id: number
+  title: string | null
+  source_export_filename: string
+  message_count: number
+  first_sent_at: string | null
+  last_sent_at: string | null
+  imported_at: string
+}
+
+export interface WhatsAppMessageSummary {
+  document_id: number
+  sequence_index: number
+  sender_name: string | null
+  // Exactly as exported (e.g. "25/03/24, 10:00:00") -- always shown
+  // alongside/sent_at instead of it, since sent_at can be null or
+  // ambiguous.
+  raw_timestamp_text: string
+  sent_at: string | null
+  sent_at_ambiguous: boolean
+  message_type: 'text' | 'system' | 'deleted' | 'media'
+  status: 'uploaded' | 'processing' | 'ready' | 'failed'
+  attachment_count: number
+}
+
+export interface WhatsAppChatDetail {
+  id: number
+  title: string | null
+  messages: WhatsAppMessageSummary[]
+}
+
+export interface WhatsAppMediaAttachmentSummary {
+  id: number
+  filename: string
+  content_type: string | null
+  size_bytes: number
+  // 'processed' (a real PDF/DOCX Document was created) | 'stored_pending_
+  // processing' (original bytes preserved, not yet interpreted -- never
+  // shown as "understood") | 'unsupported_format' | 'rejected' | 'failed'
+  status: 'processed' | 'stored_pending_processing' | 'unsupported_format' | 'rejected' | 'failed'
+  document_id: number | null
+  processing_error: string | null
+}
+
+export interface WhatsAppMessageDetail {
+  document_id: number
+  chat_id: number
+  sequence_index: number
+  sender_name: string | null
+  raw_timestamp_text: string
+  sent_at: string | null
+  sent_at_ambiguous: boolean
+  message_type: 'text' | 'system' | 'deleted' | 'media'
+  status: 'uploaded' | 'processing' | 'ready' | 'failed'
+  processing_error: string | null
+  doc_date: string | null
+  text: string | null
+  attachments: WhatsAppMediaAttachmentSummary[]
 }
 
 // backend/app/api/routes/project_mailboxes.py (Phase 1: Gmail Integration).

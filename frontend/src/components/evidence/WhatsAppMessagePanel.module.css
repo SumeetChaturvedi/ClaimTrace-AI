@@ -1,0 +1,73 @@
+.panelContent {
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  overflow-y: auto;
+  height: 100%;
+}
+
+.headerList {
+  margin: var(--space-2) 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.headerList dt {
+  color: var(--color-text-muted);
+}
+
+.headerList dd {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.ambiguousNote {
+  color: var(--color-amber-text);
+  font-size: var(--text-xs);
+}
+
+.excerptSection,
+.bodySection,
+.attachmentsSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--border-color);
+}
+
+.attachmentList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.attachmentRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.attachmentLink {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+.attachmentLink:hover {
+  text-decoration: underline;
+}
+
+.attachmentName {
+  color: var(--color-text-secondary);
+}

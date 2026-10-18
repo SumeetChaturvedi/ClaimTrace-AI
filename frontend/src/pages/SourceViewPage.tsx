@@ -14,6 +14,7 @@ import { listAllDocuments, fetchDocumentFileBlobUrl, getDocumentFileUrl } from '
 import type { DocumentSummary } from '../api/types'
 import { isDocxFilename, isEmailFilename, citationLocationLabel } from '../lib/documentFormat'
 import { EmailMessagePanel } from '../components/evidence/EmailMessagePanel'
+import { WhatsAppMessagePanel } from '../components/evidence/WhatsAppMessagePanel'
 import styles from './SourceViewPage.module.css'
 
 type PdfState = { status: 'checking' } | { status: 'available'; blobUrl: string } | { status: 'unavailable' }
@@ -214,6 +215,10 @@ export function SourceViewPage() {
   const documentLabel = document?.filename ?? `Document #${citation.document_id}`
   const isDocx = isDocxFilename(document?.filename)
   const isEmail = isEmailFilename(document?.filename)
+  // A WhatsApp message's Document has a synthetic filename -- doc_type is
+  // the real signal, same reasoning as DocumentSourceViewPage.tsx's own
+  // isWhatsApp check.
+  const isWhatsApp = document?.doc_type === 'WHATSAPP_MESSAGE'
 
   // The page-position fragment is appended to the local blob URL, not the
   // network URL — Chrome/Firefox/Safari's native PDF viewer honors
@@ -232,9 +237,11 @@ export function SourceViewPage() {
       <p className={styles.intro}>
         {isEmail
           ? "This is the email message ClaimTrace indexed as evidence, including the exact cited passage from its body."
-          : isDocx
-            ? 'This is the extracted passage ClaimTrace indexed from the original Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view its full formatted content.'
-            : 'This is the original source document for the cited evidence. It opens at the page ClaimTrace cited, where known.'}
+          : isWhatsApp
+            ? 'This is the WhatsApp message ClaimTrace indexed as evidence, including the exact cited passage from its text.'
+            : isDocx
+              ? 'This is the extracted passage ClaimTrace indexed from the original Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view its full formatted content.'
+              : 'This is the original source document for the cited evidence. It opens at the page ClaimTrace cited, where known.'}
       </p>
 
       {isEmail ? (
@@ -257,6 +264,28 @@ export function SourceViewPage() {
             <LinkButton to={getDocumentFileUrl(id, citation.document_id)} variant="secondary" reloadDocument>
               Download original .eml
             </LinkButton>
+            <LinkButton to={`/projects/${id}/investigations/${investigationId}`} variant="secondary" className={styles.backLink}>
+              ← Back to investigation
+            </LinkButton>
+          </Panel>
+        </div>
+      ) : isWhatsApp ? (
+        <div className={styles.grid}>
+          <Panel className={styles.pdfPanel}>
+            <WhatsAppMessagePanel projectId={id} documentId={citation.document_id} highlightExcerpt={citation.chunk_text} />
+          </Panel>
+          <Panel className={styles.metaPanel}>
+            <SectionLabel>Source</SectionLabel>
+            <dl className={styles.metaList}>
+              <div>
+                <dt>Passage reference</dt>
+                <dd>{citation.chunk_id}</dd>
+              </div>
+              <div>
+                <dt>Relevance score</dt>
+                <dd>{citation.relevance_score.toFixed(2)}</dd>
+              </div>
+            </dl>
             <LinkButton to={`/projects/${id}/investigations/${investigationId}`} variant="secondary" className={styles.backLink}>
               ← Back to investigation
             </LinkButton>

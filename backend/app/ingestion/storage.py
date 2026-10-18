@@ -85,3 +85,22 @@ def save_extracted_text(storage_root: Path, project_id: int, storage_key: str, f
     destination = text_storage_dir(storage_root, project_id) / f"{storage_key}.txt"
     destination.write_text(full_text, encoding="utf-8")
     return destination
+
+
+def whatsapp_media_dir(storage_root: Path, project_id: int) -> Path:
+    path = storage_root / "whatsapp_media" / str(project_id)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def save_whatsapp_media(storage_root: Path, project_id: int, storage_key: str, content: bytes, extension: str) -> Path:
+    """Persist raw WhatsApp media bytes (Phase W1: WhatsApp Export
+    Ingestion) under its own tree, mirroring save_eml()/save_pdf()'s own
+    pattern exactly. `extension` is the SERVER-DETECTED file type (see
+    app/whatsapp_ingestion/pipeline.py's content-sniffing), never the
+    original filename's own extension taken on faith -- the original
+    filename is preserved only as metadata (WhatsAppMediaAttachment.
+    filename), never used to build a filesystem path."""
+    destination = whatsapp_media_dir(storage_root, project_id) / f"{storage_key}{extension}"
+    destination.write_bytes(content)
+    return destination

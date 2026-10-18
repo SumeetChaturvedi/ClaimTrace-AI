@@ -13,6 +13,7 @@ import { getProjectDocument, fetchDocumentFileBlobUrl, getDocumentFileUrl } from
 import type { ProjectDocumentSummary } from '../api/types'
 import { isDocxFilename, isEmailFilename } from '../lib/documentFormat'
 import { EmailMessagePanel } from '../components/evidence/EmailMessagePanel'
+import { WhatsAppMessagePanel } from '../components/evidence/WhatsAppMessagePanel'
 import styles from './SourceViewPage.module.css'
 
 type PdfState = { status: 'checking' } | { status: 'available'; blobUrl: string } | { status: 'unavailable' }
@@ -155,18 +156,26 @@ export function DocumentSourceViewPage() {
   }
   const isDocx = isDocxFilename(document.filename)
   const isEmail = isEmailFilename(document.filename)
+  // A WhatsApp message's Document has a synthetic, non-distinctive
+  // filename (e.g. "chat title — message 3.txt"), unlike .eml's reliable
+  // extension -- doc_type is the real signal here, checked directly since
+  // the full ProjectDocumentSummary is already in hand (same seam
+  // isEmail/isDocx already use once fetched).
+  const isWhatsApp = document.doc_type === 'WHATSAPP_MESSAGE'
   const pdfHref = pdfState.status === 'available' ? pdfState.blobUrl : null
 
   return (
     <AppShell key={docId} breadcrumb={[...breadcrumbBase, projectCrumb, { label: document.filename }]} wide>
-      <p className={styles.kicker}>{isEmail ? 'Email Message' : 'Source Document'}</p>
+      <p className={styles.kicker}>{isEmail ? 'Email Message' : isWhatsApp ? 'WhatsApp Message' : 'Source Document'}</p>
       <h1 className={styles.title}>{document.filename}</h1>
       <p className={styles.intro}>
         {isEmail
           ? 'This email message was imported into this project and indexed as evidence, including any attachments ClaimTrace could process.'
-          : isDocx
-            ? "This is a Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view it."
-            : "This is the original document as stored in this project's record, opened at its first page. There is no cited passage here — this document was opened directly from the project's document register, not from an investigation's evidence."}
+          : isWhatsApp
+            ? 'This WhatsApp message was imported from a chat export and indexed as evidence, including any attachments ClaimTrace could process.'
+            : isDocx
+              ? "This is a Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view it."
+              : "This is the original document as stored in this project's record, opened at its first page. There is no cited passage here — this document was opened directly from the project's document register, not from an investigation's evidence."}
       </p>
 
       {isEmail ? (
@@ -187,6 +196,26 @@ export function DocumentSourceViewPage() {
             <LinkButton to={getDocumentFileUrl(id, docId)} variant="secondary" reloadDocument>
               Download original .eml
             </LinkButton>
+            <LinkButton to={`/projects/${id}`} variant="secondary" className={styles.backLink}>
+              ← Back to project
+            </LinkButton>
+          </Panel>
+        </div>
+      ) : isWhatsApp ? (
+        <div className={styles.grid}>
+          <Panel className={styles.pdfPanel}>
+            <WhatsAppMessagePanel projectId={id} documentId={docId} />
+          </Panel>
+          <Panel className={styles.metaPanel}>
+            <SectionLabel>Document</SectionLabel>
+            <dl className={styles.metaList}>
+              <div>
+                <dt>Status</dt>
+                <dd>
+                  <DocumentStatusBadge status={document.status} />
+                </dd>
+              </div>
+            </dl>
             <LinkButton to={`/projects/${id}`} variant="secondary" className={styles.backLink}>
               ← Back to project
             </LinkButton>
@@ -251,6 +280,17 @@ export function DocumentSourceViewPage() {
                 <dd>
                   <Link to={`/projects/${id}/emails/${document.email_source.thread_id}`}>
                     {document.email_source.subject ?? '(no subject)'}
+                  </Link>
+                </dd>
+              </div>
+            )}
+            {document.whatsapp_source && (
+              <div>
+                <dt>From WhatsApp message</dt>
+                <dd>
+                  <Link to={`/projects/${id}/documents/${document.whatsapp_source.message_document_id}/source`}>
+                    {document.whatsapp_source.sender_name ?? '(unknown sender)'}
+                    {document.whatsapp_source.sent_at ? ` — ${document.whatsapp_source.sent_at}` : ''}
                   </Link>
                 </dd>
               </div>

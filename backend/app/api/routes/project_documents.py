@@ -27,7 +27,14 @@ from sqlalchemy.orm import Session
 
 from app.api.routes.documents import DocumentSummary
 from app.config import Settings, get_settings
-from app.db.models import Document, EmailAttachment, EmailMessage, Project
+from app.db.models import (
+    Document,
+    EmailAttachment,
+    EmailMessage,
+    Project,
+    WhatsAppMediaAttachment,
+    WhatsAppMessage,
+)
 from app.db.session import get_db
 from app.ingestion.pipeline import IngestionError, ingest_document
 
@@ -49,14 +56,30 @@ class EmailSourceInfo(BaseModel):
     sent_at: datetime | None
 
 
+class WhatsAppSourceInfo(BaseModel):
+    """Present only on a document that is a real, successfully-processed
+    WHATSAPP MEDIA ATTACHMENT (see WhatsAppMediaAttachment.document_id) —
+    the covering message it came from. Mirrors EmailSourceInfo exactly,
+    following the same existing email-attachment provenance pattern
+    (Phase W1: WhatsApp Export Ingestion)."""
+
+    message_document_id: int
+    chat_id: int
+    sender_name: str | None
+    sent_at: datetime | None
+    sent_at_ambiguous: bool
+
+
 class ProjectDocumentSummary(DocumentSummary):
-    """DocumentSummary plus the project-scoped email_source enrichment —
-    deliberately NOT added to the shared, project-agnostic DocumentSummary
-    in app/api/routes/documents.py (that route has no project_id to scope
-    the join by, and keeping this field project-scoped avoids the global
-    /documents route needing to know about email attachments at all)."""
+    """DocumentSummary plus the project-scoped email_source/whatsapp_source
+    enrichment — deliberately NOT added to the shared, project-agnostic
+    DocumentSummary in app/api/routes/documents.py (that route has no
+    project_id to scope the join by, and keeping these fields
+    project-scoped avoids the global /documents route needing to know
+    about email/WhatsApp attachments at all)."""
 
     email_source: EmailSourceInfo | None = None
+    whatsapp_source: WhatsAppSourceInfo | None = None
 
 
 def _email_sources_for(db: Session, project_id: int, document_ids: list[int]) -> dict[int, EmailSourceInfo]:
@@ -99,6 +122,41 @@ def _email_sources_for(db: Session, project_id: int, document_ids: list[int]) ->
     }
 
 
+def _whatsapp_sources_for(db: Session, project_id: int, document_ids: list[int]) -> dict[int, WhatsAppSourceInfo]:
+    """Mirrors _email_sources_for exactly, for WhatsApp media attachments
+    -- a single join, scoped to this project via WhatsAppMessage.project_id,
+    keyed by the ATTACHMENT's own document_id."""
+    if not document_ids:
+        return {}
+
+    rows = db.execute(
+        select(
+            WhatsAppMediaAttachment.document_id,
+            WhatsAppMessage.document_id,
+            WhatsAppMessage.chat_id,
+            WhatsAppMessage.sender_name,
+            WhatsAppMessage.sent_at,
+            WhatsAppMessage.sent_at_ambiguous,
+        )
+        .join(WhatsAppMessage, WhatsAppMessage.document_id == WhatsAppMediaAttachment.message_id)
+        .where(
+            WhatsAppMediaAttachment.document_id.in_(document_ids),
+            WhatsAppMessage.project_id == project_id,
+        )
+    ).all()
+
+    return {
+        attachment_document_id: WhatsAppSourceInfo(
+            message_document_id=message_document_id,
+            chat_id=chat_id,
+            sender_name=sender_name,
+            sent_at=sent_at,
+            sent_at_ambiguous=sent_at_ambiguous,
+        )
+        for attachment_document_id, message_document_id, chat_id, sender_name, sent_at, sent_at_ambiguous in rows
+    }
+
+
 def _get_project_or_404(db: Session, project_id: int) -> Project:
     project = db.get(Project, project_id)
     if project is None:
@@ -134,9 +192,15 @@ def list_project_documents(project_id: int, db: Session = Depends(get_db)) -> li
             select(Document).where(Document.project_id == project_id).order_by(Document.uploaded_at.desc())
         )
     )
-    email_sources = _email_sources_for(db, project_id, [d.id for d in documents])
+    document_ids = [d.id for d in documents]
+    email_sources = _email_sources_for(db, project_id, document_ids)
+    whatsapp_sources = _whatsapp_sources_for(db, project_id, document_ids)
     return [
-        ProjectDocumentSummary(**DocumentSummary.model_validate(d).model_dump(), email_source=email_sources.get(d.id))
+        ProjectDocumentSummary(
+            **DocumentSummary.model_validate(d).model_dump(),
+            email_source=email_sources.get(d.id),
+            whatsapp_source=whatsapp_sources.get(d.id),
+        )
         for d in documents
     ]
 
@@ -187,6 +251,9 @@ def get_project_document(project_id: int, document_id: int, db: Session = Depend
     if document is None or document.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     email_sources = _email_sources_for(db, project_id, [document_id])
+    whatsapp_sources = _whatsapp_sources_for(db, project_id, [document_id])
     return ProjectDocumentSummary(
-        **DocumentSummary.model_validate(document).model_dump(), email_source=email_sources.get(document_id)
+        **DocumentSummary.model_validate(document).model_dump(),
+        email_source=email_sources.get(document_id),
+        whatsapp_source=whatsapp_sources.get(document_id),
     )
