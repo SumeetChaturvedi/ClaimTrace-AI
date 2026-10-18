@@ -17,6 +17,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -26,6 +27,7 @@ from app.db.models import Document, EmailAttachment, EmailMessage, EmailThread, 
 from app.db.session import get_db
 from app.email_ingestion.pipeline import EmailImportOutcome, ingest_email_bytes
 from app.email_ingestion.zip_import import ZipImportError, extract_eml_entries
+from app.ingestion.storage import image_storage_dir
 
 router = APIRouter(prefix="/projects/{project_id}/emails", tags=["emails"])
 
@@ -328,4 +330,54 @@ def get_email_message(
             )
             for a in attachments
         ],
+    )
+
+
+# -- Preserved-image file serving (Phase W2.0) -----------------------------
+#
+# A PDF/DOCX attachment (document_id set) is already served by the
+# existing, unmodified GET /projects/{project_id}/documents/{document_id}/file
+# endpoint (app/api/routes/document_file.py) -- reused as-is, never
+# duplicated. This endpoint exists ONLY for an image attachment preserved
+# as bytes with no Document row at all (status='stored_pending_processing'
+# -- see app/email_ingestion/pipeline.py's _ingest_image_attachment),
+# located by its own storage_key/detected_extension rather than anything
+# derived from a Document. Mirrors
+# app/api/routes/project_whatsapp.py's get_whatsapp_attachment_file
+# exactly.
+
+
+@router.get("/attachments/{attachment_id}/file")
+def get_email_attachment_file(
+    project_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    """Serve the preserved original bytes of one email image attachment
+    that has no indexed Document (status='stored_pending_processing').
+    Project scope is verified via the owning message's own project_id —
+    never trusted from the URL alone. Content-type is served from the
+    attachment's own server-detected `content_type` (real file-signature
+    sniffing at import time, see app/ingestion/image_validation.py), never
+    guessed from the filename at serve time. 404s uniformly for "doesn't
+    exist", "belongs to a different project", and "no preserved original
+    to serve" (e.g. a PDF/DOCX or 'unsupported_format'/'rejected'
+    attachment that was never stored under this path)."""
+    _get_project_or_404(db, project_id)
+
+    attachment = db.get(EmailAttachment, attachment_id)
+    if attachment is None or attachment.message.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Email attachment not found")
+    if not attachment.storage_key or not attachment.detected_extension:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No preserved original file for this attachment")
+
+    file_path = image_storage_dir(settings.storage_root, project_id) / f"{attachment.storage_key}{attachment.detected_extension}"
+    if not file_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preserved original file is missing")
+
+    return FileResponse(
+        path=file_path,
+        media_type=attachment.content_type or "application/octet-stream",
+        filename=attachment.filename,
     )

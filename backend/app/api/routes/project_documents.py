@@ -35,7 +35,9 @@ from app.db.models import (
     WhatsAppMediaAttachment,
     WhatsAppMessage,
 )
+from app.api.routes.project_images import ProjectImageAssetSummary, ingest_project_image, to_project_image_summary
 from app.db.session import get_db
+from app.ingestion.image_validation import sniff_image_signature
 from app.ingestion.pipeline import IngestionError, ingest_document
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
@@ -177,6 +179,12 @@ class RejectedUpload(BaseModel):
 class UploadResponse(BaseModel):
     documents: list[DocumentSummary]
     rejected: list[RejectedUpload]
+    # Phase W2.0 (Shared Image Preservation Foundation): a recognized
+    # image in the same upload batch, preserved rather than run through
+    # ingest_document() -- additive field, old clients that don't read it
+    # are unaffected; existing PDF/DOCX behavior and the `documents`/
+    # `rejected` fields are completely unchanged by its presence.
+    images: list[ProjectImageAssetSummary] = []
 
 
 @router.get("", response_model=list[ProjectDocumentSummary])
@@ -212,21 +220,44 @@ async def upload_project_documents(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> UploadResponse:
-    """Upload one or more PDF or DOCX files to this project. Each file is
-    processed independently through the real, unmodified ingestion pipeline
-    — a corrupted or invalid file in the batch doesn't block the rest. A file
-    that fails pre-flight validation (unsupported file type, empty, oversized) is
-    reported under `rejected` with no Document row created; anything past
-    that point always gets a persisted Document, with `status` reflecting
-    the real outcome ('ready' or 'failed') — never silently dropped."""
+    """Upload one or more PDF, DOCX, or image (JPEG/PNG/GIF/WEBP) files to
+    this project. Each file is processed independently through the real,
+    unmodified ingestion pipeline — a corrupted or invalid file in the batch
+    doesn't block the rest. A file that fails pre-flight validation
+    (unsupported file type, empty, oversized) is reported under `rejected`
+    with no Document row created; anything past that point always gets a
+    persisted Document, with `status` reflecting the real outcome ('ready'
+    or 'failed') — never silently dropped.
+
+    Phase W2.0 (Shared Image Preservation Foundation): a file is routed to
+    image preservation (reported under `images`, never `documents` or
+    `rejected`) ONLY when its own bytes sniff as a recognized image
+    signature (see app/ingestion/image_validation.py) — never by filename
+    extension or the upload's claimed content type. Everything else
+    (including a real but corrupt/oversized image, which is still reported
+    under `images` with status='rejected' and a specific reason) falls
+    through to the existing ingest_document() path exactly as before."""
     _get_project_or_404(db, project_id)
 
     documents: list[DocumentSummary] = []
     rejected: list[RejectedUpload] = []
+    images: list[ProjectImageAssetSummary] = []
 
     for upload in files:
         name = upload.filename or "unnamed.pdf"
         content = await upload.read()
+
+        if sniff_image_signature(content) is not None:
+            image_asset = ingest_project_image(
+                session=db,
+                storage_root=settings.storage_root,
+                project_id=project_id,
+                filename=name,
+                content=content,
+            )
+            images.append(to_project_image_summary(image_asset))
+            continue
+
         try:
             document = ingest_document(
                 session=db,
@@ -241,7 +272,7 @@ async def upload_project_documents(
 
         documents.append(DocumentSummary.model_validate(document))
 
-    return UploadResponse(documents=documents, rejected=rejected)
+    return UploadResponse(documents=documents, rejected=rejected, images=images)
 
 
 @router.get("/{document_id}", response_model=ProjectDocumentSummary)

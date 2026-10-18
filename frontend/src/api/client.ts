@@ -22,6 +22,7 @@ import type {
   DocumentUploadResponse,
   Project,
   ProjectCreateRequest,
+  ProjectImageAssetSummary,
   SyncResult,
   WhatsAppChatDetail,
   WhatsAppChatSummary,
@@ -301,6 +302,15 @@ export function getEmailMessage(projectId: number, documentId: number): Promise<
   return request<EmailMessageDetail>(`/projects/${projectId}/emails/messages/${documentId}`)
 }
 
+// Phase W2.0 (Shared Image Preservation Foundation): the file URL for a
+// preserved email image attachment (status 'stored_pending_processing')
+// that has no indexed Document to serve it through. A plain string
+// builder, not a fetch -- used directly as an <a href>/<img src>, mirrors
+// getWhatsAppAttachmentFileUrl below exactly.
+export function getEmailAttachmentFileUrl(projectId: number, attachmentId: number): string {
+  return `/api/projects/${projectId}/emails/attachments/${attachmentId}/file`
+}
+
 // Phase W1: WhatsApp Export Ingestion — project-scoped chat export import
 // and inspection. Mirrors importProjectEmails()'s pattern exactly, except
 // a WhatsApp import is always exactly one file (.txt transcript or .zip
@@ -358,6 +368,19 @@ export function getWhatsAppMessage(projectId: number, documentId: number): Promi
 // pattern exactly — not a JSON endpoint.
 export function getWhatsAppAttachmentFileUrl(projectId: number, attachmentId: number): string {
   return `/api/projects/${projectId}/whatsapp/attachments/${attachmentId}/file`
+}
+
+// Phase W2.0 (Shared Image Preservation Foundation): directly-uploaded
+// project images. Upload itself reuses uploadProjectDocuments() above
+// (the same POST /projects/{project_id}/documents endpoint now also
+// accepts recognized images, reported under DocumentUploadResponse.images)
+// — these two are only for listing/viewing what was uploaded.
+export function listProjectImages(projectId: number): Promise<ProjectImageAssetSummary[]> {
+  return request<ProjectImageAssetSummary[]>(`/projects/${projectId}/images`)
+}
+
+export function getProjectImageFileUrl(projectId: number, imageId: number): string {
+  return `/api/projects/${projectId}/images/${imageId}/file`
 }
 
 // backend/app/api/routes/project_mailboxes.py (Phase 1: Gmail Integration).

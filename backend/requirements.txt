@@ -17,6 +17,26 @@ pymupdf
 # parsing is implemented here.
 python-docx
 
+# Image preservation (Phase W2.0: Shared Image Preservation Foundation) —
+# app/ingestion/image_validation.py uses Pillow for real content-signature
+# decoding, dimension/pixel-count introspection, and decompression-bomb
+# protection on Gmail and direct-upload image attachments (see
+# app/email_ingestion/pipeline.py and app/api/routes/project_images.py).
+# WhatsApp image attachments are NOT covered by this module -- they go
+# through app/whatsapp_ingestion/pipeline.py's own, separate
+# _detect_media_type detection, which never imports Pillow and has no
+# decompression-bomb guard of its own. Pillow was present in the dev
+# environment only incidentally (via an unrelated, otherwise-undeclared
+# package) until this phase; declared explicitly now so a clean
+# `pip install -r requirements.txt` actually has it — without it, the
+# backend fails to import at all (app/api/router.py unconditionally
+# registers the image-upload routes). Constrained to the major version
+# already tested against (12.3.0) rather than left fully unpinned like
+# most of this file, since Pillow's own decompression-bomb API
+# (Image.DecompressionBombError/-Warning, see image_validation.py) is the
+# exact behavior this phase depends on and verifies.
+pillow>=12.3,<13
+
 # Chunking & embeddings (Milestone 0C)
 sentence-transformers
 

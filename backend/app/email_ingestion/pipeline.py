@@ -33,10 +33,11 @@ from app.email_ingestion.dedup import (
 )
 from app.email_ingestion.parsing import EmailParseError, ParsedAttachment, ParsedEmail, parse_eml
 from app.email_ingestion.threading import resolve_thread
+from app.ingestion.image_validation import sniff_image_signature, validate_image
 from app.ingestion.indexing import index_document
 from app.ingestion.metadata import extract_referenced_ids
 from app.ingestion.pipeline import IngestionError, ingest_document
-from app.ingestion.storage import new_storage_key, save_eml, save_extracted_text
+from app.ingestion.storage import new_storage_key, save_eml, save_extracted_text, save_image
 
 logger = logging.getLogger(__name__)
 
@@ -332,14 +333,43 @@ def _ingest_attachment(
 ) -> EmailAttachment:
     """Process one attachment. A supported type (PDF/DOCX) goes through the
     EXISTING, unmodified ingest_document() — it becomes a real, indexed
-    Document, citable and viewable exactly like any standalone upload. An
-    unsupported type is recorded (filename/content_type/size/hash) and
-    explicitly marked as such; its bytes are not persisted, so no second,
-    parallel storage/extraction system is built for formats this phase
-    doesn't otherwise support (see module docstring)."""
+    Document, citable and viewable exactly like any standalone upload.
+
+    Phase W2.0 (Shared Image Preservation Foundation): a recognized image
+    (JPEG/PNG/GIF/WEBP, detected by real content signature — see
+    app/ingestion/image_validation.py — never by this attachment's
+    filename extension or its own untrusted MIME Content-Type header) is
+    preserved as bytes via _ingest_image_attachment below, mirroring
+    app/whatsapp_ingestion/pipeline.py's 'stored_pending_processing'
+    contract: the original is now genuinely available to open/download,
+    but this phase makes no claim it has been OCR'd/described/indexed.
+
+    Any other unsupported type (including a non-image attachment, or one
+    whose declared filename extension isn't PDF/DOCX/a recognized image)
+    is recorded (filename/content_type/size/hash) and explicitly marked as
+    such; its bytes are not persisted, exactly as before this phase — no
+    second, parallel storage/extraction system is built for formats this
+    phase doesn't otherwise support (see module docstring)."""
     content_hash = hashlib.sha256(attachment.content).hexdigest()
     size_bytes = len(attachment.content)
     extension = Path(attachment.filename).suffix.lower()
+
+    # Checked by real content signature BEFORE the claimed extension, even
+    # when that extension looks like a "supported" .pdf/.docx -- per this
+    # phase's own explicit requirement to detect by content, never by a
+    # filename or MIME type an attacker (or a simple naming mistake)
+    # fully controls. A genuine PDF/DOCX never collides with a JPEG/PNG/
+    # GIF/WEBP signature, so this never misroutes real PDF/DOCX content.
+    if sniff_image_signature(attachment.content) is not None:
+        return _ingest_image_attachment(
+            session=session,
+            storage_root=storage_root,
+            project_id=project_id,
+            message_id=message_id,
+            attachment=attachment,
+            content_hash=content_hash,
+            size_bytes=size_bytes,
+        )
 
     if extension not in _SUPPORTED_ATTACHMENT_EXTENSIONS:
         row = EmailAttachment(
@@ -391,4 +421,84 @@ def _ingest_attachment(
     )
     session.add(row)
     session.flush()
+    return row
+
+
+def _ingest_image_attachment(
+    *,
+    session: Session,
+    storage_root: Path,
+    project_id: int,
+    message_id: int,
+    attachment: ParsedAttachment,
+    content_hash: str,
+    size_bytes: int,
+) -> EmailAttachment:
+    """Phase W2.0 (Shared Image Preservation Foundation): preserve one
+    recognized-image attachment's original bytes, or record a clear
+    rejection reason if it only looked like an image by signature but
+    failed real validation (corrupt, oversized, or excessive dimensions)
+    — never silently treated as a plain 'unsupported_format' in that
+    case, since the real reason is more specific and more useful than
+    that.
+
+    Mirrors app/whatsapp_ingestion/pipeline.py's own raw-media branch of
+    _ingest_media_attachment: the attachment row's own commit is wrapped
+    in try/except so a failure after the file is already written deletes
+    that now-orphaned file (exclusively owned by this row, under its own
+    freshly-generated storage_key — never a previously committed or
+    shared asset) rather than leaving it untracked on disk."""
+    result = validate_image(attachment.content)
+    if not result.valid:
+        row = EmailAttachment(
+            message_id=message_id,
+            document_id=None,
+            filename=attachment.filename,
+            content_type=attachment.content_type,
+            size_bytes=size_bytes,
+            content_hash=content_hash,
+            status="rejected",
+            processing_error=result.error,
+        )
+        session.add(row)
+        session.flush()
+        return row
+
+    storage_key = new_storage_key(attachment.filename)
+    file_path = save_image(storage_root, project_id, storage_key, attachment.content, result.extension)
+    row = EmailAttachment(
+        message_id=message_id,
+        document_id=None,
+        filename=attachment.filename,
+        content_type=result.content_type,
+        size_bytes=size_bytes,
+        content_hash=content_hash,
+        status="stored_pending_processing",
+        processing_error=None,
+        storage_key=storage_key,
+        detected_extension=result.extension,
+        width_px=result.width,
+        height_px=result.height,
+    )
+    session.add(row)
+    try:
+        session.commit()
+    except Exception as exc:  # noqa: BLE001 -- compensating cleanup for the file just written above
+        session.rollback()
+        file_path.unlink(missing_ok=True)
+        logger.warning(
+            "Email image attachment commit failed after writing %s; removed the now-orphaned file: %s",
+            file_path,
+            exc,
+        )
+        return EmailAttachment(
+            message_id=message_id,
+            document_id=None,
+            filename=attachment.filename,
+            content_type=result.content_type,
+            size_bytes=size_bytes,
+            content_hash=content_hash,
+            status="failed",
+            processing_error=str(exc),
+        )
     return row

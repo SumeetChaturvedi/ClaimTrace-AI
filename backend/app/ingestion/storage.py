@@ -79,6 +79,36 @@ def save_eml(storage_root: Path, project_id: int, storage_key: str, content: byt
     return destination
 
 
+def image_storage_dir(storage_root: Path, project_id: int) -> Path:
+    path = storage_root / "images" / str(project_id)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def save_image(storage_root: Path, project_id: int, storage_key: str, content: bytes, extension: str) -> Path:
+    """Persist raw image bytes (Phase W2.0: Shared Image Preservation
+    Foundation), source-neutral: used by Gmail image attachments
+    (app/email_ingestion/pipeline.py) and direct project image uploads
+    (app/api/routes/project_images.py) alike, in its own images/ tree --
+    mirrors save_eml()/save_pdf()/save_whatsapp_media()'s own pattern
+    exactly. Deliberately NOT used by app/whatsapp_ingestion/pipeline.py,
+    which already has its own, already-reviewed save_whatsapp_media() and
+    whatsapp_media/ tree from Phase W1; this function exists for the two
+    sources that had no such preservation path before this phase, not to
+    replace one that already works.
+
+    `extension` is the SERVER-DETECTED file type (see
+    app/ingestion/image_validation.py's validate_image), never the
+    original filename's own extension taken on faith -- the original
+    filename is preserved only as metadata on the owning row, never used
+    to build a filesystem path. `storage_key` is always a fresh,
+    server-generated value (new_storage_key()), never derived from
+    untrusted input."""
+    destination = image_storage_dir(storage_root, project_id) / f"{storage_key}{extension}"
+    destination.write_bytes(content)
+    return destination
+
+
 def save_extracted_text(storage_root: Path, project_id: int, storage_key: str, full_text: str) -> Path:
     """Persist a document's extracted text (pages joined with form-feed
     separators so a later chunking step can recover page boundaries)."""

@@ -640,7 +640,30 @@ class EmailAttachment(Base):
     or one that failed pre-flight validation; status explains why, and no
     second storage/extraction system is built for those — their bytes are
     deliberately not persisted (see app/email_ingestion/pipeline.py), only
-    their real, observed metadata (filename/content_type/size/hash)."""
+    their real, observed metadata (filename/content_type/size/hash).
+
+    Phase W2.0 (Shared Image Preservation Foundation) adds exactly one
+    exception to that "bytes not persisted" rule: a recognized image
+    attachment (JPEG/PNG/GIF/WEBP, detected by real content signature --
+    see app/ingestion/image_validation.py — never by filename or the
+    email's own untrusted MIME header) now gets status
+    'stored_pending_processing' and its original bytes preserved under
+    app/ingestion/storage.py's save_image(), mirroring
+    WhatsAppMediaAttachment's own 'stored_pending_processing' contract
+    exactly: the original is genuinely available to open/download, but
+    this phase makes no claim it has been OCR'd, described, or indexed.
+    storage_key/detected_extension/width_px/height_px are populated only
+    for that status (and, in a future phase, 'processed' once a real
+    Document exists for it); they stay NULL for every other status,
+    including the pre-existing 'unsupported_format'/'rejected'/'failed'
+    outcomes this phase does not change the meaning of.
+
+    These four columns were added to an already-existing, already-
+    populated table via a safe, additive, idempotent ALTER (see
+    app/db/init_db.py's ensure_email_attachment_image_columns), the same
+    pattern already used for documents.status/processing_error/updated_at
+    — Base.metadata.create_all() only creates tables that don't exist yet,
+    it never alters one that already does."""
 
     __tablename__ = "email_attachments"
     __table_args__ = (Index("ix_email_attachments_message_id", "message_id"),)
@@ -664,6 +687,14 @@ class EmailAttachment(Base):
 
     status: Mapped[str] = mapped_column(Text, nullable=False)
     processing_error: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Phase W2.0 -- see class docstring. Populated only when a preserved
+    # original actually exists on disk (status='stored_pending_processing'
+    # today); NULL for every status that predates or doesn't involve it.
+    storage_key: Mapped[Optional[str]] = mapped_column(Text)
+    detected_extension: Mapped[Optional[str]] = mapped_column(Text)
+    width_px: Mapped[Optional[int]] = mapped_column(Integer)
+    height_px: Mapped[Optional[int]] = mapped_column(Integer)
 
     message: Mapped["EmailMessage"] = relationship(back_populates="attachments")
     document: Mapped[Optional["Document"]] = relationship()
@@ -947,4 +978,79 @@ class WhatsAppMediaAttachment(Base):
     detected_extension: Mapped[Optional[str]] = mapped_column(Text)
 
     message: Mapped["WhatsAppMessage"] = relationship(back_populates="media_attachments")
+    document: Mapped[Optional["Document"]] = relationship()
+
+
+class ProjectImageAsset(Base):
+    """One image uploaded directly to a project as evidence, with no
+    covering WhatsApp message or email (Phase W2.0: Shared Image
+    Preservation Foundation).
+
+    Unlike EmailAttachment/WhatsAppMediaAttachment, there is no parent
+    message row at all here -- project_id is this table's own, direct
+    provenance, and content_hash is deduplicated per-project at the
+    database level (see the unique constraint below), mirroring how
+    WhatsAppMessage/EmailMessage each dedupe within their own scope. This
+    deliberately reuses WhatsAppMediaAttachment's column shape and status
+    vocabulary ('stored_pending_processing' etc.) rather than inventing a
+    third convention for the same kind of fact.
+
+    document_id stays NULL in this phase -- no OCR/vision/Document
+    creation happens here at all (W2.1+); it exists now only so a future
+    phase can point this row at the real, indexed Document it eventually
+    becomes, the same document_id contract WhatsAppMediaAttachment/
+    EmailAttachment already use.
+
+    New table -- Base.metadata.create_all() (app/db/init_db.py) creates it
+    automatically with no ALTER required, exactly like WhatsAppChat/
+    WhatsAppMessage/WhatsAppMediaAttachment were in Phase W1."""
+
+    __tablename__ = "project_image_assets"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('stored_pending_processing', 'processed', 'rejected', 'failed')",
+            name="ck_project_image_assets_status",
+        ),
+        # Defense-in-depth backstop (mirrors WhatsAppMessage's own
+        # chat_id+content_hash constraint): an application-level dedup
+        # pre-check is the first line of defense against re-uploading the
+        # exact same image bytes to the same project, but a real DB
+        # constraint is what actually prevents it under a concurrent
+        # double-upload race, never just a best-effort check.
+        UniqueConstraint("project_id", "content_hash", name="ux_project_image_assets_project_content_hash"),
+        Index("ix_project_image_assets_project_id", "project_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+    )
+
+    # The filename as uploaded -- metadata only, NEVER used to build a
+    # filesystem path (see storage.py's save_image, which always uses a
+    # fresh, server-generated key).
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[Optional[str]] = mapped_column(Text)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    processing_error: Mapped[Optional[str]] = mapped_column(Text)
+
+    storage_key: Mapped[Optional[str]] = mapped_column(Text)
+    detected_extension: Mapped[Optional[str]] = mapped_column(Text)
+    width_px: Mapped[Optional[int]] = mapped_column(Integer)
+    height_px: Mapped[Optional[int]] = mapped_column(Integer)
+
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    project: Mapped["Project"] = relationship()
     document: Mapped[Optional["Document"]] = relationship()

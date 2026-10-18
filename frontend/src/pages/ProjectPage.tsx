@@ -11,11 +11,13 @@ import { useProject } from '../lib/useProject'
 import { useRevealRefs } from '../lib/useRevealOnScroll'
 import {
   ApiError,
+  getProjectImageFileUrl,
   importProjectEmails,
   importWhatsAppExport,
   listEmailThreads,
   listInvestigations,
   listProjectDocuments,
+  listProjectImages,
   listWhatsAppChats,
   uploadProjectDocuments,
 } from '../api/client'
@@ -26,6 +28,7 @@ import type {
   InvestigationRecord,
   InvestigationStatus,
   ProjectDocumentSummary,
+  ProjectImageAssetSummary,
   WhatsAppChatSummary,
 } from '../api/types'
 import { ConnectedMailboxesSection } from './ConnectedMailboxesSection'
@@ -70,6 +73,14 @@ export function ProjectPage() {
     () => (id === null ? Promise.resolve<WhatsAppChatSummary[]>([]) : listWhatsAppChats(id)),
     [id, refreshToken],
   )
+  // Phase W2.0 (Shared Image Preservation Foundation): directly-uploaded
+  // images, listed separately from the Document Register below — a
+  // preserved image is never a Document in this phase, and must never be
+  // shown as if it were one.
+  const projectImagesQuery = useApiQuery(
+    () => (id === null ? Promise.resolve<ProjectImageAssetSummary[]>([]) : listProjectImages(id)),
+    [id, refreshToken],
+  )
   const motifRef = useRevealRefs<HTMLDivElement>(1, styles.motifVisible)
 
   const [uploading, setUploading] = useState(false)
@@ -99,11 +110,21 @@ export function ProjectPage() {
       const readyCount = result.documents.filter((d) => d.status === 'ready').length
       const failedCount = result.documents.filter((d) => d.status === 'failed').length
       const rejectedCount = result.rejected.length
+      // Phase W2.0: a recognized image is reported separately from
+      // documents/rejected — preserved, not processed, never implied to
+      // be "ready for investigation" the way a real indexed Document is.
+      const images = result.images ?? []
+      const imagesPreservedCount = images.filter((img) => img.status === 'stored_pending_processing').length
+      const imagesRejectedCount = images.filter((img) => img.status === 'rejected' || img.status === 'failed').length
 
       const parts: string[] = []
       if (readyCount > 0) parts.push(`${readyCount} ready for investigation`)
       if (failedCount > 0) parts.push(`${failedCount} failed to process`)
       if (rejectedCount > 0) parts.push(`${rejectedCount} rejected (${result.rejected.map((r) => r.error).join('; ')})`)
+      if (imagesPreservedCount > 0) {
+        parts.push(`${imagesPreservedCount} image${imagesPreservedCount === 1 ? '' : 's'} preserved (not yet processed)`)
+      }
+      if (imagesRejectedCount > 0) parts.push(`${imagesRejectedCount} image${imagesRejectedCount === 1 ? '' : 's'} rejected`)
       setUploadSummary(parts.length > 0 ? parts.join(', ') : 'No files were uploaded.')
 
       setRefreshToken((t) => t + 1)
@@ -429,6 +450,41 @@ export function ProjectPage() {
           </ol>
         )}
       </section>
+
+      <section className={styles.documentsSection}>
+        <div className={styles.sectionRule}>
+          <span className={styles.sectionRuleNodeAlt} aria-hidden="true" />
+          <SectionLabel>
+            Images
+            {projectImagesQuery.status === 'success' && projectImagesQuery.data.length > 0
+              ? ` · ${String(projectImagesQuery.data.length).padStart(2, '0')}`
+              : ''}
+          </SectionLabel>
+          <span className={styles.sectionRuleLine} aria-hidden="true" />
+        </div>
+        <p className={styles.sectionBody}>
+          Images uploaded above (JPEG, PNG, GIF, or WEBP) are preserved as original evidence here.
+          ClaimTrace does not yet extract text or describe their contents — each one is the
+          original file, available to open, not yet searchable or citable.
+        </p>
+
+        {projectImagesQuery.status === 'loading' && <LoadingState label="Loading images…" />}
+        {projectImagesQuery.status === 'error' && (
+          <ErrorState message={`Could not load images for this project: ${projectImagesQuery.error}`} />
+        )}
+        {projectImagesQuery.status === 'success' && projectImagesQuery.data.length === 0 && (
+          <p className={styles.emptyDocuments}>
+            <Muted>No image has been uploaded to this project yet.</Muted>
+          </p>
+        )}
+        {projectImagesQuery.status === 'success' && projectImagesQuery.data.length > 0 && (
+          <ol className={styles.documentRegister}>
+            {projectImagesQuery.data.map((image, i) => (
+              <ProjectImageRow key={image.id ?? `unpersisted-${i}`} image={image} projectId={id} index={i} />
+            ))}
+          </ol>
+        )}
+      </section>
       </div>
     </AppShell>
   )
@@ -627,6 +683,60 @@ function WhatsAppChatRow({ chat, projectId, index }: { chat: WhatsAppChatSummary
           <span className={styles.registerArrow}>→</span>
         </div>
       </Link>
+    </li>
+  )
+}
+
+/** One directly-uploaded project image (Phase W2.0: Shared Image
+ * Preservation Foundation) -- opens the real, byte-exact original file
+ * when preserved; a rejected/failed upload is shown as plain text with
+ * its real reason, never a clickable link to nothing. */
+function ProjectImageRow({
+  image,
+  projectId,
+  index,
+}: {
+  image: ProjectImageAssetSummary
+  projectId: number
+  index: number
+}) {
+  const ordinal = String(index + 1).padStart(3, '0')
+  const isOpenable = image.status === 'stored_pending_processing' && image.id != null
+
+  return (
+    <li>
+      {isOpenable ? (
+        <a
+          href={getProjectImageFileUrl(projectId, image.id as number)}
+          target="_blank"
+          rel="noreferrer"
+          className={`${styles.registerRow} ${styles.registerRowOpenable}`}
+        >
+          <span className={styles.registerOrdinal}>{ordinal}</span>
+          <div className={styles.docMain}>
+            <span className={styles.docName}>{image.filename}</span>
+            <div className={styles.docMeta}>
+              <span className={styles.docMetaText}>Preserved — not yet processed</span>
+            </div>
+          </div>
+          <div className={styles.docTrailing}>
+            <span className={styles.registerArrow}>→</span>
+          </div>
+        </a>
+      ) : (
+        <div className={styles.registerRow}>
+          <span className={styles.registerOrdinal}>{ordinal}</span>
+          <div className={styles.docMain}>
+            <span className={styles.docName}>{image.filename}</span>
+            <div className={styles.docMeta}>
+              <span className={styles.docMetaText}>
+                {image.status === 'rejected' ? 'Rejected' : 'Processing failed'}
+                {image.processing_error ? `: ${image.processing_error}` : ''}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </li>
   )
 }

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { getEmailMessage } from '../../api/client'
+import { getEmailAttachmentFileUrl, getEmailMessage } from '../../api/client'
 import { useApiQuery } from '../../api/useApi'
 import { SectionLabel, Muted, Prose } from '../ui/Typography'
 import { Badge } from '../ui/Badge'
@@ -138,6 +138,15 @@ export function EmailMessagePanel({
                   >
                     {attachment.filename}
                   </Link>
+                ) : attachment.status === 'stored_pending_processing' ? (
+                  <a
+                    href={getEmailAttachmentFileUrl(projectId, attachment.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={styles.attachmentLink}
+                  >
+                    {attachment.filename}
+                  </a>
                 ) : (
                   <span className={styles.attachmentName}>{attachment.filename}</span>
                 )}
@@ -151,8 +160,13 @@ export function EmailMessagePanel({
   )
 }
 
-function AttachmentStatusBadge({ status }: { status: 'processed' | 'unsupported_format' | 'rejected' | 'failed' }) {
+function AttachmentStatusBadge({
+  status,
+}: {
+  status: 'processed' | 'unsupported_format' | 'rejected' | 'failed' | 'stored_pending_processing'
+}) {
   if (status === 'processed') return <Badge tone="green">Available</Badge>
+  if (status === 'stored_pending_processing') return <Badge tone="amber">Preserved — not yet processed</Badge>
   if (status === 'unsupported_format') return <Badge tone="neutral">Format not supported</Badge>
   if (status === 'failed') return <Badge tone="red">Processing failed</Badge>
   return <Badge tone="red">Rejected</Badge>

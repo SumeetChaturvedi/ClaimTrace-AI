@@ -20,14 +20,19 @@ Run with:
 """
 
 import io
+import struct
 import unittest
 import zipfile
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from email.message import EmailMessage as StdlibEmailMessage
 from email.utils import formatdate
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import delete, select
+from sqlalchemy.orm import Session as SqlAlchemySession
 
 from app.config import get_settings
 from app.db.models import (
@@ -40,7 +45,7 @@ from app.db.models import (
     Project,
 )
 from app.db.session import get_session_factory
-from app.ingestion.storage import email_storage_dir, text_storage_dir
+from app.ingestion.storage import email_storage_dir, image_storage_dir, text_storage_dir
 from app.main import app
 
 NONEXISTENT_PROJECT_ID = 999_999
@@ -87,6 +92,30 @@ def _zip_of(entries: dict[str, bytes]) -> bytes:
         for name, content in entries.items():
             zf.writestr(name, content)
     return buffer.getvalue()
+
+
+def _build_test_image(*, size: tuple[int, int] = (64, 48), color=(10, 120, 200), fmt: str = "JPEG") -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color=color).save(buf, format=fmt)
+    return buf.getvalue()
+
+
+def _build_png_with_forged_dimensions(width: int, height: int, *, real_size: tuple[int, int] = (4, 4)) -> bytes:
+    """A real, tiny, genuinely-decodable PNG whose IHDR chunk is rewritten
+    (with a correctly recomputed CRC) to CLAIM the given, much larger,
+    width/height -- exercises Pillow's real decompression-bomb check
+    without this test allocating an actual huge pixel buffer. See
+    test_project_documents.py's identical helper for the full rationale."""
+    buf = io.BytesIO()
+    Image.new("RGB", real_size, color=(5, 5, 5)).save(buf, format="PNG")
+    data = bytearray(buf.getvalue())
+    assert data[12:16] == b"IHDR"
+    bit_depth, color_type, compression, filter_method, interlace = data[24:29]
+    new_ihdr_data = struct.pack(">IIBBBBB", width, height, bit_depth, color_type, compression, filter_method, interlace)
+    crc = zlib.crc32(b"IHDR" + new_ihdr_data) & 0xFFFFFFFF
+    data[16 : 16 + 13] = new_ihdr_data
+    data[29:33] = struct.pack(">I", crc)
+    return bytes(data)
 
 
 class EmailIngestionTests(unittest.TestCase):
@@ -404,18 +433,24 @@ class EmailIngestionTests(unittest.TestCase):
             self.assertEqual(doc.status, "ready")
 
     def test_unsupported_attachment_format_is_marked_not_pretended_processed(self):
+        # Phase W2.0 (Shared Image Preservation Foundation): this now
+        # exercises a genuinely non-image, non-PDF/DOCX format (a CSV) --
+        # an attachment with a real image signature is handled by the new
+        # image-preservation path instead (see the W2.0-specific test
+        # class below), which correctly reports it with a more specific
+        # status than 'unsupported_format'.
         project_id = self._create_project("Email Test Project N")
         raw = _build_eml(
-            headers={"Message-ID": "<n-msg@example.com>", "From": "a@example.com", "Subject": "Image attach", "Date": formatdate()},
+            headers={"Message-ID": "<n-msg@example.com>", "From": "a@example.com", "Subject": "Spreadsheet attach", "Date": formatdate()},
             body="see attached",
-            attachments=[{"filename": "site-photo.jpg", "content": b"\xff\xd8\xff fake jpeg bytes", "maintype": "image", "subtype": "jpeg"}],
+            attachments=[{"filename": "costs.csv", "content": b"item,amount\nrebar,1000\n", "maintype": "text", "subtype": "csv"}],
         )
         result = self._import(project_id, "n.eml", raw).json()["results"][0]
         message = self.client.get(f"/projects/{project_id}/emails/messages/{result['document_id']}").json()
         attachment = message["attachments"][0]
         self.assertEqual(attachment["status"], "unsupported_format")
         self.assertIsNone(attachment["document_id"])
-        self.assertEqual(attachment["filename"], "site-photo.jpg")
+        self.assertEqual(attachment["filename"], "costs.csv")
 
     def test_empty_attachment_is_rejected_not_silently_dropped(self):
         project_id = self._create_project("Email Test Project O")
@@ -709,6 +744,287 @@ class EmailConcurrentImportTests(unittest.TestCase):
         text_files = list(text_storage_dir(settings.storage_root, project_id).iterdir())
         self.assertEqual(len(eml_files), 1, f"expected exactly one surviving .eml file, found {eml_files}")
         self.assertEqual(len(text_files), 1, f"expected exactly one surviving extracted-text file, found {text_files}")
+
+
+class EmailImagePreservationTests(unittest.TestCase):
+    """Phase W2.0 (Shared Image Preservation Foundation): a recognized
+    image attachment (JPEG/PNG/GIF/WEBP, by real content signature) is now
+    preserved as bytes and linked to its email, mirroring
+    app/whatsapp_ingestion/pipeline.py's own 'stored_pending_processing'
+    contract -- never discarded as 'unsupported_format' the way it was
+    before this phase, and never claimed as OCR'd/indexed/processed."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+        cls.client.__enter__()
+        cls._created_project_ids: list[int] = []
+
+    @classmethod
+    def tearDownClass(cls):
+        with get_session_factory()() as session:
+            for project_id in cls._created_project_ids:
+                documents = session.query(Document).filter(Document.project_id == project_id).all()
+                for document in documents:
+                    session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+                session.execute(delete(EmailAttachment).where(
+                    EmailAttachment.message_id.in_(select(Document.id).where(Document.project_id == project_id))
+                ))
+                session.execute(delete(EmailMessage).where(EmailMessage.project_id == project_id))
+                session.execute(delete(EmailThread).where(EmailThread.project_id == project_id))
+                session.query(Document).filter(Document.project_id == project_id).delete()
+                session.query(Project).filter(Project.id == project_id).delete()
+            session.commit()
+        cls.client.__exit__(None, None, None)
+
+    def _create_project(self, name: str) -> int:
+        resp = self.client.post("/projects", json={"name": name})
+        assert resp.status_code == 201, resp.text
+        project_id = resp.json()["id"]
+        self._created_project_ids.append(project_id)
+        return project_id
+
+    def _import(self, project_id: int, filename: str, content: bytes):
+        return self.client.post(
+            f"/projects/{project_id}/emails/import",
+            files={"files": (filename, io.BytesIO(content), "message/rfc822")},
+        )
+
+    def _import_image_attachment(self, project_id: int, *, message_id: str, image_bytes: bytes, filename: str = "photo.jpg"):
+        raw = _build_eml(
+            headers={"Message-ID": f"<{message_id}>", "From": "a@example.com", "Subject": "Photo attach", "Date": formatdate()},
+            body="see attached photo",
+            attachments=[{"filename": filename, "content": image_bytes, "maintype": "image", "subtype": "jpeg"}],
+        )
+        result = self._import(project_id, f"{message_id}.eml", raw).json()["results"][0]
+        message = self.client.get(f"/projects/{project_id}/emails/messages/{result['document_id']}").json()
+        return result, message["attachments"][0]
+
+    def test_valid_image_attachment_is_preserved_and_linked_to_its_message(self):
+        project_id = self._create_project("Email Image Test Valid")
+        image_bytes = _build_test_image(color=(200, 10, 10))
+        result, attachment = self._import_image_attachment(project_id, message_id="img-valid@example.com", image_bytes=image_bytes)
+
+        self.assertEqual(attachment["status"], "stored_pending_processing")
+        self.assertIsNone(attachment["document_id"])
+        self.assertEqual(attachment["content_type"], "image/jpeg")
+
+        with get_session_factory()() as session:
+            row = session.scalar(
+                select(EmailAttachment).where(
+                    EmailAttachment.id == attachment["id"],
+                    EmailAttachment.message_id == result["document_id"],
+                )
+            )
+            self.assertIsNotNone(row)
+            self.assertEqual(row.width_px, 64)
+            self.assertEqual(row.height_px, 48)
+            self.assertIsNotNone(row.storage_key)
+            self.assertEqual(row.detected_extension, ".jpg")
+
+    def test_exact_bytes_are_preserved_unmodified(self):
+        """Never rewritten or recompressed -- the served file must be
+        byte-identical to what was uploaded, not merely "a valid JPEG"."""
+        project_id = self._create_project("Email Image Test Byte Exact")
+        image_bytes = _build_test_image(color=(1, 2, 3), size=(37, 29))
+        _, attachment = self._import_image_attachment(project_id, message_id="img-bytes@example.com", image_bytes=image_bytes)
+
+        file_resp = self.client.get(f"/projects/{project_id}/emails/attachments/{attachment['id']}/file")
+        self.assertEqual(file_resp.status_code, 200)
+        self.assertEqual(file_resp.content, image_bytes)
+        self.assertEqual(file_resp.headers["content-type"], "image/jpeg")
+
+    def test_image_attachment_is_never_presented_as_an_indexed_document(self):
+        """The core guarantee this phase must not violate: preserved does
+        not mean processed. No Document, no citation, no fabricated
+        'ready'/'processed' status for an attachment this phase never
+        OCRs or indexes."""
+        project_id = self._create_project("Email Image Test Not Indexed")
+        image_bytes = _build_test_image()
+        _, attachment = self._import_image_attachment(project_id, message_id="img-notindexed@example.com", image_bytes=image_bytes)
+
+        self.assertIsNone(attachment["document_id"])
+        self.assertNotEqual(attachment["status"], "processed")
+        documents = self.client.get(f"/projects/{project_id}/documents").json()
+        self.assertEqual([d for d in documents if d["filename"] == "photo.jpg"], [])
+
+    def test_corrupt_image_bytes_with_a_real_signature_are_rejected_not_stored(self):
+        """A real JPEG magic-number prefix with unreadable content behind
+        it (truncated/corrupt/spoofed) must never be silently preserved as
+        if it were a valid image."""
+        project_id = self._create_project("Email Image Test Corrupt")
+        fake_jpeg = b"\xff\xd8\xff\xe0" + b"not actually a decodable jpeg body" * 5
+        _, attachment = self._import_image_attachment(project_id, message_id="img-corrupt@example.com", image_bytes=fake_jpeg)
+
+        self.assertEqual(attachment["status"], "rejected")
+        self.assertIsNotNone(attachment["processing_error"])
+        self.assertIsNone(attachment["document_id"])
+
+        settings = get_settings()
+        media_dir = image_storage_dir(settings.storage_root, project_id)
+        self.assertEqual(list(media_dir.iterdir()) if media_dir.exists() else [], [])
+
+    def test_decompression_bomb_attachment_is_rejected_without_aborting_the_import(self):
+        """Independent-review follow-up: a declared-oversized image
+        attachment (Pillow's real DecompressionBombError tier -- see
+        app/ingestion/image_validation.py) must be cleanly rejected, not
+        crash the whole email import, and a second, unrelated attachment
+        on the same message must still be processed normally. Uses a
+        forged PNG header (see _build_png_with_forged_dimensions) rather
+        than a genuinely huge pixel buffer, so this stays a fast, routine
+        test -- the previously-missing email-side counterpart to the
+        equivalent direct-upload regression test in
+        test_project_documents.py."""
+        project_id = self._create_project("Email Image Test Decompression Bomb")
+        bomb_bytes = _build_png_with_forged_dimensions(20_000, 20_000)
+        self.assertGreater(20_000 * 20_000, 2 * 89_478_485, "must exceed Pillow's own ERROR tier, not just its warning tier")
+        normal_image_bytes = _build_test_image(color=(1, 2, 3))
+
+        raw = _build_eml(
+            headers={"Message-ID": "<img-bomb@example.com>", "From": "a@example.com", "Subject": "Bomb attach", "Date": formatdate()},
+            body="see attached",
+            attachments=[
+                {"filename": "bomb.png", "content": bomb_bytes, "maintype": "image", "subtype": "png"},
+                {"filename": "photo.jpg", "content": normal_image_bytes, "maintype": "image", "subtype": "jpeg"},
+            ],
+        )
+        resp = self._import(project_id, "bomb.eml", raw)
+        self.assertEqual(resp.status_code, 201, f"a decompression-bomb-sized attachment must never crash the import: {resp.text}")
+        result = resp.json()["results"][0]
+        self.assertEqual(result["status"], "imported")
+
+        message = self.client.get(f"/projects/{project_id}/emails/messages/{result['document_id']}").json()
+        attachments = {a["filename"]: a for a in message["attachments"]}
+
+        self.assertEqual(attachments["bomb.png"]["status"], "rejected")
+        self.assertIsNotNone(attachments["bomb.png"]["processing_error"])
+        self.assertIn("decompression bomb", attachments["bomb.png"]["processing_error"].lower())
+
+        # The sibling attachment on the same message was still processed normally.
+        self.assertEqual(attachments["photo.jpg"]["status"], "stored_pending_processing")
+
+    def test_spoofed_extension_is_ignored_in_favor_of_real_content_detection(self):
+        """A file whose filename claims .pdf but whose actual bytes are a
+        real JPEG must be detected and preserved as the image it actually
+        is, never misrouted by trusting the claimed extension/MIME type."""
+        project_id = self._create_project("Email Image Test Spoofed Extension")
+        image_bytes = _build_test_image(fmt="PNG")
+        raw = _build_eml(
+            headers={"Message-ID": "<img-spoof@example.com>", "From": "a@example.com", "Subject": "Spoofed", "Date": formatdate()},
+            body="see attached",
+            attachments=[{"filename": "report.pdf", "content": image_bytes, "maintype": "application", "subtype": "pdf"}],
+        )
+        result = self._import(project_id, "spoof.eml", raw).json()["results"][0]
+        message = self.client.get(f"/projects/{project_id}/emails/messages/{result['document_id']}").json()
+        attachment = message["attachments"][0]
+
+        self.assertEqual(attachment["status"], "stored_pending_processing")
+        self.assertEqual(attachment["content_type"], "image/png")
+        self.assertIsNone(attachment["document_id"])  # never run through ingest_document() as a PDF
+
+    def test_oversized_image_is_rejected_with_a_clear_reason(self):
+        from app.ingestion import image_validation as iv
+
+        original_max_bytes = iv.MAX_IMAGE_BYTES
+        iv.MAX_IMAGE_BYTES = 100
+        try:
+            project_id = self._create_project("Email Image Test Oversized")
+            image_bytes = _build_test_image(size=(200, 200))
+            self.assertGreater(len(image_bytes), 100)
+            _, attachment = self._import_image_attachment(project_id, message_id="img-big@example.com", image_bytes=image_bytes)
+        finally:
+            iv.MAX_IMAGE_BYTES = original_max_bytes
+
+        self.assertEqual(attachment["status"], "rejected")
+        self.assertIn("MB size limit", attachment["processing_error"])
+
+    def test_excessive_dimensions_are_rejected_with_a_clear_reason(self):
+        from app.ingestion import image_validation as iv
+
+        original_max_dim = iv.MAX_IMAGE_DIMENSION_PX
+        iv.MAX_IMAGE_DIMENSION_PX = 10
+        try:
+            project_id = self._create_project("Email Image Test Excessive Dimensions")
+            image_bytes = _build_test_image(size=(64, 48))
+            _, attachment = self._import_image_attachment(project_id, message_id="img-dims@example.com", image_bytes=image_bytes)
+        finally:
+            iv.MAX_IMAGE_DIMENSION_PX = original_max_dim
+
+        self.assertEqual(attachment["status"], "rejected")
+        self.assertIn("per-side limit", attachment["processing_error"])
+
+    def test_commit_failure_after_writing_the_image_removes_the_orphaned_file(self):
+        """Failure-injection regression: if the EmailAttachment row's own
+        commit fails after the image file has already been written, the
+        now-orphaned file must be removed, not left untracked on disk."""
+        from app.db.models import EmailAttachment as _EmailAttachmentModel
+
+        project_id = self._create_project("Email Image Test Commit Failure")
+        image_bytes = _build_test_image()
+
+        original_commit = SqlAlchemySession.commit
+
+        def failing_commit(self):
+            pending_image_rows = [
+                obj for obj in self.new
+                if isinstance(obj, _EmailAttachmentModel) and obj.status == "stored_pending_processing"
+            ]
+            if pending_image_rows:
+                raise RuntimeError("injected commit failure (failure-injection regression test)")
+            return original_commit(self)
+
+        with patch.object(SqlAlchemySession, "commit", failing_commit):
+            raw = _build_eml(
+                headers={"Message-ID": "<img-failure@example.com>", "From": "a@example.com", "Subject": "Failure", "Date": formatdate()},
+                body="see attached",
+                attachments=[{"filename": "clip.jpg", "content": image_bytes, "maintype": "image", "subtype": "jpeg"}],
+            )
+            resp = self._import(project_id, "failure.eml", raw)
+        self.assertEqual(resp.status_code, 201, resp.text)
+
+        settings = get_settings()
+        media_dir = image_storage_dir(settings.storage_root, project_id)
+        leftover_files = list(media_dir.iterdir()) if media_dir.exists() else []
+        self.assertEqual(leftover_files, [], "the file written for the image attachment must be removed when its row commit fails")
+
+        with get_session_factory()() as session:
+            document_id = resp.json()["results"][0]["document_id"]
+            orphaned_row = session.scalar(
+                select(EmailAttachment).where(EmailAttachment.message_id == document_id)
+            )
+            self.assertIsNone(orphaned_row)
+
+    def test_reimporting_the_same_message_never_duplicates_the_image_attachment(self):
+        project_id = self._create_project("Email Image Test Duplicate Import")
+        image_bytes = _build_test_image()
+        raw = _build_eml(
+            headers={"Message-ID": "<img-dup@example.com>", "From": "a@example.com", "Subject": "Dup", "Date": formatdate()},
+            body="see attached",
+            attachments=[{"filename": "site.jpg", "content": image_bytes, "maintype": "image", "subtype": "jpeg"}],
+        )
+        first = self._import(project_id, "dup1.eml", raw).json()["results"][0]
+        second = self._import(project_id, "dup2.eml", raw).json()["results"][0]
+
+        self.assertEqual(first["status"], "imported")
+        self.assertEqual(second["status"], "duplicate")
+
+        with get_session_factory()() as session:
+            attachments = list(
+                session.scalars(select(EmailAttachment).where(EmailAttachment.message_id == first["document_id"]))
+            )
+            self.assertEqual(len(attachments), 1, "a duplicate import must never re-process or duplicate the attachment")
+
+    def test_image_attachment_from_one_project_not_retrievable_via_another(self):
+        project_a = self._create_project("Email Image Test Isolation A")
+        project_b = self._create_project("Email Image Test Isolation B")
+        image_bytes = _build_test_image()
+        _, attachment = self._import_image_attachment(project_a, message_id="img-iso@example.com", image_bytes=image_bytes)
+
+        cross_project_resp = self.client.get(f"/projects/{project_b}/emails/attachments/{attachment['id']}/file")
+        self.assertEqual(cross_project_resp.status_code, 404)
+
+        same_project_resp = self.client.get(f"/projects/{project_a}/emails/attachments/{attachment['id']}/file")
+        self.assertEqual(same_project_resp.status_code, 200)
 
 
 if __name__ == "__main__":

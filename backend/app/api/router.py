@@ -8,6 +8,7 @@ from app.api.routes import (
     investigations,
     project_documents,
     project_emails,
+    project_images,
     project_mailboxes,
     project_whatsapp,
     projects,
@@ -27,3 +28,4 @@ api_router.include_router(project_emails.router)
 api_router.include_router(project_mailboxes.router)
 api_router.include_router(project_mailboxes.project_router)
 api_router.include_router(project_whatsapp.router)
+api_router.include_router(project_images.router)

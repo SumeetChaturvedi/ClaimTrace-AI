@@ -89,9 +89,30 @@ export interface RejectedUpload {
   error: string
 }
 
+// Phase W2.0 (Shared Image Preservation Foundation): a directly-uploaded
+// image, preserved rather than run through PDF/DOCX ingestion. 'rejected'
+// and 'failed' both carry id/uploaded_at as null, since no row was ever
+// durably persisted in either case -- never a fabricated id for
+// something that doesn't exist.
+export interface ProjectImageAssetSummary {
+  id: number | null
+  filename: string
+  content_type: string | null
+  size_bytes: number
+  status: 'stored_pending_processing' | 'processed' | 'rejected' | 'failed'
+  document_id: number | null
+  processing_error: string | null
+  width_px: number | null
+  height_px: number | null
+  uploaded_at: string | null
+}
+
 export interface DocumentUploadResponse {
   documents: DocumentSummary[]
   rejected: RejectedUpload[]
+  // Additive (Phase W2.0): a recognized image in the same upload batch.
+  // Always present, defaults to [] server-side.
+  images: ProjectImageAssetSummary[]
 }
 
 // backend/app/agent/models.py
@@ -314,10 +335,14 @@ export interface EmailAttachmentSummary {
   content_type: string | null
   size_bytes: number
   // 'processed' (a real PDF/DOCX document was created) | 'unsupported_format'
-  // (format not indexed; bytes not stored) | 'rejected' (empty/oversized) |
-  // 'failed' (accepted but extraction/indexing failed — document_id is
-  // still set, a real 'failed' Document, never silently dropped)
-  status: 'processed' | 'unsupported_format' | 'rejected' | 'failed'
+  // (format not indexed; bytes not stored) | 'rejected' (empty/oversized,
+  // or — Phase W2.0 — a recognized-but-invalid/corrupt image) | 'failed'
+  // (accepted but extraction/indexing failed — document_id is still set,
+  // a real 'failed' Document, never silently dropped) |
+  // 'stored_pending_processing' (Phase W2.0: a recognized image,
+  // preserved as bytes, not yet OCR'd/described/indexed — never
+  // presented as processed)
+  status: 'processed' | 'unsupported_format' | 'rejected' | 'failed' | 'stored_pending_processing'
   document_id: number | null
   processing_error: string | null
 }

@@ -188,6 +188,27 @@ def ensure_email_message_content_hash_index(engine: Engine) -> None:
         connection.commit()
 
 
+def ensure_email_attachment_image_columns(engine: Engine) -> None:
+    """Retrofit the storage_key/detected_extension/width_px/height_px
+    columns (Phase W2.0: Shared Image Preservation Foundation) onto an
+    already-existing, already-populated `email_attachments` table — same
+    safe, additive, idempotent ALTER pattern as
+    ensure_document_lifecycle_columns above. No-op in effect on a clean
+    database, where create_tables() already creates email_attachments
+    with these columns from the start.
+
+    Every attachment row that predates this phase is left with all four
+    columns NULL — correct, not a gap to backfill: those rows' bytes were
+    genuinely never persisted (see EmailAttachment's own docstring), so
+    there is no preserved original for these columns to point at."""
+    with engine.connect() as connection:
+        connection.execute(text("ALTER TABLE email_attachments ADD COLUMN IF NOT EXISTS storage_key TEXT"))
+        connection.execute(text("ALTER TABLE email_attachments ADD COLUMN IF NOT EXISTS detected_extension TEXT"))
+        connection.execute(text("ALTER TABLE email_attachments ADD COLUMN IF NOT EXISTS width_px INTEGER"))
+        connection.execute(text("ALTER TABLE email_attachments ADD COLUMN IF NOT EXISTS height_px INTEGER"))
+        connection.commit()
+
+
 def ensure_storage_root(storage_root: Path) -> None:
     storage_root.mkdir(parents=True, exist_ok=True)
 
@@ -216,6 +237,7 @@ def initialize_database(engine: Engine, settings: Settings) -> Project:
     ensure_investigation_pipeline_gap_fix_columns(engine)
     ensure_investigation_attempt_number_column(engine)
     ensure_email_message_content_hash_index(engine)
+    ensure_email_attachment_image_columns(engine)
     ensure_storage_root(settings.storage_root)
 
     with get_session_factory()() as session:
