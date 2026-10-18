@@ -318,6 +318,13 @@ class InvestigationRecord(Base):
     # investigator sees, and treats NULL identically to 'sufficient' (no
     # limitation to report) -- never as a failure or a fabricated reason.
     stopping_reason: Mapped[Optional[str]] = mapped_column(Text)
+    # Phase 2a (Preserve Investigation Attempt History): 1-based, incremented
+    # by retry_investigation() each time this record is retried. A record
+    # that predates this column is correctly described as attempt 1 (from
+    # this system's own persistence perspective, it has only ever had one
+    # known attempt) -- a real default, same reasoning as answer_truncated/
+    # events_truncated above, never an "unknown" value is needed here.
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     error: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -367,6 +374,73 @@ class InvestigationRecordCitation(Base):
     chunk_text: Mapped[Optional[str]] = mapped_column(Text)
 
     investigation: Mapped["InvestigationRecord"] = relationship(back_populates="citations")
+
+
+class InvestigationRecordAttempt(Base):
+    """A frozen snapshot of one PREVIOUS, superseded attempt of an
+    InvestigationRecord (Phase 2a: Preserve Investigation Attempt History) --
+    captured by retry_investigation() (app/api/routes/investigations.py)
+    immediately before it clears and reruns the live record, so a retry can
+    never destroy what the previous attempt actually produced.
+
+    Deliberately NOT a reuse of the live InvestigationRecord row itself:
+    that row always represents the CURRENT/latest attempt, so every
+    existing GET/list caller keeps its exact current meaning with zero
+    reinterpretation. This table holds only attempts that have since been
+    superseded by a later retry -- a never-retried investigation has zero
+    rows here; its one and only attempt is simply the live record, numbered
+    1 via InvestigationRecord.attempt_number.
+
+    Citations are stored as a plain JSONB array (each element shaped like
+    Citation.model_dump()) rather than a child table like
+    InvestigationRecordCitation: a snapshot is read-only and append-only
+    for its entire life, so it never needs the relational ordinal/
+    foreign-key machinery a live, re-populated citation set does -- this
+    keeps the feature to one new table, not two.
+
+    New table -- Base.metadata.create_all() (app/db/init_db.py) creates it
+    with no ALTER needed, exactly like every other table in this file (see
+    InvestigationRecord's own docstring for why a new table is this
+    project's migration-free option)."""
+
+    __tablename__ = "investigation_record_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "investigation_id", "attempt_number", name="ux_investigation_record_attempts_number"
+        ),
+        Index("ix_investigation_record_attempts_investigation_id", "investigation_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    investigation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("investigation_records.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[Optional[str]] = mapped_column(Text)
+    reasoning_steps: Mapped[Optional[list[str]]] = mapped_column(JSONB)
+    # Citation.model_dump() shape per element -- see class docstring for why
+    # this is a plain JSONB array rather than a child table.
+    citations: Mapped[Optional[list[dict]]] = mapped_column(JSONB)
+    timeline: Mapped[Optional[list[dict]]] = mapped_column(JSONB)
+    contract_clauses: Mapped[Optional[list[dict]]] = mapped_column(JSONB)
+    events: Mapped[Optional[list[dict]]] = mapped_column(JSONB)
+    events_error: Mapped[Optional[str]] = mapped_column(Text)
+    events_truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    answer_truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    stopping_reason: Mapped[Optional[str]] = mapped_column(Text)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+    # When this attempt itself last changed (its own completion/failure
+    # time) -- captured from the live record's own `updated_at` BEFORE
+    # retry processing mutates anything on it. Never re-derived after the
+    # fact: by the time the new attempt starts, the live record's
+    # updated_at would already reflect the NEW attempt's start, not this
+    # (previous) attempt's real finish time.
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    snapshotted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class EmailThread(Base):

@@ -13,6 +13,7 @@ import type {
   EmailThreadSummary,
   HealthResponse,
   InvestigationCreateRequest,
+  InvestigationAttempt,
   InvestigationRecord,
   InvestigationRequest,
   InvestigationResponse,
@@ -143,6 +144,16 @@ export function retryInvestigation(projectId: number, investigationId: string): 
   return request<InvestigationRecord>(`/projects/${projectId}/investigations/${investigationId}/retry`, {
     method: 'POST',
   })
+}
+
+// GET /projects/{project_id}/investigations/{investigation_id}/attempts
+// (Phase 2a: Preserve Investigation Attempt History) — the full attempt
+// history: every superseded snapshot (oldest first), then the current/
+// latest attempt (the same record getInvestigation() returns) last. Fetched
+// lazily by the Workspace only when the "previous attempts" section is
+// actually opened, never on initial page load.
+export function getInvestigationAttempts(projectId: number, investigationId: string): Promise<InvestigationAttempt[]> {
+  return request<InvestigationAttempt[]>(`/projects/${projectId}/investigations/${investigationId}/attempts`)
 }
 
 // GET /documents — NOT project-scoped by the backend (no project_id filter

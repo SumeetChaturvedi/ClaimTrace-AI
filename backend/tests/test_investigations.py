@@ -24,11 +24,14 @@ Run with:
 
 import unittest
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
-from app.api.routes.investigations import _describe_stopping_reason
-from app.db.models import InvestigationRecord, Project
+from app.api.routes.investigations import _describe_stopping_reason, _lock_record_for_retry, _snapshot_current_attempt
+from app.db.models import InvestigationRecord, InvestigationRecordAttempt, Project
 from app.db.session import get_session_factory
 from app.main import app
 
@@ -212,6 +215,315 @@ class InvestigationEndpointsTests(unittest.TestCase):
             self.assertFalse(db_row.answer_truncated)
             self.assertIsNone(db_row.stopping_reason)
 
+    def test_never_retried_investigation_is_attempt_1(self):
+        self.assertEqual(self.p2_investigation["attempt_number"], 1)
+        resp = self.client.get(f"/projects/{PROJECT_2_ID}/investigations/{self.p2_investigation['id']}/attempts")
+        self.assertEqual(resp.status_code, 200)
+        attempts = resp.json()
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0]["attempt_number"], 1)
+        self.assertTrue(attempts[0]["is_current"])
+        self.assertEqual(attempts[0]["status"], self.p2_investigation["status"])
+
+
+class InvestigationAttemptHistoryTests(unittest.TestCase):
+    """Phase 2a (Preserve Investigation Attempt History). Directly inserts
+    its own InvestigationRecord rows with a pre-set, fully-populated prior
+    result (never via the real create endpoint) so these tests can verify
+    snapshot correctness without making any real Gemini call -- an empty
+    `question` on the row being retried deliberately makes the RETRY
+    itself fail fast at InvestigationService's own validation (the same
+    trick InvestigationEndpointsTests already uses above), which is
+    exactly what's needed to test "a failed retry still preserves the
+    snapshot of the attempt it superseded" for free."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+        cls.client.__enter__()
+        cls._created_ids: list[uuid.UUID] = []
+
+    @classmethod
+    def tearDownClass(cls):
+        with get_session_factory()() as session:
+            for investigation_id in cls._created_ids:
+                record = session.get(InvestigationRecord, investigation_id)
+                if record is not None:
+                    session.delete(record)  # cascades investigation_record_attempts via ON DELETE CASCADE
+            session.commit()
+        cls.client.__exit__(None, None, None)
+
+    def _insert_rich_completed_record(self, *, question: str = "") -> uuid.UUID:
+        """A directly-inserted, fully-populated 'completed' record -- every
+        existing result-bearing field set to a distinct, recognizable fake
+        value, so a test can confirm the snapshot captured ALL of them,
+        not just a convenient subset. `question=""` by default so that
+        retrying this record fails fast (ValueError from InvestigationService.
+        _validate) without ever reaching Gemini."""
+        with get_session_factory()() as session:
+            record = InvestigationRecord(
+                project_id=PROJECT_2_ID,
+                question=question,
+                status="completed",
+                answer="The original, pre-retry answer.",
+                reasoning_steps=["Step one.", "Step two."],
+                timeline=[
+                    {
+                        "document_id": 1,
+                        "document_date": "2024-01-01",
+                        "document_type": "NOTICE",
+                        "event_label": "Notice issued",
+                        "citations": [],
+                    }
+                ],
+                contract_clauses=[
+                    {"clause_number": "4.2", "title": "Notices", "topic": "NOTICE", "text": "Notice text."}
+                ],
+                events=[
+                    {
+                        "document_id": 1,
+                        "chunk_id": 1,
+                        "excerpt": "an excerpt",
+                        "event_type": None,
+                        "assertion_type": None,
+                        "description": "An extracted event.",
+                        "event_date": None,
+                        "event_date_basis": "unknown",
+                        "attributed_party": None,
+                    }
+                ],
+                events_error=None,
+                events_truncated=True,
+                answer_truncated=True,
+                stopping_reason="unsupported_remediation",
+                error=None,
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            investigation_id = record.id
+
+            from app.db.models import InvestigationRecordCitation
+
+            session.add(
+                InvestigationRecordCitation(
+                    investigation_id=investigation_id,
+                    ordinal=0,
+                    document_id=1,
+                    chunk_id=1,
+                    page=1,
+                    relevance_score=0.9,
+                    chunk_text="The original citation's chunk text.",
+                )
+            )
+            session.commit()
+
+        self._created_ids.append(investigation_id)
+        return investigation_id
+
+    def test_retry_snapshots_the_full_prior_attempt_before_clearing_it(self):
+        investigation_id = self._insert_rich_completed_record()
+
+        retry_resp = self.client.post(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}/retry")
+        # The empty question makes the retry itself fail fast (400) --
+        # irrelevant to what this test checks, which is the snapshot taken
+        # BEFORE that failure.
+        self.assertEqual(retry_resp.status_code, 400)
+
+        with get_session_factory()() as session:
+            snapshots = session.scalars(
+                select(InvestigationRecordAttempt).where(InvestigationRecordAttempt.investigation_id == investigation_id)
+            ).all()
+            self.assertEqual(len(snapshots), 1)
+            snapshot = snapshots[0]
+
+            self.assertEqual(snapshot.attempt_number, 1)
+            self.assertEqual(snapshot.status, "completed")
+            self.assertEqual(snapshot.answer, "The original, pre-retry answer.")
+            self.assertEqual(snapshot.reasoning_steps, ["Step one.", "Step two."])
+            self.assertEqual(len(snapshot.timeline), 1)
+            self.assertEqual(snapshot.timeline[0]["event_label"], "Notice issued")
+            self.assertEqual(len(snapshot.contract_clauses), 1)
+            self.assertEqual(snapshot.contract_clauses[0]["clause_number"], "4.2")
+            self.assertEqual(len(snapshot.events), 1)
+            self.assertEqual(snapshot.events[0]["description"], "An extracted event.")
+            self.assertIsNone(snapshot.events_error)
+            self.assertTrue(snapshot.events_truncated)
+            self.assertTrue(snapshot.answer_truncated)
+            self.assertEqual(snapshot.stopping_reason, "unsupported_remediation")
+            self.assertIsNone(snapshot.error)
+
+            # Citations: ALL fields needed to inspect the original evidence
+            # reference must survive, not just document_id.
+            self.assertEqual(len(snapshot.citations), 1)
+            cited = snapshot.citations[0]
+            self.assertEqual(cited["document_id"], 1)
+            self.assertEqual(cited["chunk_id"], 1)
+            self.assertEqual(cited["page"], 1)
+            self.assertEqual(cited["relevance_score"], 0.9)
+            self.assertEqual(cited["chunk_text"], "The original citation's chunk text.")
+
+            # The live record has genuinely moved on: a failed retry, not a
+            # silent no-op, and the prior attempt's data is gone from the
+            # live row (it now lives only in the snapshot just verified).
+            live = session.get(InvestigationRecord, investigation_id)
+            self.assertEqual(live.attempt_number, 2)
+            self.assertEqual(live.status, "failed")
+            self.assertIsNotNone(live.error)
+            self.assertIsNone(live.answer)
+
+    def test_a_failed_retry_remains_inspectable_and_does_not_erase_the_preceding_attempt(self):
+        """The preceding, successful attempt's answer must still be fully
+        recoverable (via the snapshot) even though the live record now
+        reflects the failed retry — this is the whole point of the
+        feature, checked end to end through the real API responses rather
+        than the ORM rows directly."""
+        investigation_id = self._insert_rich_completed_record()
+        self.client.post(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}/retry")
+
+        current = self.client.get(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}").json()
+        self.assertEqual(current["status"], "failed")
+        self.assertIsNotNone(current["error"])
+
+        attempts = self.client.get(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}/attempts").json()
+        self.assertEqual(len(attempts), 2)
+
+        attempt_1, attempt_2 = attempts
+        self.assertEqual(attempt_1["attempt_number"], 1)
+        self.assertFalse(attempt_1["is_current"])
+        self.assertEqual(attempt_1["status"], "completed")
+        self.assertEqual(attempt_1["answer"], "The original, pre-retry answer.")
+        self.assertEqual(len(attempt_1["citations"]), 1)
+        self.assertEqual(attempt_1["citations"][0]["chunk_text"], "The original citation's chunk text.")
+        self.assertTrue(attempt_1["answer_truncated"])
+        self.assertIsNotNone(attempt_1["evidence_limitation"])  # mapped from stopping_reason, never the raw name
+        self.assertNotIn("unsupported_remediation", attempt_1["evidence_limitation"])
+
+        self.assertEqual(attempt_2["attempt_number"], 2)
+        self.assertTrue(attempt_2["is_current"])
+        self.assertEqual(attempt_2["status"], "failed")  # never implied to have completed
+
+    def test_attempts_endpoint_scope_checks_match_existing_endpoints(self):
+        investigation_id = self._insert_rich_completed_record()
+
+        wrong_project_resp = self.client.get(f"/projects/{PROJECT_3_ID}/investigations/{investigation_id}/attempts")
+        self.assertEqual(wrong_project_resp.status_code, 404)
+
+        nonexistent_resp = self.client.get(f"/projects/{PROJECT_2_ID}/investigations/{NONEXISTENT_INVESTIGATION_ID}/attempts")
+        self.assertEqual(nonexistent_resp.status_code, 404)
+
+        nonexistent_project_resp = self.client.get(
+            f"/projects/{NONEXISTENT_PROJECT_ID}/investigations/{investigation_id}/attempts"
+        )
+        self.assertEqual(nonexistent_project_resp.status_code, 404)
+
+    def test_snapshot_and_reset_are_atomic_a_rollback_destroys_neither(self):
+        """Directly exercises the real transaction semantics
+        _snapshot_current_attempt/retry_investigation depend on: a crash
+        (simulated here by rolling back instead of committing) before the
+        snapshot-insert-plus-reset commits must leave the previous attempt
+        completely untouched -- neither partially reset nor missing its
+        snapshot."""
+        investigation_id = self._insert_rich_completed_record(question="non-empty, irrelevant here")
+
+        with get_session_factory()() as session:
+            record = session.get(InvestigationRecord, investigation_id)
+            _snapshot_current_attempt(session, record)
+            record.attempt_number += 1
+            record.status = "running"
+            record.answer = None
+            session.rollback()  # simulates a crash before the real commit
+
+        with get_session_factory()() as session:
+            record = session.get(InvestigationRecord, investigation_id)
+            self.assertEqual(record.status, "completed")
+            self.assertEqual(record.answer, "The original, pre-retry answer.")
+            self.assertEqual(record.attempt_number, 1)
+            snapshots = session.scalars(
+                select(InvestigationRecordAttempt).where(InvestigationRecordAttempt.investigation_id == investigation_id)
+            ).all()
+            self.assertEqual(snapshots, [])
+
+    def test_concurrent_retry_lock_prevents_simultaneous_snapshot_and_reset(self):
+        """Exercises the REAL row-level lock against two REAL, separate
+        database sessions -- not a mocked lock -- mirroring the exact
+        two-session reproduction used to design this mechanism."""
+        investigation_id = self._insert_rich_completed_record()
+
+        session_a = get_session_factory()()
+        session_b = get_session_factory()()
+        try:
+            locked = _lock_record_for_retry(session_a, investigation_id)
+            self.assertEqual(locked.id, investigation_id)
+
+            with self.assertRaises(HTTPException) as ctx:
+                _lock_record_for_retry(session_b, investigation_id)
+            self.assertEqual(ctx.exception.status_code, 409)
+        finally:
+            session_a.rollback()
+            session_b.rollback()
+            session_a.close()
+            session_b.close()
+
+    def test_lock_helper_refreshes_a_stale_identity_mapped_status(self):
+        """Pre-commit review fix regression: session A reads the record
+        once (entering its identity map) BEFORE session B changes and
+        commits a new status -- the exact sequence retry_investigation()
+        itself produces via its own prior, unlocked _get_record_or_404
+        call. _lock_record_for_retry's own locking SELECT must return the
+        REAL, current status (populate_existing=True), never the value
+        session A happened to cache on its first, earlier read."""
+        investigation_id = self._insert_rich_completed_record()
+
+        session_a = get_session_factory()()
+        session_b = get_session_factory()()
+        try:
+            cached = session_a.get(InvestigationRecord, investigation_id)
+            self.assertEqual(cached.status, "completed")  # the premise: A's own cache is now stale once B commits below
+
+            other_row = session_b.get(InvestigationRecord, investigation_id)
+            other_row.status = "running"
+            session_b.commit()
+
+            locked = _lock_record_for_retry(session_a, investigation_id)
+            self.assertIs(locked, cached)  # same identity-mapped Python object
+            self.assertEqual(locked.status, "running")  # refreshed, not the stale 'completed' it was first loaded with
+        finally:
+            session_a.rollback()
+            session_b.rollback()
+            session_a.close()
+            session_b.close()
+
+    def test_concurrent_http_retries_never_create_duplicate_attempt_numbers(self):
+        """Real concurrency through the actual HTTP endpoint (ThreadPoolExecutor
+        + TestClient, mirroring the existing Gmail/email concurrent-import
+        tests' own pattern) -- not a mock of the locking mechanism. Every
+        response must be either a genuine outcome (400, the real empty-query
+        failure) or a clean 409 (another retry already in flight) -- never
+        an unhandled 500 from a race -- and the resulting snapshots must
+        never collide on attempt_number."""
+        investigation_id = self._insert_rich_completed_record()
+
+        def _one(_: int):
+            return self.client.post(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}/retry")
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            responses = list(pool.map(_one, range(6)))
+
+        status_codes = [r.status_code for r in responses]
+        self.assertTrue(all(code in (400, 409) for code in status_codes), status_codes)
+
+        with get_session_factory()() as session:
+            snapshots = session.scalars(
+                select(InvestigationRecordAttempt).where(InvestigationRecordAttempt.investigation_id == investigation_id)
+            ).all()
+            attempt_numbers = [s.attempt_number for s in snapshots]
+            self.assertEqual(
+                len(attempt_numbers), len(set(attempt_numbers)), f"duplicate attempt_number snapshot detected: {attempt_numbers}"
+            )
+            final_record = session.get(InvestigationRecord, investigation_id)
+            self.assertEqual(final_record.attempt_number, len(snapshots) + 1)
+
 
 class LegacyInvestigationRecordTests(unittest.TestCase):
     """Phase 1 (Fix Existing Investigation Pipeline Gaps) backward-
@@ -243,11 +555,12 @@ class LegacyInvestigationRecordTests(unittest.TestCase):
             session.commit()
             session.refresh(record)
             investigation_id = record.id
-            # Confirms the premise: no value was ever set for either new
-            # column, so the database's own column defaults/nullability
+            # Confirms the premise: no value was ever set for any of these
+            # columns, so the database's own column defaults/nullability
             # are what this test is actually exercising.
             self.assertFalse(record.answer_truncated)
             self.assertIsNone(record.stopping_reason)
+            self.assertEqual(record.attempt_number, 1)
 
         try:
             resp = self.client.get(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}")
@@ -256,6 +569,14 @@ class LegacyInvestigationRecordTests(unittest.TestCase):
             self.assertEqual(body["status"], "completed")
             self.assertFalse(body["answer_truncated"])
             self.assertIsNone(body["evidence_limitation"])
+            self.assertEqual(body["attempt_number"], 1)
+
+            attempts_resp = self.client.get(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}/attempts")
+            self.assertEqual(attempts_resp.status_code, 200)
+            attempts = attempts_resp.json()
+            self.assertEqual(len(attempts), 1)
+            self.assertEqual(attempts[0]["attempt_number"], 1)
+            self.assertTrue(attempts[0]["is_current"])
         finally:
             with get_session_factory()() as session:
                 row = session.get(InvestigationRecord, investigation_id)

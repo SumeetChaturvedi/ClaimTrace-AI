@@ -214,6 +214,38 @@ export interface InvestigationRecord {
   answer_truncated: boolean
   evidence_limitation: string | null
   error: string | null
+  // Phase 2a (Preserve Investigation Attempt History). 1-based attempt
+  // number of the CURRENT/latest attempt this record represents. 1 for
+  // every investigation that predates this field — correct, not a guess.
+  // See GET .../attempts (InvestigationAttempt below) for the full
+  // history when this is > 1.
+  attempt_number: number
+}
+
+// backend/app/api/routes/investigations.py (Phase 2a: Preserve
+// Investigation Attempt History). One entry in an investigation's attempt
+// history — either a frozen, superseded snapshot or the current/latest
+// attempt (is_current=true), represented accurately whatever its real
+// status is ('running', 'failed', or 'completed') — never implied to have
+// completed merely because it appears in this list. Omits id/project_id/
+// query/created_at: those are investigation-identity-level, shared across
+// every attempt of the same investigation (see InvestigationRecord above).
+export interface InvestigationAttempt {
+  attempt_number: number
+  is_current: boolean
+  status: InvestigationStatus
+  attempted_at: string
+  answer: string | null
+  citations: Citation[]
+  reasoning_steps: string[]
+  timeline: TimelineEntry[]
+  contract_clauses: ContractClause[]
+  events: ExtractedEvent[]
+  events_error: string | null
+  events_truncated: boolean
+  answer_truncated: boolean
+  evidence_limitation: string | null
+  error: string | null
 }
 
 // backend/app/api/routes/project_emails.py (Phase 8A: Email Thread

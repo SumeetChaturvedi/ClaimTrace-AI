@@ -21,6 +21,7 @@ import { DocumentsPanel } from './workspace/DocumentsPanel'
 import { TracePanel } from './workspace/TracePanel'
 import { TimelinePanel } from './workspace/TimelinePanel'
 import { ContractPanel } from './workspace/ContractPanel'
+import { AttemptHistorySection } from './workspace/AttemptHistorySection'
 import styles from './InvestigationWorkspacePage.module.css'
 
 /**
@@ -159,6 +160,23 @@ export function InvestigationWorkspacePage() {
       <div className={styles.page}>
         <WorkspaceHeader record={record} projectId={id} citationCount={citationCount} citedDocumentCount={citedDocumentCount} />
 
+        {record.attempt_number > 1 && (
+          // Pre-commit review fix: keyed on attempt_number so a retry (which
+          // bumps this number on the SAME investigationId) forces a fresh
+          // remount rather than leaving this section's own internal state
+          // — already-loaded attempts, an expanded row, an "is_current"
+          // badge on what is now a superseded attempt — stale after the
+          // retry completes. Mirrors DocumentSourceViewPage.tsx's own
+          // key={docId} remount-on-identity-change pattern.
+          <AttemptHistorySection
+            key={record.attempt_number}
+            projectId={id}
+            investigationId={record.id}
+            documentNames={documentNames}
+            documents={documents}
+          />
+        )}
+
         {record.status === 'running' && (
           <LoadingState label="Reviewing the project record and preparing a finding…" />
         )}
@@ -269,6 +287,7 @@ function WorkspaceHeader({
           {record.status === 'running' && <Badge tone="neutral">Investigating…</Badge>}
           {record.status === 'completed' && <Badge tone="green">Investigation complete</Badge>}
           {record.status === 'failed' && <Badge tone="red">Investigation not completed</Badge>}
+          <span className={styles.attemptMark}>Attempt {record.attempt_number}</span>
         </div>
 
         {record.status === 'completed' && (

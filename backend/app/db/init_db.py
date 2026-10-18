@@ -146,6 +146,25 @@ def ensure_investigation_pipeline_gap_fix_columns(engine: Engine) -> None:
         connection.commit()
 
 
+def ensure_investigation_attempt_number_column(engine: Engine) -> None:
+    """Retrofit the `attempt_number` column (Phase 2a: Preserve
+    Investigation Attempt History) onto an already-existing,
+    already-populated `investigation_records` table — same safe, additive,
+    idempotent ALTER pattern as the other ensure_investigation_* functions
+    above. No-op in effect on a clean database.
+
+    Gets a real default of 1, not NULL: an investigation that predates
+    this column has, from this system's own persistence perspective, only
+    ever had one known attempt — describing it as attempt 1 is simply
+    correct, not a fabricated guess, unlike stopping_reason's NULL-means-
+    unknown convention above."""
+    with engine.connect() as connection:
+        connection.execute(
+            text("ALTER TABLE investigation_records ADD COLUMN IF NOT EXISTS attempt_number INTEGER NOT NULL DEFAULT 1")
+        )
+        connection.commit()
+
+
 def ensure_email_message_content_hash_index(engine: Engine) -> None:
     """Retrofit the `(project_id, content_hash) WHERE message_id IS NULL`
     unique index (Phase 8A pre-commit review fix) onto the `email_messages`
@@ -195,6 +214,7 @@ def initialize_database(engine: Engine, settings: Settings) -> Project:
     ensure_investigation_contract_clauses_column(engine)
     ensure_investigation_events_columns(engine)
     ensure_investigation_pipeline_gap_fix_columns(engine)
+    ensure_investigation_attempt_number_column(engine)
     ensure_email_message_content_hash_index(engine)
     ensure_storage_root(settings.storage_root)
 
