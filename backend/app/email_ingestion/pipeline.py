@@ -165,8 +165,15 @@ def ingest_email_bytes(
         # won the race, exactly like the non-racing duplicate path already
         # does — never a 500, never a silently duplicated evidence record.
         session.rollback()
+        # Capture the paths into plain locals BEFORE delete+commit: once the
+        # row is deleted and this commits, `document`'s attributes can no
+        # longer be read (SQLAlchemy raises ObjectDeletedError on access to
+        # a deleted, expired instance) -- there would be nothing left to
+        # read raw_text_path off of to know what to clean up.
+        raw_text_path = document.raw_text_path
         session.delete(document)
         session.commit()
+        _delete_orphaned_document_files(eml_path, raw_text_path)
 
         winner = None
         if parsed.message_id:
@@ -210,6 +217,33 @@ def ingest_email_bytes(
         subject=parsed.subject,
         message_id=parsed.message_id,
     )
+
+
+def _delete_orphaned_document_files(eml_path: Path, raw_text_path: str | None) -> None:
+    """Best-effort removal of the on-disk files belonging to a Document
+    that was just deleted from the database -- the duplicate-import race
+    recovery path in ingest_email_bytes() above, the only caller. Never
+    raises: a filesystem issue here must never turn an already-successful
+    duplicate-recovery outcome into a failure (see the IntegrityError
+    handler's own comment).
+
+    `eml_path`/`raw_text_path` are always the exact paths this same call
+    just wrote moments earlier for the document being discarded -- passed
+    in directly, never re-derived or looked up by a shared key -- so this
+    can never touch the retained, canonical document's own files (the
+    request that actually won the race) or any other document's or
+    project's files: new_storage_key() (app/ingestion/storage.py) gives
+    every call its own fresh, UUID-prefixed storage key, so two documents
+    never share a filename to begin with. `raw_text_path` is None if
+    indexing failed before the extracted-text file was ever written --
+    there is then nothing to delete for it, not an error."""
+    for path in (eml_path, Path(raw_text_path) if raw_text_path else None):
+        if path is None:
+            continue
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Could not remove orphaned file %s for a discarded duplicate import: %s", path, exc)
 
 
 def _derive_document_filename(parsed: ParsedEmail, source_name: str) -> str:

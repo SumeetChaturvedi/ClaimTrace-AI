@@ -299,6 +299,25 @@ class InvestigationRecord(Base):
     # "predates this column" ambiguity to represent: an investigation from
     # before this column existed is correctly described as "not truncated").
     events_truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # Phase 1 (Fix Existing Investigation Pipeline Gaps): True when the
+    # LLM provider's own response metadata reported that `answer` was cut
+    # off by its output-token budget (see InvestigationResponse.answer_
+    # truncated's own docstring) -- a plain boolean with a real default,
+    # same reasoning as events_truncated above: "not truncated" is simply
+    # correct for every investigation that predates this column.
+    answer_truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # The raw, internal reason the Investigation Loop's evidence-gathering
+    # stopped for this run (InvestigationLoop.LoopRunResult.stopping_reason
+    # — e.g. 'sufficient', 'unsupported_remediation', 'max_iterations_
+    # reached'). Nullable, with NO default: unlike answer_truncated/events_
+    # truncated above, "unknown" (NULL) is the only honest value for a
+    # legacy investigation that predates this column, since this phase has
+    # no way to know what a pre-existing run's loop actually did. The API
+    # layer (app/api/routes/investigations.py) maps a non-NULL value onto a
+    # plain-language `evidence_limitation` message for anything an
+    # investigator sees, and treats NULL identically to 'sufficient' (no
+    # limitation to report) -- never as a failure or a fabricated reason.
+    stopping_reason: Mapped[Optional[str]] = mapped_column(Text)
     error: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

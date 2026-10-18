@@ -169,6 +169,15 @@ export interface InvestigationResponse {
   events: ExtractedEvent[]
   events_error: string | null
   events_truncated: boolean
+  // Phase 1 (Fix Existing Investigation Pipeline Gaps). True only when the
+  // LLM provider's own response metadata reported `answer` was cut off by
+  // its output-token budget — never inferred from the answer's length.
+  answer_truncated: boolean
+  // Plain-language note when the Investigation Loop's evidence-gathering
+  // stopped for a reason other than finding sufficient evidence (e.g. a
+  // referenced contract clause could not be retrieved) — null for a
+  // cleanly completed investigation. Never the raw internal reason name.
+  evidence_limitation: string | null
   // NOTE: this is the entire response shape. There is no separate field for
   // evidence gaps or conflicts — the backend does not return them. Any UI
   // section for those concepts must say so explicitly rather than deriving
@@ -202,6 +211,8 @@ export interface InvestigationRecord {
   events: ExtractedEvent[]
   events_error: string | null
   events_truncated: boolean
+  answer_truncated: boolean
+  evidence_limitation: string | null
   error: string | null
 }
 

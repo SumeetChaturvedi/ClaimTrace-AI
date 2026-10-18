@@ -175,6 +175,13 @@ export function InvestigationRecordPage() {
           <>
             <Section title="Finding">
               <Prose>{record.answer}</Prose>
+              {record.answer_truncated && (
+                <p className={styles.limitationText}>
+                  This answer may be incomplete — it was cut off before the model finished
+                  generating it.
+                </p>
+              )}
+              {record.evidence_limitation && <p className={styles.limitationText}>{record.evidence_limitation}</p>}
             </Section>
 
             <Section title="Evidence Review">

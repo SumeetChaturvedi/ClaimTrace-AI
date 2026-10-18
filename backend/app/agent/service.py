@@ -324,6 +324,8 @@ class InvestigationService:
             events=events,
             events_error=events_error,
             events_truncated=events_truncated,
+            answer_truncated=result.answer_truncated,
+            stopping_reason=loop_result.stopping_reason,
         )
 
     def _extract_events(self, question: str, evidence: list[Evidence]) -> tuple[list, str | None, bool]:

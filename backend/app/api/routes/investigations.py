@@ -89,7 +89,64 @@ class InvestigationRecordResponse(BaseModel):
         default=False,
         description="True if the extraction response was cut off mid-array and some candidates had to be dropped as incomplete — events still holds every complete, verified candidate found before the cut-off.",
     )
+    answer_truncated: bool = Field(
+        default=False,
+        description=(
+            "Phase 1 (Fix Existing Investigation Pipeline Gaps): True if the LLM provider's own "
+            "response metadata reported that `answer` was cut off by its output-token budget. "
+            "False for every investigation that predates this field — that is the correct, "
+            "honest default (see InvestigationRecord.answer_truncated's own docstring), never a "
+            "fabricated claim that an old answer was definitely complete."
+        ),
+    )
+    evidence_limitation: str | None = Field(
+        default=None,
+        description=(
+            "Phase 1 (Fix Existing Investigation Pipeline Gaps): a plain-language note when the "
+            "Investigation Loop's evidence-gathering stopped for a reason other than finding "
+            "sufficient evidence (see _describe_stopping_reason below for the exact mapping) — "
+            "None for a cleanly completed investigation, for one that predates this field, and "
+            "for a failed investigation (see `error` instead, which is unrelated and untouched "
+            "by this field). Never the raw internal stopping-reason value."
+        ),
+    )
     error: str | None = None
+
+
+# Internal engine stopping-reason values (InvestigationLoop.LoopRunResult.
+# stopping_reason / InvestigationResponse.stopping_reason) mapped onto
+# plain-language text an investigator can act on — never the raw enum
+# name, and never a claim stronger than what the engine actually
+# established. 'sufficient' (evidence-gathering completed normally) and
+# None (a legacy investigation, or one that failed before a loop result
+# was ever produced — see _run_and_persist) both mean "nothing to report"
+# and return None here; every other value gets its own or a shared
+# generic message, never silently dropped.
+_STOPPING_REASON_MESSAGES: dict[str, str] = {
+    "unsupported_remediation": (
+        "This investigation referenced a specific contract clause that could not be retrieved "
+        "from this project's contract data. The finding below reflects only the evidence that "
+        "was found; it does not confirm or rule out the referenced clause."
+    ),
+}
+_GENERIC_EVIDENCE_LIMITATION_MESSAGE = (
+    "This investigation's evidence search stopped before every available lead was followed. "
+    "The finding below reflects the evidence that was gathered, which may be incomplete."
+)
+
+
+def _describe_stopping_reason(stopping_reason: str | None) -> str | None:
+    """Map a raw internal stopping_reason onto the plain-language
+    `evidence_limitation` text an investigator sees, or None when there is
+    nothing to report (stopping_reason is None — a legacy record or a
+    failed run — or 'sufficient', meaning the loop's own assessor reported
+    the evidence was enough). A recognized non-sufficient reason gets its
+    own specific message; any other non-sufficient value (including one
+    this mapping doesn't yet know about) gets the shared generic message
+    rather than exposing its raw name or being silently dropped."""
+    if stopping_reason is None or stopping_reason == "sufficient":
+        return None
+    return _STOPPING_REASON_MESSAGES.get(stopping_reason, _GENERIC_EVIDENCE_LIMITATION_MESSAGE)
 
 
 class InvestigationExecutionError(HTTPException):
@@ -131,6 +188,8 @@ def _to_response(record: InvestigationRecord) -> InvestigationRecordResponse:
         events=[ExtractedEvent.model_validate(e) for e in (record.events or [])],
         events_error=record.events_error,
         events_truncated=record.events_truncated,
+        answer_truncated=record.answer_truncated,
+        evidence_limitation=_describe_stopping_reason(record.stopping_reason),
         error=record.error,
     )
 
@@ -201,6 +260,8 @@ async def _run_and_persist(
     )
     record.events_error = response.events_error
     record.events_truncated = response.events_truncated
+    record.answer_truncated = response.answer_truncated
+    record.stopping_reason = response.stopping_reason
     for ordinal, citation in enumerate(response.citations):
         db.add(
             InvestigationRecordCitation(
@@ -295,6 +356,8 @@ async def retry_investigation(
     record.events = None
     record.events_error = None
     record.events_truncated = False
+    record.answer_truncated = False
+    record.stopping_reason = None
     record.citations = []
     db.commit()
 

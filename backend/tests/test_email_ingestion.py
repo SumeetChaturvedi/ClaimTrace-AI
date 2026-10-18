@@ -29,6 +29,7 @@ from email.utils import formatdate
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
+from app.config import get_settings
 from app.db.models import (
     Document,
     DocumentChunk,
@@ -39,6 +40,7 @@ from app.db.models import (
     Project,
 )
 from app.db.session import get_session_factory
+from app.ingestion.storage import email_storage_dir, text_storage_dir
 from app.main import app
 
 NONEXISTENT_PROJECT_ID = 999_999
@@ -684,6 +686,29 @@ class EmailConcurrentImportTests(unittest.TestCase):
         docs = self.client.get(f"/projects/{project_id}/documents").json()
         email_docs = [d for d in docs if d["doc_type"] == "EMAIL"]
         self.assertEqual(len(email_docs), 1, "a concurrent race must never leave more than one Document behind")
+
+    def test_concurrent_import_race_cleans_up_the_discarded_duplicates_files(self):
+        """Code review fix regression: the IntegrityError recovery path in
+        ingest_email_bytes() deletes the losing duplicate's Document row,
+        but previously left its on-disk .eml and extracted-text files
+        behind. Drives the same real concurrent race as the tests above,
+        then checks the filesystem directly: exactly one .eml and one
+        extracted-text file must remain for this project -- never one per
+        losing thread, and never zero (the winner's own files must still
+        be intact)."""
+        project_id = self._create_project("Email Concurrency Test C (file cleanup)")
+        raw = _build_eml(
+            headers={"From": "a@example.com", "Subject": "Race C (file cleanup)", "Date": "Tue, 03 Feb 2026 09:15:00 +0000"},
+            body="race marker C, identical content every time, checked against disk",
+        )
+        statuses = self._concurrent_import(project_id, raw, workers=5)
+        self.assertEqual(statuses.count("imported"), 1, statuses)
+
+        settings = get_settings()
+        eml_files = list(email_storage_dir(settings.storage_root, project_id).iterdir())
+        text_files = list(text_storage_dir(settings.storage_root, project_id).iterdir())
+        self.assertEqual(len(eml_files), 1, f"expected exactly one surviving .eml file, found {eml_files}")
+        self.assertEqual(len(text_files), 1, f"expected exactly one surviving extracted-text file, found {text_files}")
 
 
 if __name__ == "__main__":

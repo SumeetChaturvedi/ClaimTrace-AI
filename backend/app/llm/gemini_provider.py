@@ -15,7 +15,7 @@ from google.genai import types
 from google.genai.errors import APIError
 
 from app.config import get_settings
-from app.llm.provider import LLMProvider, LLMProviderError, Prompt
+from app.llm.provider import GenerationResult, LLMProvider, LLMProviderError, Prompt
 
 # Gemini's free API tier is Flash-model-friendly; kept configurable via
 # Settings.gemini_model since exact free-tier model availability/naming
@@ -31,10 +31,12 @@ class GeminiProvider(LLMProvider):
     def __init__(self) -> None:
         self._client: genai.Client | None = None
 
-    def generate(self, prompt: Prompt) -> str:
+    def generate(self, prompt: Prompt) -> GenerationResult:
         """Send `prompt` to the configured Gemini model and return its text
-        response verbatim. Raises LLMProviderError if no API key is
-        configured, or if the call fails."""
+        response verbatim, plus whether Gemini's own response metadata
+        indicates the output was cut off by the model's output-token limit.
+        Raises LLMProviderError if no API key is configured, or if the call
+        fails."""
         settings = get_settings()
         api_key = (settings.gemini_api_key or "").strip()
         if not api_key:
@@ -65,9 +67,28 @@ class GeminiProvider(LLMProvider):
         text = (response.text or "").strip()
         if not text:
             raise LLMProviderError("Gemini returned an empty response")
-        return text
+        return GenerationResult(text=text, truncated=_hit_output_token_limit(response))
 
     def _get_client(self, api_key: str) -> genai.Client:
         if self._client is None:
             self._client = genai.Client(api_key=api_key)
         return self._client
+
+
+def _hit_output_token_limit(response: "types.GenerateContentResponse") -> bool:
+    """Whether Gemini's own response metadata reports that the first
+    candidate stopped because it hit its output-token budget
+    (finish_reason == MAX_TOKENS) — the one reliable, provider-reported
+    signal for "this text may be incomplete," as opposed to guessing from
+    the text's length or proximity to a character limit. Defensively
+    returns False (never raises, never guesses) if `response` doesn't have
+    the expected shape at all -- a response missing this metadata is not
+    evidence of truncation, only evidence that this signal is unavailable
+    for it."""
+    try:
+        candidates = response.candidates
+        if not candidates:
+            return False
+        return candidates[0].finish_reason == types.FinishReason.MAX_TOKENS
+    except (AttributeError, IndexError, TypeError):
+        return False

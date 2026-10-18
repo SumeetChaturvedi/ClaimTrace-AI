@@ -34,6 +34,17 @@ export function FindingPanel({
         <div className={styles.findingText}>
           <Prose>{response.answer}</Prose>
         </div>
+        {response.answer_truncated && (
+          <div className={styles.limitationNotice} role="status">
+            This answer may be incomplete — it was cut off before the model finished generating
+            it.
+          </div>
+        )}
+        {response.evidence_limitation && (
+          <div className={styles.limitationNotice} role="status">
+            {response.evidence_limitation}
+          </div>
+        )}
       </div>
 
       <p className={styles.disclaimer}>

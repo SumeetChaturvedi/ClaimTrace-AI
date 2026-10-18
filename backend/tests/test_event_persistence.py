@@ -40,7 +40,7 @@ from app.agent.service import InvestigationService
 from app.api.routes.investigate import get_investigation_service
 from app.db.models import InvestigationRecord
 from app.db.session import get_session_factory
-from app.llm.provider import LLMProvider, LLMProviderError, Prompt
+from app.llm.provider import GenerationResult, LLMProvider, LLMProviderError, Prompt
 from app.main import app
 
 PROJECT_ID = 2
@@ -52,8 +52,8 @@ class _FakeAnswerProvider(LLMProvider):
     ReasoningEngine's provider in this file, so these tests never call
     real Gemini for the reasoning step either."""
 
-    def generate(self, prompt: Prompt) -> str:
-        return "A fake, fixed reasoning answer for testing persistence."
+    def generate(self, prompt: Prompt) -> GenerationResult:
+        return GenerationResult(text="A fake, fixed reasoning answer for testing persistence.")
 
 
 class _FixedEventExtractor:

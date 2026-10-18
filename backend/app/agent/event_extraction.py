@@ -134,7 +134,13 @@ class EventExtractor:
         )
 
         try:
-            raw_text = self._provider.generate(prompt)
+            # .truncated (the provider's own output-token-limit signal) is
+            # deliberately not used here -- this module keeps its own,
+            # separate structural truncation check below (_parse_json_array:
+            # did the JSON array ever reach a closing "]"), unchanged by
+            # this field's addition, so the two truncation signals (main
+            # answer vs. event extraction) are never conflated.
+            raw_text = self._provider.generate(prompt).text
         except LLMProviderError as exc:
             raise EventExtractionError(str(exc)) from exc
 

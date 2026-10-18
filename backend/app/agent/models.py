@@ -191,6 +191,16 @@ class ReasoningResult(BaseModel):
     answer: str
     reasoning_steps: list[str] = Field(default_factory=list)
     supporting_evidence: list[Citation] = Field(default_factory=list)
+    answer_truncated: bool = Field(
+        default=False,
+        description=(
+            "True only when the LLM provider's own response metadata reports that `answer` "
+            "was cut off by its output-token budget (see GeminiProvider._hit_output_token_limit) "
+            "-- never inferred from the answer's length or wording. False whenever the provider "
+            "finished normally, or has no such metadata to report (which is not evidence either "
+            "way, just an unavailable signal -- see GenerationResult's own docstring)."
+        ),
+    )
 
 
 class InvestigationResponse(BaseModel):
@@ -248,5 +258,25 @@ class InvestigationResponse(BaseModel):
             "incomplete — `events` still holds every candidate that WAS complete and passed "
             "source verification; this only flags that the true count may be higher. Always "
             "False when events_error is set (there's nothing partial about a hard failure)."
+        ),
+    )
+    answer_truncated: bool = Field(
+        default=False,
+        description=(
+            "True only when the LLM provider's own response metadata reports that `answer` "
+            "was cut off by its output-token budget — never inferred from length or wording, "
+            "and never set merely because events_truncated is set (that is a separate, "
+            "independent signal for event extraction's own, differently-budgeted call)."
+        ),
+    )
+    stopping_reason: str = Field(
+        default="sufficient",
+        description=(
+            "The raw, internal reason the Investigation Loop's evidence-gathering stopped for "
+            "this run (see InvestigationLoop.LoopRunResult.stopping_reason for the full set of "
+            "values) — an internal engine signal, not end-user-facing text. "
+            "app/api/routes/investigations.py maps this onto a plain-language "
+            "`evidence_limitation` message (or None when it's 'sufficient', meaning evidence "
+            "gathering completed normally) for anything presented to an investigator."
         ),
     )

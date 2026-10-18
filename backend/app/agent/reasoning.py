@@ -77,6 +77,7 @@ class ReasoningEngine:
                     "No supporting evidence was found for this question.",
                 ],
                 supporting_evidence=[],
+                answer_truncated=False,
             )
 
         ranked_evidence = sorted(package.evidence, key=lambda item: item.confidence, reverse=True)
@@ -85,7 +86,7 @@ class ReasoningEngine:
         prompt = self._prompt_builder.build_reasoning_prompt(ranked_package)
 
         try:
-            answer = self._provider.generate(prompt)
+            result = self._provider.generate(prompt)
         except LLMProviderError as exc:
             raise ReasoningError(str(exc)) from exc
 
@@ -93,7 +94,7 @@ class ReasoningEngine:
         verified_citations = verify_citations(candidate_citations, retrieved_evidence=candidate_citations)
 
         return ReasoningResult(
-            answer=answer,
+            answer=result.text,
             reasoning_steps=[
                 "Retrieved relevant evidence.",
                 "Ranked evidence by confidence.",
@@ -102,4 +103,12 @@ class ReasoningEngine:
                 "Verified each citation against the database before returning it.",
             ],
             supporting_evidence=verified_citations,
+            # The provider's own signal that the answer text was cut off by
+            # its output-token budget (see GeminiProvider._hit_output_token_
+            # limit) — never inferred here from the answer's length. This is
+            # about the MAIN answer only; event extraction has its own,
+            # separate truncation signal (event_extraction.py's structural
+            # "did the JSON array close" check) which this never touches or
+            # conflates with.
+            answer_truncated=result.truncated,
         )

@@ -22,7 +22,7 @@ import unittest
 
 from app.agent.event_extraction import EventExtractionError, EventExtractor
 from app.agent.models import Citation, Evidence
-from app.llm.provider import LLMProvider, LLMProviderError, Prompt
+from app.llm.provider import GenerationResult, LLMProvider, LLMProviderError, Prompt
 
 
 class FakeProvider(LLMProvider):
@@ -32,10 +32,10 @@ class FakeProvider(LLMProvider):
         self._response = response
         self._error = error
 
-    def generate(self, prompt: Prompt) -> str:
+    def generate(self, prompt: Prompt) -> GenerationResult:
         if self._error is not None:
             raise LLMProviderError(self._error)
-        return self._response
+        return GenerationResult(text=self._response)
 
 
 def _evidence(document_id: int, chunk_id: int, chunk_text: str) -> Evidence:
@@ -249,9 +249,9 @@ class OutputBudgetTests(unittest.TestCase):
         captured: dict[str, Prompt] = {}
 
         class CapturingProvider(LLMProvider):
-            def generate(self, prompt: Prompt) -> str:
+            def generate(self, prompt: Prompt) -> GenerationResult:
                 captured["prompt"] = prompt
-                return "[]"
+                return GenerationResult(text="[]")
 
         extractor = EventExtractor(provider=CapturingProvider())
         extractor.extract("question", [GOOD_EVIDENCE])

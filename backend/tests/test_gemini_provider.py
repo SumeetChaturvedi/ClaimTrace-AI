@@ -23,14 +23,24 @@ Run with:
 import unittest
 from unittest.mock import MagicMock, patch
 
+from google.genai import types
+
 from app.llm.gemini_provider import MAX_OUTPUT_TOKENS, GeminiProvider
 from app.llm.provider import Prompt
 
 
-def _provider_with_fake_client(response_text: str = "ok"):
+def _provider_with_fake_client(response_text: str = "ok", finish_reason=None):
+    """finish_reason=None simulates a response with no candidate metadata
+    at all (the exact shape the three existing request-construction tests
+    below already rely on) -- a real types.FinishReason value simulates a
+    real Gemini response that actually reports one."""
     provider = GeminiProvider()
     fake_client = MagicMock()
-    fake_client.models.generate_content.return_value = MagicMock(text=response_text)
+    if finish_reason is None:
+        fake_response = MagicMock(text=response_text)
+    else:
+        fake_response = MagicMock(text=response_text, candidates=[MagicMock(finish_reason=finish_reason)])
+    fake_client.models.generate_content.return_value = fake_response
     provider._client = fake_client  # bypass the lazy genai.Client() construction
     return provider, fake_client
 
@@ -69,6 +79,42 @@ class OutputBudgetReachesRequestConfigTests(unittest.TestCase):
         args, kwargs = fake_client.models.generate_content.call_args
         self.assertEqual(kwargs["contents"], "user-text")
         self.assertEqual(kwargs["config"].system_instruction, "sys-text")
+
+
+class AnswerTruncationDetectionTests(unittest.TestCase):
+    """Phase 1 fix: GenerationResult.truncated must reflect Gemini's own
+    reported finish_reason, never a guess based on the text itself."""
+
+    @patch("app.llm.gemini_provider.get_settings")
+    def test_max_tokens_finish_reason_sets_truncated_true(self, mock_get_settings):
+        mock_get_settings.return_value = MagicMock(gemini_api_key="fake-key", gemini_model="fake-model")
+        provider, _ = _provider_with_fake_client(finish_reason=types.FinishReason.MAX_TOKENS)
+
+        result = provider.generate(Prompt(system_prompt="sys", user_prompt="user"))
+
+        self.assertTrue(result.truncated)
+        self.assertEqual(result.text, "ok")
+
+    @patch("app.llm.gemini_provider.get_settings")
+    def test_normal_stop_finish_reason_does_not_set_truncated(self, mock_get_settings):
+        mock_get_settings.return_value = MagicMock(gemini_api_key="fake-key", gemini_model="fake-model")
+        provider, _ = _provider_with_fake_client(finish_reason=types.FinishReason.STOP)
+
+        result = provider.generate(Prompt(system_prompt="sys", user_prompt="user"))
+
+        self.assertFalse(result.truncated)
+
+    @patch("app.llm.gemini_provider.get_settings")
+    def test_response_with_no_candidate_metadata_defaults_to_not_truncated(self, mock_get_settings):
+        """A response shape this code can't read finish_reason from at all
+        (no `candidates`) must never be treated as proof of truncation --
+        only STOP/MAX_TOKENS from a real response indicate anything."""
+        mock_get_settings.return_value = MagicMock(gemini_api_key="fake-key", gemini_model="fake-model")
+        provider, _ = _provider_with_fake_client()  # finish_reason=None -> no `candidates` attribute set
+
+        result = provider.generate(Prompt(system_prompt="sys", user_prompt="user"))
+
+        self.assertFalse(result.truncated)
 
 
 if __name__ == "__main__":

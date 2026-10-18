@@ -150,6 +150,8 @@ export function InvestigationWorkspacePage() {
     events: record.events,
     events_error: record.events_error,
     events_truncated: record.events_truncated,
+    answer_truncated: record.answer_truncated,
+    evidence_limitation: record.evidence_limitation,
   }
 
   return (

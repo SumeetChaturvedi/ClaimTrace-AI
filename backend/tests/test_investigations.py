@@ -27,7 +27,8 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from app.db.models import InvestigationRecord
+from app.api.routes.investigations import _describe_stopping_reason
+from app.db.models import InvestigationRecord, Project
 from app.db.session import get_session_factory
 from app.main import app
 
@@ -85,6 +86,10 @@ class InvestigationEndpointsTests(unittest.TestCase):
         self.assertIsInstance(record["reasoning_steps"], list)
         # A stable, real UUID -- not a client-supplied or sequential id.
         uuid.UUID(record["id"])
+        # Phase 1 (Fix Existing Investigation Pipeline Gaps): both new
+        # fields must always be present and well-typed on a fresh response.
+        self.assertIsInstance(record["answer_truncated"], bool)
+        self.assertTrue(record["evidence_limitation"] is None or isinstance(record["evidence_limitation"], str))
 
         with get_session_factory()() as session:
             db_row = session.get(InvestigationRecord, uuid.UUID(record["id"]))
@@ -93,6 +98,10 @@ class InvestigationEndpointsTests(unittest.TestCase):
             self.assertEqual(db_row.status, record["status"])
             if record["status"] == "completed":
                 self.assertEqual(len(db_row.citations), len(record["citations"]))
+                # A completed run always goes through a real LoopRunResult,
+                # so a real stopping_reason is always persisted for it --
+                # never left NULL the way a legacy/pre-feature row would be.
+                self.assertIsNotNone(db_row.stopping_reason)
 
     def test_create_under_nonexistent_project_returns_404(self):
         resp = self.client.post(f"/projects/{NONEXISTENT_PROJECT_ID}/investigations", json={"query": "Any question?"})
@@ -178,6 +187,112 @@ class InvestigationEndpointsTests(unittest.TestCase):
     def test_retry_under_wrong_project_returns_404(self):
         resp = self.client.post(f"/projects/{PROJECT_3_ID}/investigations/{self.p2_investigation['id']}/retry")
         self.assertEqual(resp.status_code, 404)
+
+    def test_retry_clears_the_prior_runs_answer_truncated_and_stopping_reason(self):
+        """Mirrors the existing clearing behaviour already verified for
+        status/citations above -- a retry must not leave the PREVIOUS
+        attempt's truncation/stopping-reason signals visible on a record
+        whose new attempt hasn't produced its own yet. Uses the same
+        never-reaches-Gemini empty-query failure as the retry test above,
+        so this stays cheap."""
+        create_resp = self.client.post(f"/projects/{PROJECT_2_ID}/investigations", json={"query": "   "})
+        investigation_id = create_resp.json()["detail"]["investigation_id"]
+        self._created_ids.append(investigation_id)
+
+        with get_session_factory()() as session:
+            db_row = session.get(InvestigationRecord, uuid.UUID(investigation_id))
+            db_row.answer_truncated = True
+            db_row.stopping_reason = "unsupported_remediation"
+            session.commit()
+
+        self.client.post(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}/retry")
+
+        with get_session_factory()() as session:
+            db_row = session.get(InvestigationRecord, uuid.UUID(investigation_id))
+            self.assertFalse(db_row.answer_truncated)
+            self.assertIsNone(db_row.stopping_reason)
+
+
+class LegacyInvestigationRecordTests(unittest.TestCase):
+    """Phase 1 (Fix Existing Investigation Pipeline Gaps) backward-
+    compatibility regression: a record persisted before answer_truncated/
+    stopping_reason existed (simulated here by inserting a row without
+    ever setting either) must still render correctly through GET — never
+    an error, never a fabricated limitation or truncation claim."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+        cls.client.__enter__()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client.__exit__(None, None, None)
+
+    def test_legacy_completed_record_with_no_stopping_reason_shows_no_limitation(self):
+        with get_session_factory()() as session:
+            project = session.get(Project, PROJECT_2_ID)
+            self.assertIsNotNone(project, f"project {PROJECT_2_ID} must already exist for this test")
+            record = InvestigationRecord(
+                project_id=PROJECT_2_ID,
+                question="A legacy investigation question",
+                status="completed",
+                answer="A legacy answer persisted before this phase existed.",
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            investigation_id = record.id
+            # Confirms the premise: no value was ever set for either new
+            # column, so the database's own column defaults/nullability
+            # are what this test is actually exercising.
+            self.assertFalse(record.answer_truncated)
+            self.assertIsNone(record.stopping_reason)
+
+        try:
+            resp = self.client.get(f"/projects/{PROJECT_2_ID}/investigations/{investigation_id}")
+            self.assertEqual(resp.status_code, 200)
+            body = resp.json()
+            self.assertEqual(body["status"], "completed")
+            self.assertFalse(body["answer_truncated"])
+            self.assertIsNone(body["evidence_limitation"])
+        finally:
+            with get_session_factory()() as session:
+                row = session.get(InvestigationRecord, investigation_id)
+                if row is not None:
+                    session.delete(row)
+                session.commit()
+
+
+class DescribeStoppingReasonTests(unittest.TestCase):
+    """Direct, deterministic unit tests for the raw-enum-to-plain-language
+    mapping, independent of any real investigation run."""
+
+    def test_none_and_sufficient_report_no_limitation(self):
+        self.assertIsNone(_describe_stopping_reason(None))
+        self.assertIsNone(_describe_stopping_reason("sufficient"))
+
+    def test_unsupported_remediation_gets_its_specific_clause_message(self):
+        message = _describe_stopping_reason("unsupported_remediation")
+        self.assertIsNotNone(message)
+        self.assertIn("clause", message.lower())
+        # Must never claim the clause doesn't exist -- only that it
+        # couldn't be retrieved.
+        self.assertNotIn("does not exist", message.lower())
+
+    def test_other_non_sufficient_reasons_get_the_generic_message_not_the_raw_name(self):
+        for reason in ("max_iterations_reached", "budget_exhausted", "no_progress", "same_remediation_no_progress", "executor_failure"):
+            message = _describe_stopping_reason(reason)
+            self.assertIsNotNone(message, reason)
+            self.assertNotIn(reason, message)  # never the raw internal name verbatim
+
+    def test_an_unrecognized_future_reason_still_gets_a_safe_generic_message(self):
+        """A hypothetical future stopping_reason this mapping doesn't know
+        about yet must never be silently dropped or shown as its raw
+        name -- it falls back to the same generic message."""
+        message = _describe_stopping_reason("some_future_reason_not_yet_mapped")
+        self.assertIsNotNone(message)
+        self.assertNotIn("some_future_reason_not_yet_mapped", message)
 
 
 if __name__ == "__main__":

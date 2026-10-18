@@ -124,6 +124,28 @@ def ensure_investigation_events_columns(engine: Engine) -> None:
         connection.commit()
 
 
+def ensure_investigation_pipeline_gap_fix_columns(engine: Engine) -> None:
+    """Retrofit the `answer_truncated`/`stopping_reason` columns (Phase 1:
+    Fix Existing Investigation Pipeline Gaps) onto an already-existing,
+    already-populated `investigation_records` table — same safe, additive,
+    idempotent ALTER pattern as the other ensure_investigation_* functions
+    above. No-op in effect on a clean database.
+
+    answer_truncated gets a real default (same reasoning as events_
+    truncated's own ALTER above: "not truncated" is correct for every
+    investigation that predates this column). stopping_reason stays
+    nullable with NO default — NULL is the only honest value for a legacy
+    investigation this phase has no way to retroactively know a
+    stopping_reason for; the API layer treats NULL identically to
+    'sufficient' (nothing to report), never as a failure."""
+    with engine.connect() as connection:
+        connection.execute(
+            text("ALTER TABLE investigation_records ADD COLUMN IF NOT EXISTS answer_truncated BOOLEAN NOT NULL DEFAULT false")
+        )
+        connection.execute(text("ALTER TABLE investigation_records ADD COLUMN IF NOT EXISTS stopping_reason TEXT"))
+        connection.commit()
+
+
 def ensure_email_message_content_hash_index(engine: Engine) -> None:
     """Retrofit the `(project_id, content_hash) WHERE message_id IS NULL`
     unique index (Phase 8A pre-commit review fix) onto the `email_messages`
@@ -172,6 +194,7 @@ def initialize_database(engine: Engine, settings: Settings) -> Project:
     ensure_investigation_timeline_column(engine)
     ensure_investigation_contract_clauses_column(engine)
     ensure_investigation_events_columns(engine)
+    ensure_investigation_pipeline_gap_fix_columns(engine)
     ensure_email_message_content_hash_index(engine)
     ensure_storage_root(settings.storage_root)
 

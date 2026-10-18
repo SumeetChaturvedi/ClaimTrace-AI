@@ -42,6 +42,23 @@ class LLMProviderError(Exception):
     exception type."""
 
 
+@dataclass(frozen=True)
+class GenerationResult:
+    """A provider's response to one generate() call: the text itself, plus
+    whether the provider's own metadata indicates the response was cut off
+    before it naturally finished (e.g. an output-token-limit finish reason)
+    — never inferred from the text's length or shape, only from the
+    provider actually reporting it. `truncated` defaults to False, which is
+    the correct, safe value whenever a provider has no such metadata to
+    report at all (see GeminiProvider.generate() for the one concrete
+    example of how this is populated); a caller must never treat `False`
+    here as proof the response is complete if the provider genuinely can't
+    tell, only as "nothing indicated otherwise."""
+
+    text: str
+    truncated: bool = False
+
+
 class LLMProvider(ABC):
     """Minimal interface every LLM provider implements. Deliberately tiny —
     one method, one input type, one output type, no model-specific
@@ -49,7 +66,7 @@ class LLMProvider(ABC):
     requires changing anything that depends on this interface."""
 
     @abstractmethod
-    def generate(self, prompt: Prompt) -> str:
-        """Generate a text response for `prompt`. Raises LLMProviderError on
-        any failure (not configured, auth, network, empty response, ...)."""
+    def generate(self, prompt: Prompt) -> GenerationResult:
+        """Generate a response for `prompt`. Raises LLMProviderError on any
+        failure (not configured, auth, network, empty response, ...)."""
         raise NotImplementedError
