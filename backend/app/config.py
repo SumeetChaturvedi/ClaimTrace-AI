@@ -53,6 +53,20 @@ class Settings(BaseSettings):
     # app/email_sync/token_crypto.py.
     mailbox_token_encryption_key: str | None = None
 
+    # Phase W2.1: Local OCR Foundation. None (the default) means "find
+    # the `tesseract` executable on PATH" -- the normal case on any host
+    # that has it installed (brew/apt), never a hardcoded path. Set this
+    # explicitly only for a non-standard install location. The APPLICATION
+    # itself must still start with this unset and no Tesseract installed
+    # at all -- every OCR-specific code path (app/ocr/tesseract_provider.py)
+    # checks for the executable explicitly and reports a clear per-item
+    # failure rather than assuming it's present.
+    tesseract_cmd: str | None = None
+    # Tesseract's own trained-language-data code (not an app locale) --
+    # "eng" is Tesseract's own default language and the only one
+    # guaranteed present in a standard install.
+    ocr_language: str = "eng"
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -109,6 +109,29 @@ def save_image(storage_root: Path, project_id: int, storage_key: str, content: b
     return destination
 
 
+def ocr_text_storage_dir(storage_root: Path, project_id: int) -> Path:
+    path = storage_root / "ocr_text" / str(project_id)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def save_ocr_text(storage_root: Path, project_id: int, storage_key: str, text: str) -> Path:
+    """Persist one image's Tesseract OCR output (Phase W2.1: Local OCR
+    Foundation) under its own ocr_text/ tree -- deliberately NOT the same
+    extracted_text/ tree save_extracted_text() above uses for a Document's
+    own, already-indexed text, so derived, not-yet-indexed OCR content can
+    never be confused with or accidentally picked up by anything that
+    walks the extracted_text/ tree looking for real Document text. Mirrors
+    save_extracted_text()'s own pattern exactly otherwise: `storage_key` is
+    always a fresh, server-generated value (new_storage_key()), never
+    derived from the original image's own filename. An empty string is a
+    genuine, honest OCR outcome (no readable text found) and is written
+    exactly as given -- never padded, never treated as an error here."""
+    destination = ocr_text_storage_dir(storage_root, project_id) / f"{storage_key}.txt"
+    destination.write_text(text, encoding="utf-8")
+    return destination
+
+
 def save_extracted_text(storage_root: Path, project_id: int, storage_key: str, full_text: str) -> Path:
     """Persist a document's extracted text (pages joined with form-feed
     separators so a later chunking step can recover page boundaries)."""

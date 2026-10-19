@@ -209,6 +209,27 @@ def ensure_email_attachment_image_columns(engine: Engine) -> None:
         connection.commit()
 
 
+def ensure_image_ocr_result_lease_columns(engine: Engine) -> None:
+    """Retrofit the lease_token/lease_expires_at columns (W2.1
+    stale-processing recovery fix) onto an `image_ocr_results` table that
+    may already exist from this phase's earlier, pre-lease code — same
+    safe, additive, idempotent ALTER pattern as
+    ensure_email_attachment_image_columns above. No-op in effect on a
+    clean database, where create_tables() already creates
+    image_ocr_results with both columns from the start.
+
+    Every row that predates this fix is left with both columns NULL —
+    correct, not a gap to backfill: NULL lease_expires_at on a
+    'processing' row is treated by the eligibility clause
+    (app/ocr/process_pending.py's _eligibility_clause) as an expired
+    lease, so any such row is immediately reclaimable rather than stuck
+    forever behind a lease that was never actually granted."""
+    with engine.connect() as connection:
+        connection.execute(text("ALTER TABLE image_ocr_results ADD COLUMN IF NOT EXISTS lease_token TEXT"))
+        connection.execute(text("ALTER TABLE image_ocr_results ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ"))
+        connection.commit()
+
+
 def ensure_storage_root(storage_root: Path) -> None:
     storage_root.mkdir(parents=True, exist_ok=True)
 
@@ -238,6 +259,7 @@ def initialize_database(engine: Engine, settings: Settings) -> Project:
     ensure_investigation_attempt_number_column(engine)
     ensure_email_message_content_hash_index(engine)
     ensure_email_attachment_image_columns(engine)
+    ensure_image_ocr_result_lease_columns(engine)
     ensure_storage_root(settings.storage_root)
 
     with get_session_factory()() as session:

@@ -33,6 +33,7 @@ from app.db.models import Project, ProjectImageAsset
 from app.db.session import get_db
 from app.ingestion.image_validation import validate_image
 from app.ingestion.storage import image_storage_dir, new_storage_key, save_image
+from app.ocr.pending import ensure_pending_ocr_result
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +159,18 @@ def ingest_project_image(
             status="failed",
             processing_error=str(exc),
         )
+
+    # Phase W2.1 (Local OCR Foundation): record this new preservation as
+    # OCR work still to be done -- Tesseract is never invoked here (see
+    # app/ocr/process_pending.py's own batch command for that). A failure
+    # in this step is logged and swallowed (see ensure_pending_ocr_result's
+    # own docstring); it never turns an otherwise-successful image upload
+    # into a failure, since the row above is already durably committed.
+    ensure_pending_ocr_result(
+        session,
+        project_image_asset_id=row.id,
+        default_language=get_settings().ocr_language,
+    )
     return row
 
 

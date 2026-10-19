@@ -1054,3 +1054,133 @@ class ProjectImageAsset(Base):
 
     project: Mapped["Project"] = relationship()
     document: Mapped[Optional["Document"]] = relationship()
+
+
+class ImageOcrResult(Base):
+    """Local Tesseract OCR output for one already-preserved image (Phase
+    W2.1: Local OCR Foundation) -- DERIVED content, deliberately kept in
+    its own table rather than added as columns on ProjectImageAsset/
+    EmailAttachment/WhatsAppMediaAttachment, so the original evidence
+    row's own fields (filename/content_hash/storage_key/detected_extension)
+    are never at risk of being confused with, or overwritten by, this
+    phase's output. Exactly one of the three parent FKs is set per row,
+    enforced by ck_image_ocr_results_exactly_one_parent below -- never a
+    polymorphic (attachment_type, attachment_id) pair with no real
+    referential integrity. Each of the three FK columns also carries its
+    own UniqueConstraint, so "at most one OCR result per source
+    attachment" is a real database guarantee (Postgres treats every NULL
+    as distinct, so rows belonging to the other two sources, which leave
+    that column NULL, never collide with each other).
+
+    status: 'pending' (row exists, OCR not yet attempted -- created the
+    moment the source image is preserved, see
+    app/ocr/pending.py's ensure_pending_ocr_result, called from each of
+    the three ingestion paths) -> 'processing' (claimed by a batch run,
+    see app/ocr/process_pending.py) -> 'completed' (Tesseract ran; text
+    saved under ocr_text_path -- EMPTY text is a genuine, honest
+    'completed' result, never 'failed') or 'failed' (missing executable,
+    unavailable language, timeout, unreadable image, or any other real
+    error -- `error` always set).
+
+    ocr_text_path mirrors Document.raw_text_path's own convention: OCR
+    text lives in its own server-managed file (app/ingestion/storage.py's
+    save_ocr_text), never inline in this row and never logged -- this
+    table only ever stores a path to it. (ocr_engine, ocr_engine_version,
+    ocr_language) together are this phase's idempotency/provenance key
+    (Phase W2.1 Section 7): a completed result is only reprocessed when
+    one of these three no longer matches the currently configured
+    engine/language, or an explicit --force override is given (see
+    app/ocr/process_pending.py) -- never unconditionally re-run.
+
+    W2.1 explicitly does NOT index this text as a Document/DocumentChunk,
+    does not touch retrieval/citation verification, and is not read by
+    any investigation code path -- that is W2.2's job, not this phase's.
+
+    New table -- Base.metadata.create_all() (app/db/init_db.py) creates it
+    automatically with no ALTER required, exactly like every table
+    introduced in a prior phase of this project. The lease_token/
+    lease_expires_at columns were added after this table was already
+    live in some local installations (any database where the app had
+    already been run against this phase's earlier, pre-lease code) --
+    create_all() never alters a table that already exists, so
+    app/db/init_db.py's ensure_image_ocr_result_lease_columns() retrofits
+    them via a safe, additive, idempotent ALTER, same convention as every
+    other ensure_* function in that module. No-op in effect on a clean
+    database, where create_tables() already creates this table with both
+    columns from the start."""
+
+    __tablename__ = "image_ocr_results"
+    __table_args__ = (
+        CheckConstraint(
+            "(project_image_asset_id IS NOT NULL)::int "
+            "+ (email_attachment_id IS NOT NULL)::int "
+            "+ (whatsapp_media_attachment_id IS NOT NULL)::int = 1",
+            name="ck_image_ocr_results_exactly_one_parent",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'completed', 'failed')",
+            name="ck_image_ocr_results_status",
+        ),
+        UniqueConstraint("project_image_asset_id", name="ux_image_ocr_results_project_image_asset_id"),
+        UniqueConstraint("email_attachment_id", name="ux_image_ocr_results_email_attachment_id"),
+        UniqueConstraint("whatsapp_media_attachment_id", name="ux_image_ocr_results_whatsapp_media_attachment_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Exactly one of these three is ever set -- see the CHECK constraint
+    # above. ondelete="CASCADE" on all three: once the source evidence row
+    # is gone (which itself only ever happens via a project/message
+    # cascade -- nothing in this codebase deletes a single attachment in
+    # isolation), there is nothing left for this derived-content row to
+    # describe; keeping it around would be a dangling, meaningless record,
+    # not preserved evidence.
+    project_image_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("project_image_assets.id", ondelete="CASCADE"),
+    )
+    email_attachment_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("email_attachments.id", ondelete="CASCADE"),
+    )
+    whatsapp_media_attachment_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("whatsapp_media_attachments.id", ondelete="CASCADE"),
+    )
+
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Where the derived OCR text lives on disk (see app/ingestion/storage.py's
+    # save_ocr_text) -- None until a 'completed' result actually writes one.
+    ocr_text_path: Mapped[Optional[str]] = mapped_column(Text)
+
+    ocr_engine: Mapped[str] = mapped_column(Text, nullable=False, server_default="tesseract")
+    ocr_engine_version: Mapped[Optional[str]] = mapped_column(Text)
+    ocr_language: Mapped[str] = mapped_column(Text, nullable=False, server_default="eng")
+
+    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    # Database-backed lease (W2.1 stale-processing recovery fix): a
+    # 'processing' row is only ever reclaimable once lease_expires_at has
+    # passed -- NOT based on how long ago processing_started_at was set.
+    # lease_token is a fresh, random value assigned every time a row is
+    # claimed or reclaimed (app/ocr/process_pending.py's
+    # _claim_specific_rows); every later write this module makes to the
+    # row (lease renewal, or the final completed/failed status) is a
+    # conditional UPDATE keyed on this exact token, so a worker that has
+    # lost the race -- another worker's claim already replaced this
+    # value -- can never overwrite a newer result. Both columns are
+    # cleared back to NULL whenever a row leaves 'processing' for
+    # 'completed'/'failed', so they are only ever non-NULL while a row is
+    # actively leased. See process_pending.py's own module docstring for
+    # the full design.
+    lease_token: Mapped[Optional[str]] = mapped_column(Text)
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    project_image_asset: Mapped[Optional["ProjectImageAsset"]] = relationship()
+    email_attachment: Mapped[Optional["EmailAttachment"]] = relationship()
+    whatsapp_media_attachment: Mapped[Optional["WhatsAppMediaAttachment"]] = relationship()

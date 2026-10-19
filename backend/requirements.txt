@@ -37,6 +37,21 @@ python-docx
 # exact behavior this phase depends on and verifies.
 pillow>=12.3,<13
 
+# Local OCR (Phase W2.1: Local OCR Foundation) — app/ocr/tesseract_provider.py
+# uses pytesseract, a thin subprocess wrapper around the real Tesseract OS
+# executable. Installing this package does NOT install that executable --
+# it must be installed separately on the host (macOS: `brew install
+# tesseract`; Debian/Ubuntu: `apt-get install tesseract-ocr`; see the
+# README's own "Optional: Local OCR" section). The application itself
+# still starts and runs every non-OCR code path normally with Tesseract
+# completely absent -- only app/ocr/process_pending.py's own batch command
+# needs it, and it exits cleanly (never touching any row) if it's missing.
+# Pinned to the exact version its exception/timeout behavior was verified
+# against (see tesseract_provider.py's own docstring: TesseractNotFoundError,
+# TesseractError, and the plain-RuntimeError timeout path are all confirmed
+# against this installed version's actual source, not guessed from docs).
+pytesseract==0.3.13
+
 # Chunking & embeddings (Milestone 0C)
 sentence-transformers
 

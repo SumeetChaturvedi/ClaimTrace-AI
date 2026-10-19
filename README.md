@@ -97,6 +97,40 @@ uvicorn app.main:app --reload
 resolved relative to the process's current working directory, not the
 repo root.
 
+### Optional: Local OCR (Phase W2.1)
+
+Images preserved from WhatsApp/Gmail/direct project uploads can be OCR'd
+locally via Tesseract — but this is entirely optional. **The application
+starts and runs normally, with every non-OCR feature fully working, even
+with Tesseract completely absent.** `pytesseract` (a thin Python wrapper,
+installed via `pip install -r requirements.txt` above) is not the same
+thing as the real Tesseract executable, which is a separate, host-level
+install:
+
+```bash
+# macOS
+brew install tesseract
+
+# Debian/Ubuntu
+sudo apt-get install tesseract-ocr
+```
+
+OCR is never run automatically during an upload, Gmail sync, or WhatsApp
+import — those paths only ever record that OCR work is pending. To
+actually process it, run the batch command explicitly (see
+`app/ocr/process_pending.py`'s own module docstring for the full option
+list):
+
+```bash
+cd backend && source .venv/bin/activate
+python -m app.ocr.process_pending
+```
+
+If Tesseract isn't installed, this command exits immediately with a clear
+message and touches no rows — it never marks anything as failed just
+because the tool itself is missing, so it's always safe to install
+Tesseract later and re-run it.
+
 Verify it's running:
 
 ```bash

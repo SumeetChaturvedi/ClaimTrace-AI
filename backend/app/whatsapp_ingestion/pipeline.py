@@ -32,11 +32,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db.models import Document, WhatsAppChat, WhatsAppMediaAttachment, WhatsAppMessage
 from app.ingestion.indexing import index_document
 from app.ingestion.metadata import extract_referenced_ids
 from app.ingestion.pipeline import IngestionError, ingest_document
 from app.ingestion.storage import new_storage_key, save_extracted_text, save_whatsapp_media
+from app.ocr.pending import OCR_ELIGIBLE_EXTENSIONS, ensure_pending_ocr_result
 from app.whatsapp_ingestion.dedup import compute_content_hash, find_existing_by_content_hash
 from app.whatsapp_ingestion.parsing import ParsedWhatsAppMessage, WhatsAppParseError, parse_whatsapp_export
 from app.whatsapp_ingestion.zip_import import WhatsAppZipImportError, extract_whatsapp_entries
@@ -600,4 +602,18 @@ def _ingest_media_attachment(
             exc,
         )
         return "failed"
+
+    # Phase W2.1 (Local OCR Foundation): WhatsApp preserves ALL
+    # unsupported media as bytes (images, audio, video, other -- see this
+    # function's own docstring above), unlike Gmail/direct-upload, which
+    # only ever reach this status for images. OCR must NEVER be attempted
+    # on non-image media -- `extension` here is the real, server-detected
+    # type from _detect_media_type() above, never the claimed filename, so
+    # this check is reliable, not a guess from the attachment's name.
+    if extension in OCR_ELIGIBLE_EXTENSIONS:
+        ensure_pending_ocr_result(
+            session,
+            whatsapp_media_attachment_id=row.id,
+            default_language=get_settings().ocr_language,
+        )
     return "stored_pending_processing"

@@ -33,11 +33,13 @@ from app.email_ingestion.dedup import (
 )
 from app.email_ingestion.parsing import EmailParseError, ParsedAttachment, ParsedEmail, parse_eml
 from app.email_ingestion.threading import resolve_thread
+from app.config import get_settings
 from app.ingestion.image_validation import sniff_image_signature, validate_image
 from app.ingestion.indexing import index_document
 from app.ingestion.metadata import extract_referenced_ids
 from app.ingestion.pipeline import IngestionError, ingest_document
 from app.ingestion.storage import new_storage_key, save_eml, save_extracted_text, save_image
+from app.ocr.pending import ensure_pending_ocr_result
 
 logger = logging.getLogger(__name__)
 
@@ -501,4 +503,14 @@ def _ingest_image_attachment(
             status="failed",
             processing_error=str(exc),
         )
+
+    # Phase W2.1 (Local OCR Foundation): see
+    # app/api/routes/project_images.py's identical call for the full
+    # rationale -- record the OCR work still to be done, never invoke
+    # Tesseract here.
+    ensure_pending_ocr_result(
+        session,
+        email_attachment_id=row.id,
+        default_language=get_settings().ocr_language,
+    )
     return row
