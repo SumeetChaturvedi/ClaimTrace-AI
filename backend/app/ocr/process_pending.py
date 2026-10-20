@@ -71,6 +71,15 @@ earlier rows in the same batch took:
     another worker already reclaimed this specific row because its
     previous lease had genuinely expired), processing stops immediately
     for this row -- Tesseract is never even invoked for it.
+  - A SECOND renewal happens immediately after `run_ocr` returns
+    successfully, before any candidate file is written -- narrowing (but
+    not eliminating) the window during which a second worker could
+    reclaim this row and run Tesseract on it too, by re-confirming
+    ownership right after the single longest, least predictable step in
+    this pipeline. This is a second checkpoint in the same design, not a
+    guarantee that only one worker ever performs OCR on a given row --
+    the write-and-commit steps that follow are still covered by their
+    own, independent lease check (see the next point).
   - Only a 'processing' row whose `lease_expires_at` has actually passed
     (or is NULL -- see `ensure_image_ocr_result_lease_columns`'s own
     docstring) is eligible for reclaim (`_eligibility_clause`'s
@@ -451,12 +460,16 @@ def _update_with_lease(session: Session, result_id: int, lease_token: str, value
 
 def _renew_lease(session: Session, result_id: int, lease_token: str) -> bool:
     """Confirm this worker still owns result_id's lease and extend it
-    fresh to `now + LEASE_DURATION_SECONDS` -- called once, right before
-    actually starting work on this specific row (see module docstring
-    for why this, not the original batch-wide claim time, is what makes
-    the lease window independent of --batch-size). Returns False (lease
-    already lost) if the token no longer matches, in which case the
-    caller must not invoke Tesseract or write any result for this row.
+    fresh to `now + LEASE_DURATION_SECONDS` -- called at each of
+    `_process_claimed_result`'s renewal checkpoints (right before
+    starting work on this specific row, and again right after a
+    successful `run_ocr` call, before anything is written -- see that
+    function's own docstring and the module docstring for why this, not
+    the original batch-wide claim time, is what makes the lease window
+    independent of --batch-size). Returns False (lease already lost) if
+    the token no longer matches, in which case the caller must not
+    invoke Tesseract (at the first checkpoint) or write any result for
+    this row (at either checkpoint).
 
     A database error while attempting the renewal is treated the same
     as a lost lease -- a safe, conservative default: this is a
@@ -545,12 +558,17 @@ def _process_claimed_result(
     vanished before we got to it"; either way, this invocation made no
     change to the row's final outcome.
 
-    Renews its lease once, immediately, via _renew_lease -- if that
-    fails (another worker already reclaimed this row because this
-    worker's previous lease on it had genuinely expired), returns
+    Renews its lease twice: once immediately, before anything else runs
+    -- if that fails (another worker already reclaimed this row because
+    this worker's previous lease on it had genuinely expired), returns
     'skipped' without ever invoking Tesseract. This is what keeps the
     lease window per-row rather than inherited from the whole batch's
-    original claim time (see module docstring).
+    original claim time (see module docstring). The SECOND renewal
+    happens right after a successful `run_ocr` call, before any
+    candidate file is written -- if THAT fails, returns 'skipped'
+    without writing a file or touching the row at all, narrowing (not
+    eliminating) the window in which a second worker could reclaim this
+    row and run Tesseract on it concurrently.
 
     Previous-result preservation (pre-commit review fix, Section 2): if
     this row already held a real, previously-'completed' result (e.g. a
@@ -643,6 +661,28 @@ def _process_claimed_result(
         if had_previous_completed_result:
             return _restore_previous_completed_result(f"a reprocess OCR attempt failed ({ocr_outcome.error})")
         return _mark_failed(ocr_outcome.error, engine_version=ocr_outcome.engine_version)
+
+    # Second lease renewal: Tesseract itself just ran (the single
+    # longest, least predictable step in this pipeline, bounded by
+    # OCR_TIMEOUT_SECONDS but still the main consumer of the lease
+    # window granted by the FIRST renewal at the top of this function).
+    # Re-confirming ownership HERE, before writing any candidate file,
+    # means a lease lost during the OCR call is caught with nothing on
+    # disk yet to clean up -- renewing before candidate-file creation
+    # rather than after it. This narrows, but does not eliminate, the
+    # window in which a second worker could reclaim this row and run
+    # Tesseract on it too: the write-and-commit steps below still run
+    # after this check, and a loss during THOSE is still caught by the
+    # existing, unchanged rowcount==0 handling further down -- this is a
+    # second checkpoint in the same lease-token design, not a guarantee
+    # that only one worker ever performs OCR.
+    if not _renew_lease(session, result_id, lease_token):
+        logger.warning(
+            "ImageOcrResult id=%s: lease lost after a successful OCR run but before saving its result -- "
+            "discarding this worker's OCR output without writing a candidate file or touching the row",
+            result_id,
+        )
+        return "skipped"
 
     # Safe replacement sequence: write the NEW candidate text file under
     # its own fresh, server-generated key FIRST -- the OLD file (if any)

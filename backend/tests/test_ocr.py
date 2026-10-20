@@ -774,6 +774,70 @@ class BatchProcessingTests(unittest.TestCase):
         self.assertEqual(len(call_log), 1, "an abandoned row must be reclaimed and OCR'd exactly once, never concurrently")
         self.assertEqual(self._ocr_status(image_id).status, "completed")
 
+    def test_two_threads_racing_to_claim_the_same_expired_lease_each_get_a_distinct_outcome(self):
+        """Follow-up: a genuine, real-thread race directly against
+        _claim_specific_rows itself -- the exact code path every
+        reclaim/claim in this module relies on for mutual exclusion --
+        rather than the sequential, single-session simulations used by
+        the lease-specific tests above. Two real threads, each opening
+        its OWN database session, are synchronized with a
+        threading.Barrier so neither can start its claim attempt before
+        the other, then both race to claim the SAME single,
+        already-expired 'processing' row at approximately the same
+        instant. No part of the claim, UPDATE, or locking is mocked --
+        this exercises Postgres's own SELECT ... FOR UPDATE SKIP LOCKED
+        and row-level locking directly."""
+        project_id = self._create_project("OCR Batch Test Real Thread Claim Race")
+        image_id = self._upload_image(project_id, "thread-race.jpg", color=(238, 58, 68))
+        self._backdate_processing(image_id, seconds_ago=pp.LEASE_DURATION_SECONDS + 60)
+
+        with get_session_factory()() as session:
+            result_id = session.scalar(select(ImageOcrResult.id).where(ImageOcrResult.project_image_asset_id == image_id))
+
+        barrier = threading.Barrier(2)
+        outcomes: list[list[tuple[int, str]] | None] = [None, None]
+        errors: list[BaseException] = []
+
+        def worker(index: int) -> None:
+            try:
+                barrier.wait(timeout=5)
+                with get_session_factory()() as session:
+                    claimed = pp._claim_specific_rows(
+                        session,
+                        [result_id],
+                        retry_failed=False,
+                        force=False,
+                        current_engine_version=None,
+                        current_language="eng",
+                        now=datetime.now(timezone.utc),
+                    )
+                outcomes[index] = claimed
+            except BaseException as exc:  # noqa: BLE001 -- surfaced to the main thread below, never swallowed
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        self.assertEqual(errors, [], f"worker thread(s) raised: {errors}")
+        self.assertTrue(all(o is not None for o in outcomes), "both worker threads must have completed")
+
+        non_empty = [o for o in outcomes if o]
+        empty = [o for o in outcomes if not o]
+        self.assertEqual(len(non_empty), 1, "exactly one thread must obtain a lease token for the contested row")
+        self.assertEqual(len(empty), 1, "exactly one thread must obtain no claim at all")
+        self.assertEqual(len(non_empty[0]), 1)
+        winning_id, winning_token = non_empty[0][0]
+        self.assertEqual(winning_id, result_id)
+
+        row = self._ocr_status(image_id)
+        self.assertEqual(row.status, "processing")
+        self.assertEqual(row.lease_token, winning_token, "the row's final lease_token must be exactly the one winning thread's token")
+        self.assertIsNotNone(row.lease_expires_at)
+        self.assertGreater(row.lease_expires_at, datetime.now(timezone.utc), "the winning claim's lease must expire in the future")
+
     def test_old_claim_with_an_actively_renewed_lease_is_not_reclaimed(self):
         """The core of this fix: distinguishes "claimed a long time ago"
         from "lease still valid". A row whose processing_started_at is
@@ -944,6 +1008,129 @@ class BatchProcessingTests(unittest.TestCase):
         self.assertEqual(row_final.status, "completed")
         self.assertEqual(
             Path(row_final.ocr_text_path).read_text(), "worker B text", "Worker A must never overwrite Worker B's already-committed result"
+        )
+
+    def _steal_lease(self, result_id: int, *, stolen_token: str = "a-different-workers-token") -> None:
+        """Simulate a second worker reclaiming result_id's lease WHILE
+        this worker's own Tesseract call is still "running" -- used as a
+        side effect inside a mocked image_to_string so the theft happens
+        deterministically between the OCR call and the second renewal
+        this phase's follow-up adds, without needing real concurrent
+        threads to land the race."""
+        with get_session_factory()() as other_session:
+            other_session.execute(
+                update(ImageOcrResult)
+                .where(ImageOcrResult.id == result_id)
+                .values(lease_token=stolen_token, lease_expires_at=datetime.now(timezone.utc) + timedelta(seconds=60))
+            )
+            other_session.commit()
+
+    def test_lease_lost_after_a_successful_ocr_run_does_not_publish_or_delete_the_previous_result(self):
+        """Follow-up: process_pending.py now renews its lease a SECOND
+        time immediately after a successful run_ocr() call, before
+        writing any candidate file. This proves that checkpoint actually
+        works: if another worker's claim has already replaced this
+        worker's lease_token by the time Tesseract returns, this worker
+        must report 'skipped', must never write a candidate OCR text
+        file to disk at all, and must never touch (let alone delete) a
+        previously committed, still-valid OCR result."""
+        project_id = self._create_project("OCR Batch Test Post OCR Lease Lost With Previous Result")
+        color = (236, 56, 66)
+        image_id = self._upload_image(project_id, "post-ocr-lease-lost.jpg", color=color)
+        original_path, original_text = self._complete_once(image_id, color, "original good text before the race")
+
+        with get_session_factory()() as session:
+            result_id = session.scalar(select(ImageOcrResult.id).where(ImageOcrResult.project_image_asset_id == image_id))
+
+        with get_session_factory()() as session:
+            claimed = pp._claim_specific_rows(
+                session,
+                [result_id],
+                retry_failed=True,
+                force=True,
+                current_engine_version=None,
+                current_language="eng",
+                now=datetime.now(timezone.utc),
+            )
+        self.assertEqual(len(claimed), 1)
+        _claimed_id, token_a = claimed[0]
+
+        def steal_lease_during_ocr(image, lang=None, timeout=0, **kwargs):
+            if self._color_of(image) == color:
+                self._steal_lease(result_id)
+                return "text worker A must never publish"
+            return "unrelated"
+
+        with get_session_factory()() as session:
+            with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+                with patch.object(tp.pytesseract, "image_to_string", side_effect=steal_lease_during_ocr):
+                    with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                        outcome = pp._process_claimed_result(
+                            session, get_settings().storage_root, result_id, token_a, language="eng", tesseract_cmd=None
+                        )
+
+        self.assertEqual(outcome, "skipped", "a lease lost after a successful OCR run must report 'skipped', not 'completed' or 'failed'")
+
+        row_after = self._ocr_status(image_id)
+        self.assertEqual(row_after.status, "processing", "worker A must not touch status once it has lost the lease")
+        self.assertEqual(row_after.ocr_text_path, original_path, "the previously committed OCR result must not be deleted or replaced")
+        self.assertEqual(Path(row_after.ocr_text_path).read_text(), original_text, "the previously committed OCR text file must survive untouched")
+
+        ocr_dir = get_settings().storage_root / "ocr_text" / str(project_id)
+        remaining_files = {p.name for p in ocr_dir.iterdir()}
+        self.assertEqual(
+            remaining_files, {Path(original_path).name}, "no candidate file must ever be written to disk once the second renewal fails"
+        )
+
+    def test_lease_lost_after_a_successful_ocr_run_on_a_first_attempt_publishes_nothing(self):
+        """The same checkpoint, but for a row with no previous completed
+        result -- there is nothing to preserve, only a new result that
+        must never be published. Renewing before candidate-file creation
+        (rather than after) means this case must leave the OCR text
+        directory completely untouched, not merely free of an orphan."""
+        project_id = self._create_project("OCR Batch Test Post OCR Lease Lost First Attempt")
+        color = (237, 57, 67)
+        image_id = self._upload_image(project_id, "post-ocr-lease-lost-first.jpg", color=color)
+
+        with get_session_factory()() as session:
+            result_id = session.scalar(select(ImageOcrResult.id).where(ImageOcrResult.project_image_asset_id == image_id))
+
+        with get_session_factory()() as session:
+            claimed = pp._claim_specific_rows(
+                session,
+                [result_id],
+                retry_failed=False,
+                force=False,
+                current_engine_version=None,
+                current_language="eng",
+                now=datetime.now(timezone.utc),
+            )
+        self.assertEqual(len(claimed), 1)
+        _claimed_id, token_a = claimed[0]
+
+        def steal_lease_during_ocr(image, lang=None, timeout=0, **kwargs):
+            if self._color_of(image) == color:
+                self._steal_lease(result_id)
+                return "text that must never be published"
+            return "unrelated"
+
+        with get_session_factory()() as session:
+            with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+                with patch.object(tp.pytesseract, "image_to_string", side_effect=steal_lease_during_ocr):
+                    with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                        outcome = pp._process_claimed_result(
+                            session, get_settings().storage_root, result_id, token_a, language="eng", tesseract_cmd=None
+                        )
+
+        self.assertEqual(outcome, "skipped")
+        row_after = self._ocr_status(image_id)
+        self.assertIsNone(row_after.ocr_text_path, "a lease lost after OCR but before saving must never publish any result")
+        self.assertEqual(row_after.status, "processing", "worker A must not touch status at all once it has lost the lease")
+
+        ocr_dir = get_settings().storage_root / "ocr_text" / str(project_id)
+        leftover = list(ocr_dir.iterdir()) if ocr_dir.exists() else []
+        self.assertEqual(
+            leftover, [], "renewing before candidate-file creation means nothing should ever be written to disk for this attempt"
         )
 
     def test_ocr_text_stored_separately_and_original_bytes_hash_unchanged(self):
