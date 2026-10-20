@@ -9,7 +9,7 @@ import { ErrorState, LoadingState } from '../components/ui/StateViews'
 import { parseProjectId } from '../lib/projectDirectory'
 import { useProject } from '../lib/useProject'
 import { useApiQuery } from '../api/useApi'
-import { getProjectDocument, fetchDocumentFileBlobUrl, getDocumentFileUrl } from '../api/client'
+import { getProjectDocument, fetchDocumentFileBlobUrl, getDocumentFileUrl, getOcrSourceImageUrl } from '../api/client'
 import type { ProjectDocumentSummary } from '../api/types'
 import { isDocxFilename, isEmailFilename } from '../lib/documentFormat'
 import { EmailMessagePanel } from '../components/evidence/EmailMessagePanel'
@@ -162,6 +162,10 @@ export function DocumentSourceViewPage() {
   // the full ProjectDocumentSummary is already in hand (same seam
   // isEmail/isDocx already use once fetched).
   const isWhatsApp = document.doc_type === 'WHATSAPP_MESSAGE'
+  // Phase W2.2 (OCR Evidence Integration): image_source is already part
+  // of this page's own ProjectDocumentSummary fetch -- no second lookup
+  // needed, unlike SourceViewPage's citation-based variant.
+  const isImage = document.image_source !== null
   const pdfHref = pdfState.status === 'available' ? pdfState.blobUrl : null
 
   return (
@@ -175,7 +179,9 @@ export function DocumentSourceViewPage() {
             ? 'This WhatsApp message was imported from a chat export and indexed as evidence, including any attachments ClaimTrace could process.'
             : isDocx
               ? "This is a Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view it."
-              : "This is the original document as stored in this project's record, opened at its first page. There is no cited passage here — this document was opened directly from the project's document register, not from an investigation's evidence."}
+              : isImage
+                ? 'This text was locally transcribed (OCR) from a preserved image — a derived reading of the image, not the original evidence itself. View the original image below to see exactly what was captured.'
+                : "This is the original document as stored in this project's record, opened at its first page. There is no cited passage here — this document was opened directly from the project's document register, not from an investigation's evidence."}
       </p>
 
       {isEmail ? (
@@ -224,7 +230,19 @@ export function DocumentSourceViewPage() {
       ) : (
       <div className={styles.grid}>
         <Panel className={styles.pdfPanel}>
-          {isDocx ? (
+          {isImage && document.image_source ? (
+            <div className={styles.pdfPanelContent}>
+              <SectionLabel>Extracted Evidence</SectionLabel>
+              <p className={styles.docxNotice}>
+                This text was locally transcribed (OCR) from a preserved image — derived
+                evidence, not the original. Open the original image to see exactly what was
+                captured.
+              </p>
+              <LinkButton variant="secondary" to={getOcrSourceImageUrl(id, document.image_source)} reloadDocument>
+                Open original image
+              </LinkButton>
+            </div>
+          ) : isDocx ? (
             <div className={styles.pdfPanelContent}>
               <SectionLabel>Original Document</SectionLabel>
               <p className={styles.docxNotice}>

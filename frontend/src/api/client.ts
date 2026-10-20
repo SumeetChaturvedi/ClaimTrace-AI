@@ -18,6 +18,7 @@ import type {
   InvestigationRequest,
   InvestigationResponse,
   DocumentSummary,
+  ImageSourceInfo,
   ProjectDocumentSummary,
   DocumentUploadResponse,
   Project,
@@ -381,6 +382,22 @@ export function listProjectImages(projectId: number): Promise<ProjectImageAssetS
 
 export function getProjectImageFileUrl(projectId: number, imageId: number): string {
   return `/api/projects/${projectId}/images/${imageId}/file`
+}
+
+// Phase W2.2 (OCR Evidence Integration): resolves an OCR-derived
+// document's ImageSourceInfo (see ProjectDocumentSummary.image_source)
+// to the ONE of the three existing, unmodified file-serving routes that
+// actually has the preserved original bytes for it -- never a new route,
+// never the OCR text file.
+export function getOcrSourceImageUrl(projectId: number, imageSource: ImageSourceInfo): string {
+  switch (imageSource.source_kind) {
+    case 'project_image':
+      return getProjectImageFileUrl(projectId, imageSource.image_id)
+    case 'email_attachment':
+      return getEmailAttachmentFileUrl(projectId, imageSource.image_id)
+    case 'whatsapp_attachment':
+      return getWhatsAppAttachmentFileUrl(projectId, imageSource.image_id)
+  }
 }
 
 // backend/app/api/routes/project_mailboxes.py (Phase 1: Gmail Integration).

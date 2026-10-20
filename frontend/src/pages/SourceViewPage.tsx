@@ -10,8 +10,8 @@ import { parseProjectId } from '../lib/projectDirectory'
 import { parseInvestigationId } from '../lib/investigationId'
 import { useInvestigationRecord } from '../lib/useInvestigationRecord'
 import { useProject } from '../lib/useProject'
-import { listAllDocuments, fetchDocumentFileBlobUrl, getDocumentFileUrl } from '../api/client'
-import type { DocumentSummary } from '../api/types'
+import { listAllDocuments, fetchDocumentFileBlobUrl, getDocumentFileUrl, getProjectDocument, getOcrSourceImageUrl } from '../api/client'
+import type { DocumentSummary, ImageSourceInfo } from '../api/types'
 import { isDocxFilename, isEmailFilename, citationLocationLabel } from '../lib/documentFormat'
 import { EmailMessagePanel } from '../components/evidence/EmailMessagePanel'
 import { WhatsAppMessagePanel } from '../components/evidence/WhatsAppMessagePanel'
@@ -71,6 +71,29 @@ export function SourceViewPage() {
         // Non-critical: falls back to "Document #id" below.
       })
   }, [])
+
+  // Phase W2.2 (OCR Evidence Integration): image_source only exists on
+  // the project-SCOPED document shape (ProjectDocumentSummary), never on
+  // the global listAllDocuments() result above (see that type's own
+  // note) -- a second, small, project-scoped lookup for just this one
+  // cited document, not a replacement for the lookup above, which still
+  // backs every non-image branch's doc_type/filename detection unchanged.
+  const [imageSource, setImageSource] = useState<ImageSourceInfo | null>(null)
+  useEffect(() => {
+    if (id === null || !citation) return
+    let cancelled = false
+    getProjectDocument(id, citation.document_id)
+      .then((doc) => {
+        if (!cancelled) setImageSource(doc.image_source)
+      })
+      .catch(() => {
+        // Non-critical: falls back to the existing PDF/DOCX branch below.
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, citation?.document_id])
 
   // Fetches the real PDF once and keeps it as a local blob URL — a single
   // real request that's both the availability check and the render
@@ -219,6 +242,12 @@ export function SourceViewPage() {
   // the real signal, same reasoning as DocumentSourceViewPage.tsx's own
   // isWhatsApp check.
   const isWhatsApp = document?.doc_type === 'WHATSAPP_MESSAGE'
+  // Phase W2.2 (OCR Evidence Integration): a document whose text came
+  // from locally running OCR against a preserved image, across all
+  // three image sources (see ProjectDocumentSummary.image_source) --
+  // detected via that project-scoped lookup, never by filename/doc_type,
+  // since an OCR'd image carries no synthetic marker of its own.
+  const isImage = imageSource !== null
 
   // The page-position fragment is appended to the local blob URL, not the
   // network URL — Chrome/Firefox/Safari's native PDF viewer honors
@@ -241,7 +270,9 @@ export function SourceViewPage() {
             ? 'This is the WhatsApp message ClaimTrace indexed as evidence, including the exact cited passage from its text.'
             : isDocx
               ? 'This is the extracted passage ClaimTrace indexed from the original Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view its full formatted content.'
-              : 'This is the original source document for the cited evidence. It opens at the page ClaimTrace cited, where known.'}
+              : isImage
+                ? 'This is text ClaimTrace locally transcribed (OCR) from a preserved image — a derived reading of the image, not the original evidence itself. View the original image below to see exactly what was captured.'
+                : 'This is the original source document for the cited evidence. It opens at the page ClaimTrace cited, where known.'}
       </p>
 
       {isEmail ? (
@@ -294,7 +325,19 @@ export function SourceViewPage() {
       ) : (
       <div className={styles.grid}>
         <Panel className={styles.pdfPanel}>
-          {isDocx ? (
+          {isImage && imageSource ? (
+            <div className={styles.pdfPanelContent}>
+              <SectionLabel>Extracted Evidence</SectionLabel>
+              <p className={styles.docxNotice}>
+                This is text ClaimTrace locally transcribed (OCR) from a preserved image —
+                derived evidence, not the original. The exact cited passage is shown alongside,
+                in Cited passage. Open the original image to see exactly what was captured.
+              </p>
+              <LinkButton variant="secondary" to={getOcrSourceImageUrl(id, imageSource)} reloadDocument>
+                Open original image
+              </LinkButton>
+            </div>
+          ) : isDocx ? (
             <div className={styles.pdfPanelContent}>
               <SectionLabel>Extracted Evidence</SectionLabel>
               <p className={styles.docxNotice}>

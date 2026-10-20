@@ -1324,6 +1324,684 @@ class BatchProcessingTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
 
 
+class OcrDocumentIndexingTests(unittest.TestCase):
+    """Phase W2.2 (OCR Evidence Integration): locally-OCR'd image text
+    becoming a real, searchable, citable Document/DocumentChunk via the
+    EXISTING, unmodified index_document() pipeline -- see
+    app/ingestion/image_ocr_indexing.py. Same real-Postgres, mocked-
+    Tesseract-boundary approach as BatchProcessingTests above; this class
+    additionally asserts on Document/DocumentChunk rows and the parent
+    attachment's document_id/status, which that class's own tests never
+    needed to touch."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+        cls.client.__enter__()
+        cls._created_project_ids: list[int] = []
+
+    @classmethod
+    def tearDownClass(cls):
+        with get_session_factory()() as session:
+            for project_id in cls._created_project_ids:
+                for document in session.query(Document).filter(Document.project_id == project_id).all():
+                    session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+                session.execute(
+                    delete(ImageOcrResult).where(
+                        ImageOcrResult.project_image_asset_id.in_(
+                            select(ProjectImageAsset.id).where(ProjectImageAsset.project_id == project_id)
+                        )
+                        | ImageOcrResult.email_attachment_id.in_(
+                            select(EmailAttachment.id)
+                            .join(EmailMessage, EmailMessage.document_id == EmailAttachment.message_id)
+                            .where(EmailMessage.project_id == project_id)
+                        )
+                        | ImageOcrResult.whatsapp_media_attachment_id.in_(
+                            select(WhatsAppMediaAttachment.id)
+                            .join(WhatsAppMessage, WhatsAppMessage.document_id == WhatsAppMediaAttachment.message_id)
+                            .where(WhatsAppMessage.project_id == project_id)
+                        )
+                    )
+                )
+                session.execute(delete(ProjectImageAsset).where(ProjectImageAsset.project_id == project_id))
+                session.execute(
+                    delete(EmailAttachment).where(
+                        EmailAttachment.message_id.in_(select(Document.id).where(Document.project_id == project_id))
+                    )
+                )
+                session.execute(delete(EmailMessage).where(EmailMessage.project_id == project_id))
+                session.execute(delete(EmailThread).where(EmailThread.project_id == project_id))
+                session.execute(
+                    delete(WhatsAppMediaAttachment).where(
+                        WhatsAppMediaAttachment.message_id.in_(
+                            select(WhatsAppMessage.document_id).where(WhatsAppMessage.project_id == project_id)
+                        )
+                    )
+                )
+                session.execute(delete(WhatsAppMessage).where(WhatsAppMessage.project_id == project_id))
+                session.execute(delete(WhatsAppChat).where(WhatsAppChat.project_id == project_id))
+                session.query(Document).filter(Document.project_id == project_id).delete()
+                session.query(Project).filter(Project.id == project_id).delete()
+            session.commit()
+        cls.client.__exit__(None, None, None)
+
+    def _create_project(self, name: str) -> int:
+        resp = self.client.post("/projects", json={"name": name})
+        project_id = resp.json()["id"]
+        self._created_project_ids.append(project_id)
+        return project_id
+
+    def _upload_image(self, project_id: int, filename: str, *, color=(1, 2, 3)) -> int:
+        resp = self.client.post(
+            f"/projects/{project_id}/documents",
+            files={"files": (filename, io.BytesIO(_build_test_image(color=color, fmt="PNG")), "image/png")},
+        )
+        return resp.json()["images"][0]["id"]
+
+    def _run(self, **kwargs):
+        defaults = {"language": "eng", "tesseract_cmd": None, "storage_root": get_settings().storage_root}
+        defaults.update(kwargs)
+        return pp.process_pending(**defaults)
+
+    @staticmethod
+    def _color_of(image) -> tuple:
+        return image.convert("RGB").getpixel((0, 0))
+
+    def _ocr_with_text(self, color: tuple, text: str):
+        def tagged(image, lang=None, timeout=0, **kwargs):
+            return text if self._color_of(image) == color else "unrelated"
+
+        return tagged
+
+    def test_non_empty_ocr_creates_a_searchable_citable_document(self):
+        project_id = self._create_project("OCR Indexing Test Non-Empty")
+        color = (240, 10, 10)
+        image_id = self._upload_image(project_id, "notice.png", color=color)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "Site instruction regarding Pier P-42 progress")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            self.assertEqual(asset.status, "processed")
+            self.assertIsNotNone(asset.document_id)
+
+            document = session.get(Document, asset.document_id)
+            self.assertEqual(document.project_id, project_id)
+            self.assertEqual(document.status, "ready")
+
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document.id)).all()
+            self.assertEqual(len(chunks), 1)
+            self.assertIn("Pier P-42", chunks[0].chunk_text)
+            self.assertEqual(chunks[0].page_number, 1, "a flat OCR blob is one real page, never a fabricated number")
+            chunk_id = chunks[0].id
+
+        from app.agent.citation_verification import verify_citations
+        from app.agent.models import Citation
+        from app.retrieval.service import search_chunks
+
+        with get_session_factory()() as session:
+            results = search_chunks(session, "Pier P-42 site instruction", top_k=5, project_id=project_id)
+        self.assertTrue(any(r.chunk_id == chunk_id for r in results), "OCR-derived chunk must be retrievable through the existing, unmodified retrieval path")
+
+        candidate = Citation(document_id=document.id, chunk_id=chunk_id, page=1, relevance_score=0.9, chunk_text=chunks[0].chunk_text)
+        verified = verify_citations([candidate], retrieved_evidence=[candidate])
+        self.assertEqual(len(verified), 1, "an OCR-derived citation must pass the existing, unmodified citation-verification path unchanged")
+
+    def test_project_image_source_resolves_correct_parent_and_project(self):
+        project_id = self._create_project("OCR Indexing Test Source Project Image")
+        color = (241, 11, 11)
+        image_id = self._upload_image(project_id, "a.png", color=color)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "project image text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            self.assertIsNotNone(asset.document_id)
+            document = session.get(Document, asset.document_id)
+            self.assertEqual(document.project_id, project_id)
+
+    def test_email_attachment_source_resolves_correct_parent_and_project(self):
+        project_id = self._create_project("OCR Indexing Test Source Email")
+        color = (242, 12, 12)
+        raw = _build_eml(
+            headers={"Message-ID": "<ocr-index-email@example.com>", "From": "a@example.com", "Subject": "Photo", "Date": formatdate()},
+            body="see attached",
+            attachments=[{"filename": "site.jpg", "content": _build_test_image(color=color, fmt="PNG"), "maintype": "image", "subtype": "png"}],
+        )
+        self.client.post(f"/projects/{project_id}/emails/import", files={"files": ("x.eml", io.BytesIO(raw), "message/rfc822")})
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "email attachment text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            attachment = session.scalar(
+                select(EmailAttachment).where(
+                    EmailAttachment.filename == "site.jpg",
+                    EmailAttachment.message_id.in_(select(EmailMessage.document_id).where(EmailMessage.project_id == project_id)),
+                )
+            )
+            self.assertIsNotNone(attachment.document_id)
+            document = session.get(Document, attachment.document_id)
+            self.assertEqual(document.project_id, project_id)
+            self.assertEqual(attachment.status, "processed")
+
+    def test_whatsapp_attachment_source_resolves_correct_parent_and_project(self):
+        project_id = self._create_project("OCR Indexing Test Source WhatsApp")
+        color = (243, 13, 13)
+        zip_bytes = _build_whatsapp_zip(
+            text="[25/03/24, 10:00:00] Alice: <attached: pic.png>\n",
+            media={"pic.png": _build_test_image(color=color, fmt="PNG")},
+        )
+        self.client.post(f"/projects/{project_id}/whatsapp/import", files={"file": ("chat.zip", io.BytesIO(zip_bytes), "application/zip")})
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "whatsapp attachment text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            attachment = session.scalar(
+                select(WhatsAppMediaAttachment).where(
+                    WhatsAppMediaAttachment.filename == "pic.png",
+                    WhatsAppMediaAttachment.message_id.in_(select(WhatsAppMessage.document_id).where(WhatsAppMessage.project_id == project_id)),
+                )
+            )
+            self.assertIsNotNone(attachment.document_id)
+            document = session.get(Document, attachment.document_id)
+            self.assertEqual(document.project_id, project_id)
+            self.assertEqual(attachment.status, "processed")
+
+    def _claim_and_process_one(self, result_id: int, *, force: bool = False, retry_failed: bool = False) -> str:
+        """Claim and process EXACTLY this one result_id, narrowly --
+        never through self._run()/process_pending(), which discovers and
+        lists eligibility across the WHOLE shared database. Even with
+        force=True/retry_failed=True (which only ever WIDEN what SOME
+        query would consider eligible), _claim_specific_rows's own
+        `WHERE id IN (candidate_ids) AND <eligibility>` still restricts
+        the actual claim to just this id -- no other row in the shared
+        dev database is ever touched by this helper, regardless of those
+        flags. This is the same direct-call technique the existing
+        lease-specific tests above already use."""
+        with get_session_factory()() as session:
+            claimed = pp._claim_specific_rows(
+                session,
+                [result_id],
+                retry_failed=retry_failed,
+                force=force,
+                current_engine_version=None,
+                current_language="eng",
+                now=datetime.now(timezone.utc),
+            )
+        self.assertEqual(len(claimed), 1, f"result_id={result_id} was not claimable with force={force}, retry_failed={retry_failed}")
+        _claimed_id, token = claimed[0]
+        with get_session_factory()() as session:
+            return pp._process_claimed_result(session, get_settings().storage_root, result_id, token, language="eng", tesseract_cmd=None)
+
+    def test_email_attachment_forced_reprocess_reuses_document_id_and_replaces_chunks(self):
+        """Mirrors test_forced_reprocess_reuses_document_id_and_replaces_chunks
+        below, for an email image attachment specifically -- using the
+        narrow, single-row claim/process helper above for BOTH passes
+        rather than self._run(force=True), which would otherwise sweep
+        every eligible 'completed'/'failed' row in the whole shared dev
+        database, not just this test's own."""
+        project_id = self._create_project("OCR Indexing Test Email Force Reuse")
+        color = (251, 21, 21)
+        raw = _build_eml(
+            headers={"Message-ID": "<ocr-index-email-force@example.com>", "From": "a@example.com", "Subject": "Photo", "Date": formatdate()},
+            body="see attached",
+            attachments=[{"filename": "reprocess.png", "content": _build_test_image(color=color, fmt="PNG"), "maintype": "image", "subtype": "png"}],
+        )
+        self.client.post(f"/projects/{project_id}/emails/import", files={"files": ("x.eml", io.BytesIO(raw), "message/rfc822")})
+
+        with get_session_factory()() as session:
+            attachment = session.scalar(
+                select(EmailAttachment).where(
+                    EmailAttachment.filename == "reprocess.png",
+                    EmailAttachment.message_id.in_(select(EmailMessage.document_id).where(EmailMessage.project_id == project_id)),
+                )
+            )
+            result_id = session.scalar(select(ImageOcrResult.id).where(ImageOcrResult.email_attachment_id == attachment.id))
+            attachment_id = attachment.id
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "first pass email text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    outcome_1 = self._claim_and_process_one(result_id)
+        self.assertEqual(outcome_1, "completed")
+
+        with get_session_factory()() as session:
+            first_document_id = session.get(EmailAttachment, attachment_id).document_id
+            self.assertIsNotNone(first_document_id)
+            # Captured here, not asserted to equal 1 -- this project also
+            # has a SEPARATE Document for the covering email's own body
+            # text (EmailMessage's own 1:1 Document, unrelated to this
+            # attachment). "No duplicate" means this exact id SET stays
+            # unchanged across the reprocess below, not that the whole
+            # project has only one Document.
+            document_ids_before = {d.id for d in session.scalars(select(Document).where(Document.project_id == project_id)).all()}
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "second pass completely different email text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.4.0"):
+                    outcome_2 = self._claim_and_process_one(result_id, force=True, retry_failed=True)
+        self.assertEqual(outcome_2, "completed")
+
+        with get_session_factory()() as session:
+            attachment = session.get(EmailAttachment, attachment_id)
+            self.assertEqual(attachment.document_id, first_document_id, "reprocessing an email attachment must reuse the SAME Document")
+
+            document_ids_after = {d.id for d in session.scalars(select(Document).where(Document.project_id == project_id)).all()}
+            self.assertEqual(document_ids_after, document_ids_before, "no duplicate Document must be created by reprocessing")
+
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == first_document_id)).all()
+            self.assertEqual(len(chunks), 1)
+            self.assertIn("second pass", chunks[0].chunk_text)
+            self.assertNotIn("first pass", chunks[0].chunk_text, "stale chunks from the previous OCR text must be replaced")
+
+    def test_email_attachment_empty_ocr_on_reprocess_clears_stale_chunks_but_keeps_the_document_linked(self):
+        project_id = self._create_project("OCR Indexing Test Email Empty Reprocess")
+        color = (252, 22, 22)
+        raw = _build_eml(
+            headers={"Message-ID": "<ocr-index-email-empty@example.com>", "From": "a@example.com", "Subject": "Photo", "Date": formatdate()},
+            body="see attached",
+            attachments=[{"filename": "fades.png", "content": _build_test_image(color=color, fmt="PNG"), "maintype": "image", "subtype": "png"}],
+        )
+        self.client.post(f"/projects/{project_id}/emails/import", files={"files": ("x.eml", io.BytesIO(raw), "message/rfc822")})
+
+        with get_session_factory()() as session:
+            attachment = session.scalar(
+                select(EmailAttachment).where(
+                    EmailAttachment.filename == "fades.png",
+                    EmailAttachment.message_id.in_(select(EmailMessage.document_id).where(EmailMessage.project_id == project_id)),
+                )
+            )
+            result_id = session.scalar(select(ImageOcrResult.id).where(ImageOcrResult.email_attachment_id == attachment.id))
+            attachment_id = attachment.id
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "real text that will later disappear")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._claim_and_process_one(result_id)
+
+        with get_session_factory()() as session:
+            document_id = session.get(EmailAttachment, attachment_id).document_id
+            self.assertIsNotNone(document_id)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.4.0"):
+                    self._claim_and_process_one(result_id, force=True, retry_failed=True)
+
+        with get_session_factory()() as session:
+            attachment = session.get(EmailAttachment, attachment_id)
+            self.assertEqual(attachment.document_id, document_id, "the Document must stay linked when a reprocess finds no text")
+            self.assertEqual(attachment.status, "processed")
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document_id)).all()
+            self.assertEqual(len(chunks), 0, "stale chunks from the now-superseded text must be cleared")
+            document = session.get(Document, document_id)
+            self.assertEqual(document.referenced_ids, [], "referenced_ids must be an empty list, never None, matching every other ingestion path")
+
+    def test_whatsapp_attachment_forced_reprocess_reuses_document_id_and_replaces_chunks(self):
+        project_id = self._create_project("OCR Indexing Test WhatsApp Force Reuse")
+        color = (253, 23, 23)
+        zip_bytes = _build_whatsapp_zip(
+            text="[25/03/24, 10:00:00] Alice: <attached: reprocess.png>\n",
+            media={"reprocess.png": _build_test_image(color=color, fmt="PNG")},
+        )
+        self.client.post(f"/projects/{project_id}/whatsapp/import", files={"file": ("chat.zip", io.BytesIO(zip_bytes), "application/zip")})
+
+        with get_session_factory()() as session:
+            attachment = session.scalar(
+                select(WhatsAppMediaAttachment).where(
+                    WhatsAppMediaAttachment.filename == "reprocess.png",
+                    WhatsAppMediaAttachment.message_id.in_(select(WhatsAppMessage.document_id).where(WhatsAppMessage.project_id == project_id)),
+                )
+            )
+            result_id = session.scalar(select(ImageOcrResult.id).where(ImageOcrResult.whatsapp_media_attachment_id == attachment.id))
+            attachment_id = attachment.id
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "first pass whatsapp text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    outcome_1 = self._claim_and_process_one(result_id)
+        self.assertEqual(outcome_1, "completed")
+
+        with get_session_factory()() as session:
+            first_document_id = session.get(WhatsAppMediaAttachment, attachment_id).document_id
+            self.assertIsNotNone(first_document_id)
+            # See the email variant of this test for why this is a SET
+            # comparison, not a count of 1 -- the covering WhatsApp
+            # message's own body text is a separate Document in this
+            # same project.
+            document_ids_before = {d.id for d in session.scalars(select(Document).where(Document.project_id == project_id)).all()}
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "second pass completely different whatsapp text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.4.0"):
+                    outcome_2 = self._claim_and_process_one(result_id, force=True, retry_failed=True)
+        self.assertEqual(outcome_2, "completed")
+
+        with get_session_factory()() as session:
+            attachment = session.get(WhatsAppMediaAttachment, attachment_id)
+            self.assertEqual(attachment.document_id, first_document_id, "reprocessing a WhatsApp attachment must reuse the SAME Document")
+
+            document_ids_after = {d.id for d in session.scalars(select(Document).where(Document.project_id == project_id)).all()}
+            self.assertEqual(document_ids_after, document_ids_before, "no duplicate Document must be created by reprocessing")
+
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == first_document_id)).all()
+            self.assertEqual(len(chunks), 1)
+            self.assertIn("second pass", chunks[0].chunk_text)
+            self.assertNotIn("first pass", chunks[0].chunk_text, "stale chunks from the previous OCR text must be replaced")
+
+    def test_whatsapp_attachment_empty_ocr_on_reprocess_clears_stale_chunks_but_keeps_the_document_linked(self):
+        project_id = self._create_project("OCR Indexing Test WhatsApp Empty Reprocess")
+        color = (254, 24, 24)
+        zip_bytes = _build_whatsapp_zip(
+            text="[25/03/24, 10:00:00] Alice: <attached: fades.png>\n",
+            media={"fades.png": _build_test_image(color=color, fmt="PNG")},
+        )
+        self.client.post(f"/projects/{project_id}/whatsapp/import", files={"file": ("chat.zip", io.BytesIO(zip_bytes), "application/zip")})
+
+        with get_session_factory()() as session:
+            attachment = session.scalar(
+                select(WhatsAppMediaAttachment).where(
+                    WhatsAppMediaAttachment.filename == "fades.png",
+                    WhatsAppMediaAttachment.message_id.in_(select(WhatsAppMessage.document_id).where(WhatsAppMessage.project_id == project_id)),
+                )
+            )
+            result_id = session.scalar(select(ImageOcrResult.id).where(ImageOcrResult.whatsapp_media_attachment_id == attachment.id))
+            attachment_id = attachment.id
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "real whatsapp text that will later disappear")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._claim_and_process_one(result_id)
+
+        with get_session_factory()() as session:
+            document_id = session.get(WhatsAppMediaAttachment, attachment_id).document_id
+            self.assertIsNotNone(document_id)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "   ")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.4.0"):
+                    self._claim_and_process_one(result_id, force=True, retry_failed=True)
+
+        with get_session_factory()() as session:
+            attachment = session.get(WhatsAppMediaAttachment, attachment_id)
+            self.assertEqual(attachment.document_id, document_id, "the Document must stay linked when a reprocess finds no text")
+            self.assertEqual(attachment.status, "processed")
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document_id)).all()
+            self.assertEqual(len(chunks), 0, "stale chunks from the now-superseded text must be cleared")
+            document = session.get(Document, document_id)
+            self.assertEqual(document.referenced_ids, [], "referenced_ids must be an empty list, never None, matching every other ingestion path")
+
+    def test_forced_reprocess_reuses_document_id_and_replaces_chunks(self):
+        project_id = self._create_project("OCR Indexing Test Force Reuse")
+        color = (244, 14, 14)
+        image_id = self._upload_image(project_id, "reprocess.png", color=color)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "first pass text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            first_document_id = asset.document_id
+            self.assertIsNotNone(first_document_id)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "second pass completely different text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.4.0"):
+                    self._run(force=True)
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            self.assertEqual(asset.document_id, first_document_id, "reprocessing must reuse the SAME Document, never create a second one")
+
+            all_documents = session.scalars(select(Document).where(Document.project_id == project_id)).all()
+            self.assertEqual(len(all_documents), 1, "no duplicate Document must exist for the same source image")
+
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == first_document_id)).all()
+            self.assertEqual(len(chunks), 1)
+            self.assertIn("second pass", chunks[0].chunk_text)
+            self.assertNotIn("first pass", chunks[0].chunk_text, "stale chunks from the previous OCR text must be replaced, not merely appended to")
+
+    def test_empty_ocr_creates_no_document_for_a_new_source(self):
+        project_id = self._create_project("OCR Indexing Test Empty New")
+        color = (245, 15, 15)
+        image_id = self._upload_image(project_id, "blank.png", color=color)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "   ")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            self.assertEqual(asset.status, "processed", "a genuinely completed OCR attempt must not be left pending forever, even with empty text")
+            self.assertIsNone(asset.document_id, "no Document must be created for text with nothing to search")
+            result = session.scalar(select(ImageOcrResult).where(ImageOcrResult.project_image_asset_id == image_id))
+            self.assertEqual(result.status, "completed")
+
+    def test_empty_ocr_on_reprocess_clears_stale_chunks_but_keeps_the_document_linked(self):
+        project_id = self._create_project("OCR Indexing Test Empty Reprocess")
+        color = (246, 16, 16)
+        image_id = self._upload_image(project_id, "fades.png", color=color)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "real text that will later disappear")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            document_id = asset.document_id
+            self.assertIsNotNone(document_id)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.4.0"):
+                    self._run(force=True)
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            self.assertEqual(asset.document_id, document_id, "the Document must stay linked, never unlinked, when a reprocess finds no text")
+            self.assertEqual(asset.status, "processed")
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document_id)).all()
+            self.assertEqual(len(chunks), 0, "stale chunks from the previous, now-superseded text must be cleared, never left searchable")
+
+    def test_indexing_failure_rolls_back_and_preserves_the_previous_document_and_chunks(self):
+        project_id = self._create_project("OCR Indexing Test Indexing Failure")
+        color = (247, 17, 17)
+        image_id = self._upload_image(project_id, "stable.png", color=color)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "original good text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            original_document_id = asset.document_id
+            original_chunks = {
+                c.id: c.chunk_text
+                for c in session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == original_document_id)).all()
+            }
+            result = session.scalar(select(ImageOcrResult).where(ImageOcrResult.project_image_asset_id == image_id))
+            original_text_path = result.ocr_text_path
+
+        import app.ocr.process_pending as process_pending_module
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "a reprocess attempt that will fail during indexing")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.4.0"):
+                    with patch.object(process_pending_module, "index_ocr_text", side_effect=RuntimeError("simulated indexing failure")):
+                        self._run(force=True)
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            self.assertEqual(asset.document_id, original_document_id, "a failed reprocess must leave the parent's document link untouched")
+
+            document = session.get(Document, original_document_id)
+            self.assertIsNotNone(document)
+
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == original_document_id)).all()
+            self.assertEqual({c.id: c.chunk_text for c in chunks}, original_chunks, "the previously indexed chunks must survive a failed reprocess completely unchanged")
+
+            result = session.scalar(select(ImageOcrResult).where(ImageOcrResult.project_image_asset_id == image_id))
+            self.assertEqual(result.status, "completed", "the previous completed OCR result must be preserved, not marked failed, since a real previous result existed")
+            self.assertEqual(result.ocr_text_path, original_text_path)
+            self.assertTrue(Path(original_text_path).exists(), "the previous OCR text file must survive a failed reprocess")
+
+    def test_lease_lost_after_indexing_is_staged_commits_no_document_or_chunk_changes(self):
+        project_id = self._create_project("OCR Indexing Test Lease Lost After Indexing")
+        color = (248, 18, 18)
+        image_id = self._upload_image(project_id, "race.png", color=color)
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "original committed text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            result_id = session.scalar(select(ImageOcrResult.id).where(ImageOcrResult.project_image_asset_id == image_id))
+            asset = session.get(ProjectImageAsset, image_id)
+            original_document_id = asset.document_id
+
+        with get_session_factory()() as session:
+            claimed = pp._claim_specific_rows(
+                session,
+                [result_id],
+                retry_failed=True,
+                force=True,
+                current_engine_version=None,
+                current_language="eng",
+                now=datetime.now(timezone.utc),
+            )
+        self.assertEqual(len(claimed), 1)
+        _claimed_id, token_a = claimed[0]
+
+        def steal_lease_during_ocr(image, lang=None, timeout=0, **kwargs):
+            if self._color_of(image) == color:
+                with get_session_factory()() as other_session:
+                    other_session.execute(
+                        update(ImageOcrResult)
+                        .where(ImageOcrResult.id == result_id)
+                        .values(lease_token="a-different-workers-token", lease_expires_at=datetime.now(timezone.utc) + timedelta(seconds=60))
+                    )
+                    other_session.commit()
+                return "text a stale worker must never publish into the index"
+            return "unrelated"
+
+        with get_session_factory()() as session:
+            with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+                with patch.object(tp.pytesseract, "image_to_string", side_effect=steal_lease_during_ocr):
+                    with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                        outcome = pp._process_claimed_result(session, get_settings().storage_root, result_id, token_a, language="eng", tesseract_cmd=None)
+
+        self.assertEqual(outcome, "skipped")
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            self.assertEqual(asset.document_id, original_document_id, "a worker that lost its lease must never change the parent's document link")
+
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == original_document_id)).all()
+            self.assertEqual(len(chunks), 1)
+            self.assertIn("original committed text", chunks[0].chunk_text)
+            self.assertNotIn("stale worker", chunks[0].chunk_text, "a worker that lost its lease must never publish its own chunks")
+
+    def test_genuine_concurrent_workers_never_double_index_the_same_row(self):
+        """Real threads, real Postgres sessions, racing a full
+        process_pending() batch against the same abandoned row -- the
+        existing W2.1 lease mechanism must still guarantee the row (and
+        now its Document/chunks too) is only ever indexed once."""
+        project_id = self._create_project("OCR Indexing Test Real Concurrency")
+        color = (249, 19, 19)
+        image_id = self._upload_image(project_id, "concurrent.png", color=color)
+
+        with get_session_factory()() as session:
+            row = session.scalar(select(ImageOcrResult).where(ImageOcrResult.project_image_asset_id == image_id))
+            row.status = "processing"
+            row.processing_started_at = datetime.now(timezone.utc) - timedelta(seconds=pp.LEASE_DURATION_SECONDS + 60)
+            row.lease_token = "test-backdated-lease"
+            row.lease_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+            session.commit()
+
+        def tagged(image, lang=None, timeout=0, **kwargs):
+            return "concurrently indexed text" if self._color_of(image) == color else "unrelated"
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=tagged):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    with ThreadPoolExecutor(max_workers=3) as pool:
+                        list(pool.map(lambda _: self._run(batch_size=2), range(3)))
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            self.assertIsNotNone(asset.document_id)
+            all_documents = session.scalars(select(Document).where(Document.project_id == project_id)).all()
+            self.assertEqual(len(all_documents), 1, "concurrent workers must never create more than one Document for the same image")
+            chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == asset.document_id)).all()
+            self.assertEqual(len(chunks), 1, "concurrent workers must never duplicate chunks for the same image")
+
+    def test_citation_source_lookup_opens_the_correct_image_without_inventing_provenance(self):
+        project_id = self._create_project("OCR Indexing Test Citation Source Lookup")
+        color = (250, 20, 20)
+        original_bytes = _build_test_image(color=color, fmt="PNG")
+        resp_upload = self.client.post(
+            f"/projects/{project_id}/documents",
+            files={"files": ("lookup.png", io.BytesIO(original_bytes), "image/png")},
+        )
+        image_id = resp_upload.json()["images"][0]["id"]
+
+        with patch.object(tp.shutil, "which", return_value="/usr/bin/tesseract"):
+            with patch.object(tp.pytesseract, "image_to_string", side_effect=self._ocr_with_text(color, "lookup test text")):
+                with patch.object(tp.pytesseract, "get_tesseract_version", return_value="5.3.4"):
+                    self._run()
+
+        with get_session_factory()() as session:
+            asset = session.get(ProjectImageAsset, image_id)
+            document_id = asset.document_id
+
+        resp = self.client.get(f"/projects/{project_id}/documents/{document_id}")
+        self.assertEqual(resp.status_code, 200, resp.text)
+        body = resp.json()
+        self.assertIsNotNone(body["image_source"], "an OCR-derived document must carry image_source so a citation can open its real source")
+        self.assertEqual(body["image_source"]["source_kind"], "project_image")
+        self.assertEqual(body["image_source"]["image_id"], image_id)
+        self.assertIsNone(body["email_source"])
+        self.assertIsNone(body["whatsapp_source"])
+
+        # Issue a REAL GET to the exact URL the frontend's own
+        # getOcrSourceImageUrl() would construct from image_source (see
+        # frontend/src/api/client.ts) -- proving the link is actually
+        # reachable and serves the real preserved original, not merely
+        # that a well-shaped URL string could be built from the response.
+        image_resp = self.client.get(f"/projects/{project_id}/images/{body['image_source']['image_id']}/file")
+        self.assertEqual(image_resp.status_code, 200, image_resp.text)
+        self.assertEqual(image_resp.content, original_bytes, "the served file must be the exact original image bytes, never the OCR text")
+        self.assertEqual(image_resp.headers["content-type"], "image/png")
+
+        # Project isolation: the SAME image/document under a DIFFERENT,
+        # real project id must 404 -- never leak another project's image.
+        other_project_id = self._create_project("OCR Indexing Test Citation Source Lookup -- Other Project")
+        cross_project_resp = self.client.get(f"/projects/{other_project_id}/images/{image_id}/file")
+        self.assertEqual(cross_project_resp.status_code, 404)
+
+        with get_session_factory()() as session:
+            chunk = session.scalar(select(DocumentChunk).where(DocumentChunk.document_id == document_id))
+            self.assertEqual(chunk.page_number, 1, "the citation's page must be the chunk's real, stored page_number -- never fabricated")
+
+
 class CliArgumentValidationTests(unittest.TestCase):
     """Pre-commit review fix (Section 3): --batch-size/--limit must be
     validated BEFORE anything else runs -- no Tesseract check, no

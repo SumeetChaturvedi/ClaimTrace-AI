@@ -19,6 +19,7 @@ document_file.py and app/api/routes/investigations.py.
 """
 
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
@@ -32,6 +33,7 @@ from app.db.models import (
     EmailAttachment,
     EmailMessage,
     Project,
+    ProjectImageAsset,
     WhatsAppMediaAttachment,
     WhatsAppMessage,
 )
@@ -72,16 +74,35 @@ class WhatsAppSourceInfo(BaseModel):
     sent_at_ambiguous: bool
 
 
+class ImageSourceInfo(BaseModel):
+    """Present only on a document whose text was derived by locally
+    running OCR against a preserved image (Phase W2.2: OCR Evidence
+    Integration — see ImageOcrResult and app/ingestion/image_ocr_indexing.py),
+    across all three places an image can come from. Lets the frontend
+    identify this document's text as DERIVED from an image, never the
+    original itself, and link to the real preserved bytes at the
+    existing, unmodified file-serving route for that source kind:
+      - 'project_image'      -> GET /projects/{project_id}/images/{image_id}/file
+      - 'email_attachment'   -> GET /projects/{project_id}/emails/attachments/{image_id}/file
+      - 'whatsapp_attachment'-> GET /projects/{project_id}/whatsapp/attachments/{image_id}/file
+    No new file-serving code is added for this — these three routes
+    already exist and already serve exactly these rows' original bytes."""
+
+    source_kind: Literal["project_image", "email_attachment", "whatsapp_attachment"]
+    image_id: int
+
+
 class ProjectDocumentSummary(DocumentSummary):
-    """DocumentSummary plus the project-scoped email_source/whatsapp_source
-    enrichment — deliberately NOT added to the shared, project-agnostic
-    DocumentSummary in app/api/routes/documents.py (that route has no
-    project_id to scope the join by, and keeping these fields
+    """DocumentSummary plus the project-scoped email_source/whatsapp_source/
+    image_source enrichment — deliberately NOT added to the shared,
+    project-agnostic DocumentSummary in app/api/routes/documents.py (that
+    route has no project_id to scope the join by, and keeping these fields
     project-scoped avoids the global /documents route needing to know
-    about email/WhatsApp attachments at all)."""
+    about email/WhatsApp/image attachments at all)."""
 
     email_source: EmailSourceInfo | None = None
     whatsapp_source: WhatsAppSourceInfo | None = None
+    image_source: ImageSourceInfo | None = None
 
 
 def _email_sources_for(db: Session, project_id: int, document_ids: list[int]) -> dict[int, EmailSourceInfo]:
@@ -159,6 +180,45 @@ def _whatsapp_sources_for(db: Session, project_id: int, document_ids: list[int])
     }
 
 
+def _image_sources_for(db: Session, project_id: int, document_ids: list[int]) -> dict[int, ImageSourceInfo]:
+    """Look up which of `document_ids` were derived from locally-OCR'd
+    image text (Phase W2.2), across all three image sources, keyed by
+    the DOCUMENT's own id. One query per source kind, each scoped to
+    this project the same way _email_sources_for/_whatsapp_sources_for
+    already are -- a document can only ever match one of the three
+    (ImageOcrResult's own exactly-one-parent constraint, see
+    app/db/models.py, makes this unambiguous), so no ordering between
+    the three loops below matters."""
+    if not document_ids:
+        return {}
+
+    sources: dict[int, ImageSourceInfo] = {}
+
+    for document_id, image_id in db.execute(
+        select(ProjectImageAsset.document_id, ProjectImageAsset.id).where(
+            ProjectImageAsset.document_id.in_(document_ids),
+            ProjectImageAsset.project_id == project_id,
+        )
+    ).all():
+        sources[document_id] = ImageSourceInfo(source_kind="project_image", image_id=image_id)
+
+    for document_id, image_id in db.execute(
+        select(EmailAttachment.document_id, EmailAttachment.id)
+        .join(EmailMessage, EmailMessage.document_id == EmailAttachment.message_id)
+        .where(EmailAttachment.document_id.in_(document_ids), EmailMessage.project_id == project_id)
+    ).all():
+        sources[document_id] = ImageSourceInfo(source_kind="email_attachment", image_id=image_id)
+
+    for document_id, image_id in db.execute(
+        select(WhatsAppMediaAttachment.document_id, WhatsAppMediaAttachment.id)
+        .join(WhatsAppMessage, WhatsAppMessage.document_id == WhatsAppMediaAttachment.message_id)
+        .where(WhatsAppMediaAttachment.document_id.in_(document_ids), WhatsAppMessage.project_id == project_id)
+    ).all():
+        sources[document_id] = ImageSourceInfo(source_kind="whatsapp_attachment", image_id=image_id)
+
+    return sources
+
+
 def _get_project_or_404(db: Session, project_id: int) -> Project:
     project = db.get(Project, project_id)
     if project is None:
@@ -203,11 +263,13 @@ def list_project_documents(project_id: int, db: Session = Depends(get_db)) -> li
     document_ids = [d.id for d in documents]
     email_sources = _email_sources_for(db, project_id, document_ids)
     whatsapp_sources = _whatsapp_sources_for(db, project_id, document_ids)
+    image_sources = _image_sources_for(db, project_id, document_ids)
     return [
         ProjectDocumentSummary(
             **DocumentSummary.model_validate(d).model_dump(),
             email_source=email_sources.get(d.id),
             whatsapp_source=whatsapp_sources.get(d.id),
+            image_source=image_sources.get(d.id),
         )
         for d in documents
     ]
@@ -283,8 +345,10 @@ def get_project_document(project_id: int, document_id: int, db: Session = Depend
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     email_sources = _email_sources_for(db, project_id, [document_id])
     whatsapp_sources = _whatsapp_sources_for(db, project_id, [document_id])
+    image_sources = _image_sources_for(db, project_id, [document_id])
     return ProjectDocumentSummary(
         **DocumentSummary.model_validate(document).model_dump(),
         email_source=email_sources.get(document_id),
         whatsapp_source=whatsapp_sources.get(document_id),
+        image_source=image_sources.get(document_id),
     )

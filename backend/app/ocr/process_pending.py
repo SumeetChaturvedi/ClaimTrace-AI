@@ -117,6 +117,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.db.models import EmailAttachment, EmailMessage, ImageOcrResult, ProjectImageAsset, WhatsAppMediaAttachment, WhatsAppMessage
 from app.db.session import get_session_factory
+from app.ingestion.image_ocr_indexing import index_ocr_text, resolve_ocr_parent
 from app.ingestion.image_validation import validate_image
 from app.ingestion.storage import image_storage_dir, new_storage_key, ocr_text_storage_dir, save_ocr_text, whatsapp_media_dir
 from app.ocr.pending import OCR_ELIGIBLE_EXTENSIONS, ensure_pending_ocr_result
@@ -355,6 +356,20 @@ def _claim_specific_rows(
     return [(row_id, lease_tokens[row_id]) for row_id in claimed_ids]
 
 
+#  A parent attachment's original bytes stay on disk, unchanged, under
+# BOTH of these statuses -- 'processed' (Phase W2.2: OCR has since
+# completed and indexed it) is not a "no longer available" state, it is
+# the EXPECTED status once a reprocess or retry reaches an already-
+# successfully-OCR'd row (see each of ProjectImageAsset/EmailAttachment/
+# WhatsAppMediaAttachment's own docstring in app/db/models.py, which
+# already documented this exact meaning before W2.2 ever set 'processed'
+# at all). Checking only 'stored_pending_processing' here would make
+# every reprocess/retry of an already-indexed row spuriously fail at
+# this resolution step, every time, since that is precisely the status
+# this module itself moves a row OUT of on first success.
+_PRESERVED_IMAGE_STATUSES = frozenset({"stored_pending_processing", "processed"})
+
+
 def _resolve_source_image(session: Session, result: ImageOcrResult, storage_root: Path) -> _ResolvedImage | None:
     """Resolve the real, on-disk preserved original for one OCR result's
     single parent source, verifying along the way that the row is still
@@ -367,7 +382,7 @@ def _resolve_source_image(session: Session, result: ImageOcrResult, storage_root
 
     if result.project_image_asset_id is not None:
         asset = session.get(ProjectImageAsset, result.project_image_asset_id)
-        if asset is None or asset.status != "stored_pending_processing":
+        if asset is None or asset.status not in _PRESERVED_IMAGE_STATUSES:
             return None
         if not asset.storage_key or not asset.detected_extension or asset.detected_extension not in OCR_ELIGIBLE_EXTENSIONS:
             return None
@@ -377,7 +392,7 @@ def _resolve_source_image(session: Session, result: ImageOcrResult, storage_root
 
     elif result.email_attachment_id is not None:
         attachment = session.get(EmailAttachment, result.email_attachment_id)
-        if attachment is None or attachment.status != "stored_pending_processing":
+        if attachment is None or attachment.status not in _PRESERVED_IMAGE_STATUSES:
             return None
         if not attachment.storage_key or not attachment.detected_extension or attachment.detected_extension not in OCR_ELIGIBLE_EXTENSIONS:
             return None
@@ -390,7 +405,7 @@ def _resolve_source_image(session: Session, result: ImageOcrResult, storage_root
 
     elif result.whatsapp_media_attachment_id is not None:
         attachment = session.get(WhatsAppMediaAttachment, result.whatsapp_media_attachment_id)
-        if attachment is None or attachment.status != "stored_pending_processing":
+        if attachment is None or attachment.status not in _PRESERVED_IMAGE_STATUSES:
             return None
         if not attachment.storage_key or not attachment.detected_extension or attachment.detected_extension not in OCR_ELIGIBLE_EXTENSIONS:
             return None
@@ -711,9 +726,58 @@ def _process_claimed_result(
         "lease_expires_at": None,
     }
     try:
+        # W2.2 (OCR Evidence Integration): stage the Document/DocumentChunk
+        # work for this OCR text BEFORE the final lease-scoped write below,
+        # in the SAME transaction -- never committed independently of it.
+        # index_ocr_text() only ever flushes; nothing it does is durable
+        # until the session.commit() further down, which happens ONLY if
+        # the lease-scoped update that follows it still matches this row.
+        # A worker that loses the race here has its indexing work rolled
+        # back right alongside its own stale ImageOcrResult write -- see
+        # app/ingestion/image_ocr_indexing.py's own module docstring for
+        # why this ordering, not "index now, write the lease row later",
+        # is the one correctness requirement of this phase.
+        parent = resolve_ocr_parent(session, result)
+        if parent is None:
+            raise RuntimeError("OCR result's parent source row could not be resolved for indexing")
+
+        index_outcome = index_ocr_text(
+            session,
+            parent=parent,
+            project_id=resolved.project_id,
+            filename=resolved.filename,
+            ocr_text=ocr_outcome.text or "",
+            ocr_text_path=new_text_path,
+        )
+
         rowcount = _update_with_lease(session, result_id, lease_token, final_values)
-        session.commit()
-    except Exception as exc:  # noqa: BLE001 -- compensating cleanup for the candidate file just written above
+        if rowcount == 1:
+            # Still holds the lease at this instant -- safe to also
+            # publish the parent source's document_id/status alongside
+            # it, in the SAME commit as the staged indexing work above.
+            #
+            # This plain ORM write has no lease/conditional-UPDATE
+            # protection of its own, unlike the ImageOcrResult write
+            # above it -- and needs none. ImageOcrResult's own per-
+            # parent-column UniqueConstraint (see app/db/models.py) means
+            # `parent` has AT MOST ONE ImageOcrResult row ever pointing at
+            # it, so the only worker that could ever reach this line for
+            # THIS parent is whichever one currently holds that single
+            # row's lease -- which the rowcount==1 check just above this
+            # already proved is still us. If that invariant (exactly one
+            # ImageOcrResult per parent) ever changed, this write would
+            # need its own protection too.
+            parent.document_id = index_outcome.document_id
+            parent.status = index_outcome.parent_status
+            session.commit()
+        else:
+            # Lease lost before this final write could apply -- roll back
+            # EVERYTHING staged in this attempt (chunk changes, the
+            # Document row/update, and this worker's own ImageOcrResult
+            # write), not just the ImageOcrResult row. Handled below,
+            # after this try block, exactly like before this phase.
+            session.rollback()
+    except Exception as exc:  # noqa: BLE001 -- compensating cleanup for the candidate file just written above; also covers a failure anywhere in indexing (metadata extraction, chunking, embedding, or either database write), not just the final commit
         session.rollback()
         new_text_path.unlink(missing_ok=True)  # never committed to any row -- always safe to discard
         logger.warning(
@@ -733,7 +797,8 @@ def _process_claimed_result(
         # worker's own just-written candidate file without touching
         # previous_text_path or whatever the newer worker may itself have
         # already written -- never overwrite a result this worker no
-        # longer owns.
+        # longer owns. The rollback above already discarded any staged
+        # Document/chunk/parent-attachment changes too.
         new_text_path.unlink(missing_ok=True)
         logger.warning(
             "ImageOcrResult id=%s: lease lost before the final commit could apply -- discarding this "

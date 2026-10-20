@@ -73,9 +73,22 @@ export interface WhatsAppSourceInfo {
   sent_at_ambiguous: boolean
 }
 
+// backend/app/api/routes/project_documents.py (Phase W2.2: OCR Evidence
+// Integration) -- present only on a document whose text was derived by
+// locally running OCR against a preserved image, across all three image
+// sources. Identifies the document's text as DERIVED, never the
+// original itself, and names which existing file-serving route (see
+// getProjectImageFileUrl/getEmailAttachmentFileUrl/
+// getWhatsAppAttachmentFileUrl below) opens the real preserved bytes.
+export interface ImageSourceInfo {
+  source_kind: 'project_image' | 'email_attachment' | 'whatsapp_attachment'
+  image_id: number
+}
+
 export interface ProjectDocumentSummary extends DocumentSummary {
   email_source: EmailSourceInfo | null
   whatsapp_source: WhatsAppSourceInfo | null
+  image_source: ImageSourceInfo | null
   // NOTE: the backend's DocumentSummary does NOT include project_id.
   // GET /documents (unscoped) returns every document in the database; do
   // not assume a result there belongs to any particular project. The

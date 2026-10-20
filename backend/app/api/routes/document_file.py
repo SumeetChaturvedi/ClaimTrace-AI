@@ -82,8 +82,17 @@ def get_document_file(
     extension = Path(document.filename).suffix.lower()
     storage_dir_fn, media_type = _STORAGE_BY_EXTENSION.get(extension, (None, None))
     if storage_dir_fn is None:
-        # Defensive only: every persisted Document passed pipeline.py's own
-        # extension check at upload time, so this should be unreachable.
+        # Reachable by design, not just defensively, for a Document whose
+        # text came from locally-OCR'd image evidence (Phase W2.2: OCR
+        # Evidence Integration -- see app/ingestion/image_ocr_indexing.py):
+        # its filename is the preserved image's own original name (e.g.
+        # "notice.png"), never a PDF/DOCX extension pipeline.py's own
+        # upload-time check would have required. There is no original
+        # PDF/DOCX/.eml binary to serve for such a document -- its real
+        # preserved original is the image itself, served by the existing,
+        # separate image/attachment file routes (see
+        # ProjectDocumentSummary.image_source) -- so returning the same
+        # "file not found" 404 here is correct, not a bug, for that case.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document file not found")
 
     # raw_text_path looks like ".../extracted_text/{project_id}/{storage_key}.txt";
