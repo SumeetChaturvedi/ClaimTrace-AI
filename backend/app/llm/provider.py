@@ -12,6 +12,19 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class ImagePart:
+    """One raw image to attach to a prompt (Phase W2.3: Multimodal Image
+    Understanding) -- `data` is the already-validated original image
+    bytes, `mime_type` the real, server-detected content type (never a
+    caller's claimed/guessed one). Provider-agnostic: how (or whether) a
+    given LLMProvider actually sends this to its own API is entirely that
+    provider's own concern."""
+
+    data: bytes
+    mime_type: str
+
+
+@dataclass(frozen=True)
 class Prompt:
     """A provider-agnostic prompt: fixed behavioral instructions
     (system_prompt) plus the actual investigation content to reason over
@@ -28,11 +41,18 @@ class Prompt:
     genuinely different, structured-output task (EventExtractor, whose
     response is a JSON array that can legitimately need more room than a
     prose answer) can ask for more room WITHOUT silently raising the
-    shared constant every other caller also relies on."""
+    shared constant every other caller also relies on.
+
+    images (Phase W2.3 Multimodal Image Understanding): optional, defaults
+    to an empty tuple -- every existing caller (ReasoningEngine,
+    EventExtractor) never sets this, so their requests are completely
+    unaffected, byte-for-byte, by this field's existence. Only
+    app/vision/gemini_vision.py constructs a Prompt with images set."""
 
     system_prompt: str
     user_prompt: str
     max_output_tokens: int | None = None
+    images: tuple[ImagePart, ...] = ()
 
 
 class LLMProviderError(Exception):

@@ -140,6 +140,27 @@ def save_extracted_text(storage_root: Path, project_id: int, storage_key: str, f
     return destination
 
 
+def visual_description_storage_dir(storage_root: Path, project_id: int) -> Path:
+    path = storage_root / "visual_descriptions" / str(project_id)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def save_visual_description(storage_root: Path, project_id: int, storage_key: str, text: str) -> Path:
+    """Persist one image's AI-generated visual description (Phase W2.3:
+    Multimodal Image Understanding) under its own visual_descriptions/
+    tree -- mirrors save_ocr_text()'s own pattern exactly, in a SEPARATE
+    tree so a visual description is never confused with, or accidentally
+    walked alongside, OCR text or an already-indexed Document's own
+    extracted_text/ file. `storage_key` is always a fresh,
+    server-generated value (new_storage_key()). An empty/whitespace-only
+    string is a genuine, honest outcome (nothing visually describable, or
+    the model declined to speculate) and is written exactly as given."""
+    destination = visual_description_storage_dir(storage_root, project_id) / f"{storage_key}.txt"
+    destination.write_text(text, encoding="utf-8")
+    return destination
+
+
 def whatsapp_media_dir(storage_root: Path, project_id: int) -> Path:
     path = storage_root / "whatsapp_media" / str(project_id)
     path.mkdir(parents=True, exist_ok=True)

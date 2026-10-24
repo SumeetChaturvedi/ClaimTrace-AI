@@ -195,14 +195,27 @@ class FullDocumentReadExecutor:
             candidate_evidence: list[Evidence] = []
             document_duplicates = 0
             filename: str | None = None
+            derivation_kind: str | None = None
+            derivation_kind_looked_up = False
             for chunk in chunks:
                 if chunk.id in state.visited_chunk_ids:
                     document_duplicates += 1
                     continue
                 if filename is None:
                     filename = tools.get_document_filename(document_id)
+                if not derivation_kind_looked_up:
+                    # Phase W2.3: Multimodal Image Understanding -- surface
+                    # the same provenance _build_evidence() already does, so
+                    # evidence folded in via a full document read is never
+                    # silently presented as an ordinary source document.
+                    # Looked up once per document, not once per chunk.
+                    derivation_kind = tools.get_document_derivation_kind(document_id)
+                    derivation_kind_looked_up = True
                 surrounding_context = _truncate(chunk.chunk_text, CONTEXT_CHARS)
                 excerpt = _truncate(surrounding_context, EXCERPT_CHARS)
+                metadata = {"source": "full_document_read"}
+                if derivation_kind:
+                    metadata["derivation_kind"] = derivation_kind
                 candidate_evidence.append(
                     Evidence(
                         citation=Citation(
@@ -217,7 +230,7 @@ class FullDocumentReadExecutor:
                         excerpt=excerpt,
                         surrounding_context=surrounding_context,
                         confidence=_clamp_confidence(FULL_DOCUMENT_READ_CONFIDENCE),
-                        metadata={"source": "full_document_read"},
+                        metadata=metadata,
                     )
                 )
 

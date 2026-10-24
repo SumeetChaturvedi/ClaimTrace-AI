@@ -46,6 +46,12 @@ export interface DocumentSummary {
   processing_error: string | null
   uploaded_at: string
   updated_at: string
+  // Phase W2.3 (Multimodal Image Understanding): null for an ordinary
+  // source document; distinguishes a Document derived from a preserved
+  // image's locally-transcribed OCR text from one derived from an
+  // AI-generated visual description -- explicit, never inferred from
+  // filename or doc_type.
+  derivation_kind: 'ocr_transcription' | 'visual_description' | null
 }
 
 // backend/app/api/routes/project_documents.py. Present only on a document

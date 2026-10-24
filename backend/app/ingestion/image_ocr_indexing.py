@@ -128,6 +128,11 @@ def index_ocr_text(
     document.raw_text_path = str(ocr_text_path)
     document.status = "ready"
     document.processing_error = None
+    # Phase W2.3 (Multimodal Image Understanding): explicit provenance,
+    # distinct from the SEPARATE visual-description Document a given
+    # image may also have (see app/ingestion/image_visual_indexing.py
+    # and Document.derivation_kind's own docstring).
+    document.derivation_kind = "ocr_transcription"
 
     if stripped:
         metadata = extract_metadata(ocr_text)

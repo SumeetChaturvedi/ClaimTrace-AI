@@ -47,10 +47,26 @@ class GeminiProvider(LLMProvider):
 
         client = self._get_client(api_key)
 
+        # Phase W2.3 (Multimodal Image Understanding): when no images are
+        # attached, `contents` stays the exact bare string every existing
+        # caller already sends -- byte-for-byte unchanged request shape,
+        # confirmed by this module's own existing tests (test_gemini_provider.py)
+        # asserting `kwargs["contents"] == "user-text"`. Only a Prompt with
+        # images set (never produced by ReasoningEngine/EventExtractor)
+        # builds the list-of-Parts shape the google-genai SDK's own
+        # multimodal input mechanism expects (types.Part.from_bytes ->
+        # inline_data/Blob -- confirmed present in the installed SDK).
+        if prompt.images:
+            contents = [types.Part.from_text(text=prompt.user_prompt)] + [
+                types.Part.from_bytes(data=image.data, mime_type=image.mime_type) for image in prompt.images
+            ]
+        else:
+            contents = prompt.user_prompt
+
         try:
             response = client.models.generate_content(
                 model=settings.gemini_model,
-                contents=prompt.user_prompt,
+                contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=prompt.system_prompt,
                     # Per-call override (Phase 8B.2 Quality Remediation) if the

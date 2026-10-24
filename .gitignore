@@ -18,6 +18,12 @@ __pycache__/
 # Environment
 .env
 .env.*
+# .env.example is a template with no secrets (every value is a
+# placeholder/default) -- tracked deliberately so `cp backend/.env.example
+# backend/.env` has something real to copy. Narrow exception only, not a
+# broad unignore of environment files: the two patterns above still
+# exclude every actual .env/.env.* file carrying real configuration.
+!backend/.env.example
 
 # Python cache
 .pytest_cache/

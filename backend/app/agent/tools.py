@@ -148,6 +148,24 @@ def get_document_filename(document_id: int) -> str:
     return document.filename
 
 
+def get_document_derivation_kind(document_id: int) -> str | None:
+    """Look up a document's derivation_kind (Phase W2.3: Multimodal Image
+    Understanding) -- None for an ordinary source document,
+    'ocr_transcription' or 'visual_description' for one derived from a
+    preserved image (see Document.derivation_kind's own docstring).
+    Mirrors get_document_filename()'s exact pattern, so
+    InvestigationService._build_evidence can surface provenance in the
+    evidence it hands to the reasoning prompt without guessing from a
+    filename or doc_type."""
+    with get_session_factory()() as session:
+        document = session.get(Document, document_id)
+
+    if document is None:
+        raise DocumentNotFoundError(f"No document with id={document_id}")
+
+    return document.derivation_kind
+
+
 def find_related_documents(
     document_ids: list[int],
     project_id: int | None = None,

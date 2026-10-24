@@ -79,12 +79,20 @@ export function SourceViewPage() {
   // cited document, not a replacement for the lookup above, which still
   // backs every non-image branch's doc_type/filename detection unchanged.
   const [imageSource, setImageSource] = useState<ImageSourceInfo | null>(null)
+  // Phase W2.3 (Multimodal Image Understanding): from the SAME response
+  // as image_source above -- distinguishes locally-transcribed OCR text
+  // from an AI-generated visual observation, so the two are never
+  // labeled identically just because both happen to be image-derived.
+  const [derivationKind, setDerivationKind] = useState<DocumentSummary['derivation_kind']>(null)
   useEffect(() => {
     if (id === null || !citation) return
     let cancelled = false
     getProjectDocument(id, citation.document_id)
       .then((doc) => {
-        if (!cancelled) setImageSource(doc.image_source)
+        if (!cancelled) {
+          setImageSource(doc.image_source)
+          setDerivationKind(doc.derivation_kind)
+        }
       })
       .catch(() => {
         // Non-critical: falls back to the existing PDF/DOCX branch below.
@@ -248,6 +256,10 @@ export function SourceViewPage() {
   // detected via that project-scoped lookup, never by filename/doc_type,
   // since an OCR'd image carries no synthetic marker of its own.
   const isImage = imageSource !== null
+  // Phase W2.3 (Multimodal Image Understanding): which KIND of
+  // image-derived text this is -- distinct labeling, never conflated,
+  // even though both share the same "open original image" mechanism.
+  const isVisualDescription = derivationKind === 'visual_description'
 
   // The page-position fragment is appended to the local blob URL, not the
   // network URL — Chrome/Firefox/Safari's native PDF viewer honors
@@ -271,7 +283,9 @@ export function SourceViewPage() {
             : isDocx
               ? 'This is the extracted passage ClaimTrace indexed from the original Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view its full formatted content.'
               : isImage
-                ? 'This is text ClaimTrace locally transcribed (OCR) from a preserved image — a derived reading of the image, not the original evidence itself. View the original image below to see exactly what was captured.'
+                ? isVisualDescription
+                  ? 'This is an AI-generated visual observation of a preserved image — a derived interpretation, not an original fact. View the original image below to see exactly what was captured.'
+                  : 'This is text ClaimTrace locally transcribed (OCR) from a preserved image — a derived reading of the image, not the original evidence itself. View the original image below to see exactly what was captured.'
                 : 'This is the original source document for the cited evidence. It opens at the page ClaimTrace cited, where known.'}
       </p>
 
@@ -329,9 +343,10 @@ export function SourceViewPage() {
             <div className={styles.pdfPanelContent}>
               <SectionLabel>Extracted Evidence</SectionLabel>
               <p className={styles.docxNotice}>
-                This is text ClaimTrace locally transcribed (OCR) from a preserved image —
-                derived evidence, not the original. The exact cited passage is shown alongside,
-                in Cited passage. Open the original image to see exactly what was captured.
+                {isVisualDescription
+                  ? 'This is an AI-generated visual observation of a preserved image — a derived interpretation, not the original. '
+                  : 'This is text ClaimTrace locally transcribed (OCR) from a preserved image — derived evidence, not the original. '}
+                The exact cited passage is shown alongside, in Cited passage. Open the original image to see exactly what was captured.
               </p>
               <LinkButton variant="secondary" to={getOcrSourceImageUrl(id, imageSource)} reloadDocument>
                 Open original image

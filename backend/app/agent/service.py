@@ -351,15 +351,24 @@ class InvestigationService:
         only if chunk_text is genuinely unavailable. Filename lookups (and,
         in the fallback case, document reads) are cached per document_id
         within this call, since multiple citations commonly point at the
-        same (multi-chunk) document."""
+        same (multi-chunk) document.
+
+        derivation_kind (Phase W2.3: Multimodal Image Understanding) is
+        looked up and cached the same way, and surfaced in
+        Evidence.metadata so PromptBuilder can label this evidence as
+        locally transcribed OCR or an AI-generated visual observation,
+        never silently presenting either as the original source text."""
         filename_cache: dict[int, str] = {}
         full_text_cache: dict[int, str] = {}
+        derivation_kind_cache: dict[int, str | None] = {}
         evidence: list[Evidence] = []
 
         for citation in citations:
             document_id = citation.document_id
             if document_id not in filename_cache:
                 filename_cache[document_id] = tools.get_document_filename(document_id)
+            if document_id not in derivation_kind_cache:
+                derivation_kind_cache[document_id] = tools.get_document_derivation_kind(document_id)
 
             if citation.chunk_text:
                 surrounding_context = citation.chunk_text.strip()
@@ -378,7 +387,7 @@ class InvestigationService:
                     excerpt=excerpt,
                     surrounding_context=surrounding_context,
                     confidence=_clamp_confidence(citation.relevance_score),
-                    metadata={},
+                    metadata={"derivation_kind": derivation_kind_cache[document_id]} if derivation_kind_cache[document_id] else {},
                 )
             )
 

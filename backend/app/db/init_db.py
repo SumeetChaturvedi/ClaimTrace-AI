@@ -230,6 +230,72 @@ def ensure_image_ocr_result_lease_columns(engine: Engine) -> None:
         connection.commit()
 
 
+def ensure_document_derivation_kind_column(engine: Engine) -> None:
+    """Retrofit the derivation_kind column (Phase W2.3: Multimodal Image
+    Understanding) onto an already-existing `documents` table — same
+    safe, additive, idempotent ALTER pattern as the other ensure_*
+    functions above. No-op in effect on a clean database, where
+    create_tables() already creates `documents` with this column from
+    the start.
+
+    Every document row that predates this phase is left with
+    derivation_kind=NULL — correct, not a gap to backfill: NULL is this
+    column's own documented meaning for "an ordinary source document"
+    (see Document's own docstring), which is exactly what every
+    pre-existing row already is."""
+    with engine.connect() as connection:
+        connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS derivation_kind TEXT"))
+        connection.execute(
+            text(
+                """
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_documents_derivation_kind') THEN
+                        ALTER TABLE documents ADD CONSTRAINT ck_documents_derivation_kind
+                            CHECK (derivation_kind IS NULL OR derivation_kind IN ('ocr_transcription', 'visual_description'));
+                    END IF;
+                END $$;
+                """
+            )
+        )
+        connection.commit()
+
+
+def ensure_image_parent_visual_document_id_columns(engine: Engine) -> None:
+    """Retrofit the visual_document_id column (Phase W2.3: Multimodal
+    Image Understanding) onto each of the three already-existing image
+    parent tables — same safe, additive, idempotent ALTER pattern as
+    ensure_email_attachment_image_columns above. No-op in effect on a
+    clean database, where create_tables() already creates all three
+    tables with this column from the start.
+
+    Every row that predates this phase is left with
+    visual_document_id=NULL — correct: no visual description has ever
+    been generated for it yet. The existing document_id column (OCR) is
+    completely untouched by this function."""
+    with engine.connect() as connection:
+        connection.execute(text("ALTER TABLE project_image_assets ADD COLUMN IF NOT EXISTS visual_document_id INTEGER"))
+        connection.execute(text("ALTER TABLE email_attachments ADD COLUMN IF NOT EXISTS visual_document_id INTEGER"))
+        connection.execute(text("ALTER TABLE whatsapp_media_attachments ADD COLUMN IF NOT EXISTS visual_document_id INTEGER"))
+        for table, constraint in (
+            ("project_image_assets", "fk_project_image_assets_visual_document_id"),
+            ("email_attachments", "fk_email_attachments_visual_document_id"),
+            ("whatsapp_media_attachments", "fk_whatsapp_media_attachments_visual_document_id"),
+        ):
+            connection.execute(
+                text(
+                    f"""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '{constraint}') THEN
+                            ALTER TABLE {table} ADD CONSTRAINT {constraint}
+                                FOREIGN KEY (visual_document_id) REFERENCES documents(id) ON DELETE SET NULL;
+                        END IF;
+                    END $$;
+                    """
+                )
+            )
+        connection.commit()
+
+
 def ensure_storage_root(storage_root: Path) -> None:
     storage_root.mkdir(parents=True, exist_ok=True)
 
@@ -260,6 +326,8 @@ def initialize_database(engine: Engine, settings: Settings) -> Project:
     ensure_email_message_content_hash_index(engine)
     ensure_email_attachment_image_columns(engine)
     ensure_image_ocr_result_lease_columns(engine)
+    ensure_document_derivation_kind_column(engine)
+    ensure_image_parent_visual_document_id_columns(engine)
     ensure_storage_root(settings.storage_root)
 
     with get_session_factory()() as session:

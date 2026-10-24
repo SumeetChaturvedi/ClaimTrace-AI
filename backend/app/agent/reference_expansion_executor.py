@@ -240,6 +240,10 @@ class ReferenceExpansionExecutor:
         # _fetch_chunks' docstring for why).
         documents = tools.get_documents(new_document_ids) if new_document_ids else []
         filenames_by_document_id = {document.id: document.filename for document in documents}
+        # Phase W2.3: Multimodal Image Understanding -- same provenance
+        # _build_evidence() already surfaces, looked up once per newly
+        # fetched document (not re-derived from a filename or guessed).
+        derivation_kinds_by_document_id = {document.id: document.derivation_kind for document in documents}
         chunks = sorted(_fetch_chunks(new_document_ids), key=lambda chunk: (chunk.document_id, chunk.id))
 
         chunks_within_budget = chunks[: self._config.max_new_evidence_added]
@@ -249,6 +253,10 @@ class ReferenceExpansionExecutor:
         for chunk in chunks_within_budget:
             surrounding_context = _truncate(chunk.chunk_text, CONTEXT_CHARS)
             excerpt = _truncate(surrounding_context, EXCERPT_CHARS)
+            metadata = {"source": "reference_expansion"}
+            derivation_kind = derivation_kinds_by_document_id.get(chunk.document_id)
+            if derivation_kind:
+                metadata["derivation_kind"] = derivation_kind
             new_evidence.append(
                 Evidence(
                     citation=Citation(
@@ -263,7 +271,7 @@ class ReferenceExpansionExecutor:
                     excerpt=excerpt,
                     surrounding_context=surrounding_context,
                     confidence=_clamp_confidence(REFERENCE_EXPANSION_CONFIDENCE),
-                    metadata={"source": "reference_expansion"},
+                    metadata=metadata,
                 )
             )
 

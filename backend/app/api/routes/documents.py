@@ -29,6 +29,13 @@ class DocumentSummary(BaseModel):
     processing_error: str | None = None
     uploaded_at: datetime
     updated_at: datetime
+    # Phase W2.3 (Multimodal Image Understanding): None for an ordinary
+    # source document; 'ocr_transcription' or 'visual_description' for a
+    # Document derived from a preserved image (see Document.derivation_kind's
+    # own docstring in app/db/models.py). Lets the frontend distinguish
+    # an original source from a locally transcribed OCR reading from an
+    # AI-generated visual observation, without inferring from filename.
+    derivation_kind: str | None = None
 
 
 class UploadResult(BaseModel):

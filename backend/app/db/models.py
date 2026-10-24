@@ -76,6 +76,19 @@ class Document(Base):
             "status IN ('uploaded', 'processing', 'ready', 'failed')",
             name="ck_documents_status",
         ),
+        # Phase W2.3 (Multimodal Image Understanding): NULL means "an
+        # ordinary source document" (PDF/DOCX/email/WhatsApp body --
+        # every Document that predates this phase, and every one that
+        # isn't derived from an image). The two non-NULL values
+        # distinguish the two kinds of image-derived text this
+        # application can now produce, explicitly, without relying on
+        # filename or doc_type inference -- see
+        # app/ingestion/image_ocr_indexing.py and
+        # app/ingestion/image_visual_indexing.py, the only two writers.
+        CheckConstraint(
+            "derivation_kind IS NULL OR derivation_kind IN ('ocr_transcription', 'visual_description')",
+            name="ck_documents_derivation_kind",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -101,6 +114,8 @@ class Document(Base):
         onupdate=func.now(),
     )
     raw_text_path: Mapped[Optional[str]] = mapped_column(Text)
+    # Phase W2.3 -- see __table_args__ CHECK above for the full contract.
+    derivation_kind: Mapped[Optional[str]] = mapped_column(Text)
 
     project: Mapped["Project"] = relationship(back_populates="documents")
     chunks: Mapped[list["DocumentChunk"]] = relationship(back_populates="document")
@@ -679,6 +694,15 @@ class EmailAttachment(Base):
     document_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("documents.id", ondelete="SET NULL"),
     )
+    # Phase W2.3 (Multimodal Image Understanding): set only once an
+    # AI-generated visual description of this attachment's preserved
+    # image has been indexed -- a SEPARATE Document from document_id
+    # above (see Document.derivation_kind), never the same row. Both can
+    # be set independently and reprocessed independently; neither
+    # overwrites the other.
+    visual_document_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+    )
 
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     content_type: Mapped[Optional[str]] = mapped_column(Text)
@@ -697,7 +721,8 @@ class EmailAttachment(Base):
     height_px: Mapped[Optional[int]] = mapped_column(Integer)
 
     message: Mapped["EmailMessage"] = relationship(back_populates="attachments")
-    document: Mapped[Optional["Document"]] = relationship()
+    document: Mapped[Optional["Document"]] = relationship(foreign_keys="EmailAttachment.document_id")
+    visual_document: Mapped[Optional["Document"]] = relationship(foreign_keys="EmailAttachment.visual_document_id")
 
 
 class ConnectedMailbox(Base):
@@ -959,6 +984,13 @@ class WhatsAppMediaAttachment(Base):
     document_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("documents.id", ondelete="SET NULL"),
     )
+    # Phase W2.3 (Multimodal Image Understanding): set only once an
+    # AI-generated visual description of this attachment's preserved
+    # image has been indexed -- a SEPARATE Document from document_id
+    # above (see Document.derivation_kind).
+    visual_document_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+    )
 
     # The filename as referenced in the chat export text -- metadata only,
     # NEVER used to build a filesystem path (see storage.py's
@@ -978,7 +1010,8 @@ class WhatsAppMediaAttachment(Base):
     detected_extension: Mapped[Optional[str]] = mapped_column(Text)
 
     message: Mapped["WhatsAppMessage"] = relationship(back_populates="media_attachments")
-    document: Mapped[Optional["Document"]] = relationship()
+    document: Mapped[Optional["Document"]] = relationship(foreign_keys="WhatsAppMediaAttachment.document_id")
+    visual_document: Mapped[Optional["Document"]] = relationship(foreign_keys="WhatsAppMediaAttachment.visual_document_id")
 
 
 class ProjectImageAsset(Base):
@@ -1029,6 +1062,13 @@ class ProjectImageAsset(Base):
     document_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("documents.id", ondelete="SET NULL"),
     )
+    # Phase W2.3 (Multimodal Image Understanding): set only once an
+    # AI-generated visual description of this image has been indexed --
+    # a SEPARATE Document from document_id above (see
+    # Document.derivation_kind).
+    visual_document_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+    )
 
     # The filename as uploaded -- metadata only, NEVER used to build a
     # filesystem path (see storage.py's save_image, which always uses a
@@ -1053,7 +1093,8 @@ class ProjectImageAsset(Base):
     )
 
     project: Mapped["Project"] = relationship()
-    document: Mapped[Optional["Document"]] = relationship()
+    document: Mapped[Optional["Document"]] = relationship(foreign_keys="ProjectImageAsset.document_id")
+    visual_document: Mapped[Optional["Document"]] = relationship(foreign_keys="ProjectImageAsset.visual_document_id")
 
 
 class ImageOcrResult(Base):
@@ -1178,6 +1219,102 @@ class ImageOcrResult(Base):
     # 'completed'/'failed', so they are only ever non-NULL while a row is
     # actively leased. See process_pending.py's own module docstring for
     # the full design.
+    lease_token: Mapped[Optional[str]] = mapped_column(Text)
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    project_image_asset: Mapped[Optional["ProjectImageAsset"]] = relationship()
+    email_attachment: Mapped[Optional["EmailAttachment"]] = relationship()
+    whatsapp_media_attachment: Mapped[Optional["WhatsAppMediaAttachment"]] = relationship()
+
+
+class ImageVisualDescriptionResult(Base):
+    """AI-generated visual description of one already-preserved image
+    (Phase W2.3: Multimodal Image Understanding) -- a deliberate sibling
+    of ImageOcrResult, not an extension of it: same three-parent/
+    exactly-one-parent/per-column-uniqueness shape, same pending ->
+    processing -> completed/failed lifecycle, same database-backed lease
+    design (see process_pending.py's own module docstring for W2.1, reused
+    unchanged in app/vision/process_pending.py), but a SEPARATE table and
+    a SEPARATE lease -- never overloading ImageOcrResult's own columns or
+    lease. This keeps OCR and vision reprocessing/retry/lease contention
+    completely independent: a lost or stale vision lease can never affect
+    an in-flight OCR attempt on the same image, and vice versa.
+
+    status: 'pending' (row exists, vision not yet attempted) ->
+    'processing' (claimed by a batch run) -> 'completed' (Gemini returned
+    a description -- EMPTY/whitespace-only is still a genuine 'completed'
+    result, mirroring ImageOcrResult's own "empty is honest, not a
+    failure" convention) or 'failed' (missing API key, provider error,
+    unreadable/oversized image, or any other real error -- `error` always
+    set).
+
+    description_text_path mirrors ImageOcrResult.ocr_text_path exactly:
+    the generated description lives in its own server-managed file (see
+    app/ingestion/storage.py's save_visual_description), never inline in
+    this row. (vision_model, vision_model_version) together are this
+    phase's idempotency/provenance key, exactly mirroring
+    (ocr_engine, ocr_engine_version): a completed result is only
+    reprocessed when the configured model/version changes, or an explicit
+    --force override is given.
+
+    New table -- Base.metadata.create_all() (app/db/init_db.py) creates it
+    automatically with no ALTER required for a clean database."""
+
+    __tablename__ = "image_visual_description_results"
+    __table_args__ = (
+        # Constraint names abbreviated to "ivdr" (ImageVisualDescriptionResult)
+        # -- the full, unabbreviated names used elsewhere in this module
+        # (mirroring ImageOcrResult's own "ck_image_ocr_results_*" style)
+        # exceed Postgres's 63-character identifier limit for the
+        # whatsapp_media_attachment_id constraint specifically; verified
+        # directly against a real schema-creation attempt, not guessed.
+        CheckConstraint(
+            "(project_image_asset_id IS NOT NULL)::int "
+            "+ (email_attachment_id IS NOT NULL)::int "
+            "+ (whatsapp_media_attachment_id IS NOT NULL)::int = 1",
+            name="ck_ivdr_exactly_one_parent",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'completed', 'failed')",
+            name="ck_ivdr_status",
+        ),
+        UniqueConstraint("project_image_asset_id", name="ux_ivdr_project_image_asset_id"),
+        UniqueConstraint("email_attachment_id", name="ux_ivdr_email_attachment_id"),
+        UniqueConstraint("whatsapp_media_attachment_id", name="ux_ivdr_whatsapp_media_attachment_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    project_image_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("project_image_assets.id", ondelete="CASCADE"),
+    )
+    email_attachment_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("email_attachments.id", ondelete="CASCADE"),
+    )
+    whatsapp_media_attachment_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("whatsapp_media_attachments.id", ondelete="CASCADE"),
+    )
+
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    description_text_path: Mapped[Optional[str]] = mapped_column(Text)
+
+    vision_model: Mapped[str] = mapped_column(Text, nullable=False, server_default="gemini")
+    vision_model_version: Mapped[Optional[str]] = mapped_column(Text)
+
+    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    # Database-backed lease -- identical design to ImageOcrResult's own
+    # (see that model's docstring and process_pending.py's module
+    # docstring for the full rationale), just a separate lease on a
+    # separate table.
     lease_token: Mapped[Optional[str]] = mapped_column(Text)
     lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 

@@ -67,6 +67,34 @@ class Settings(BaseSettings):
     # guaranteed present in a standard install.
     ocr_language: str = "eng"
 
+    # Phase W2.3: Multimodal Image Understanding. An explicit, app-level
+    # cap on how large an image this process will ever attach to a
+    # Gemini request -- independent of, and smaller than,
+    # app/ingestion/image_validation.py's own MAX_IMAGE_BYTES (25 MB,
+    # the limit for what gets PRESERVED at all). Preservation and
+    # "sent to an external provider" are different risk levels: a large
+    # image this application is happy to store is not automatically one
+    # it should hand to a third-party API uninspected. Configurable
+    # rather than hardcoded, since the right value depends on the
+    # configured model's own real request-size limits (see
+    # app/vision/gemini_vision.py's own docstring for why that is NOT
+    # assumed here).
+    vision_max_image_bytes: int = 8 * 1024 * 1024
+    # Explicit opt-in kill switch, OFF by default, checked ONLY by
+    # app/vision/process_pending.py's own CLI entrypoint (main()) --
+    # never by OCR or by any text-only Gemini caller (ReasoningEngine,
+    # EventExtractor), and never by process_pending() itself, so a test
+    # or a future orchestrator that calls process_pending() directly is
+    # unaffected. Exists because gemini_api_key/gemini_model are shared
+    # with those unrelated, already-working callers, so neither can
+    # double as a vision-specific switch: unsetting either to "disable
+    # vision" would also break OCR's reprocess-stale-engine-version
+    # check and every existing text investigation. Flip to true only
+    # after confirming the configured gemini_model actually accepts
+    # image input (see gemini_vision.py's own docstring) -- this
+    # application makes no such claim on its own.
+    vision_processing_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

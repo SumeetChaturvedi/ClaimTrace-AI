@@ -166,6 +166,10 @@ export function DocumentSourceViewPage() {
   // of this page's own ProjectDocumentSummary fetch -- no second lookup
   // needed, unlike SourceViewPage's citation-based variant.
   const isImage = document.image_source !== null
+  // Phase W2.3 (Multimodal Image Understanding): distinguishes locally
+  // transcribed OCR from an AI-generated visual observation, both of
+  // which are "isImage" above but must never be labeled identically.
+  const isVisualDescription = document.derivation_kind === 'visual_description'
   const pdfHref = pdfState.status === 'available' ? pdfState.blobUrl : null
 
   return (
@@ -180,7 +184,9 @@ export function DocumentSourceViewPage() {
             : isDocx
               ? "This is a Word document. ClaimTrace does not render Word documents in-browser — download the original document below to view it."
               : isImage
-                ? 'This text was locally transcribed (OCR) from a preserved image — a derived reading of the image, not the original evidence itself. View the original image below to see exactly what was captured.'
+                ? isVisualDescription
+                  ? 'This is an AI-generated visual observation of a preserved image — a derived interpretation, not an original fact. View the original image below to see exactly what was captured.'
+                  : 'This text was locally transcribed (OCR) from a preserved image — a derived reading of the image, not the original evidence itself. View the original image below to see exactly what was captured.'
                 : "This is the original document as stored in this project's record, opened at its first page. There is no cited passage here — this document was opened directly from the project's document register, not from an investigation's evidence."}
       </p>
 
@@ -234,9 +240,10 @@ export function DocumentSourceViewPage() {
             <div className={styles.pdfPanelContent}>
               <SectionLabel>Extracted Evidence</SectionLabel>
               <p className={styles.docxNotice}>
-                This text was locally transcribed (OCR) from a preserved image — derived
-                evidence, not the original. Open the original image to see exactly what was
-                captured.
+                {isVisualDescription
+                  ? 'This is an AI-generated visual observation of a preserved image — a derived interpretation, not the original. '
+                  : 'This text was locally transcribed (OCR) from a preserved image — derived evidence, not the original. '}
+                Open the original image to see exactly what was captured.
               </p>
               <LinkButton variant="secondary" to={getOcrSourceImageUrl(id, document.image_source)} reloadDocument>
                 Open original image

@@ -116,6 +116,16 @@ class PromptBuilder:
             lines = [f"[{index}] Document: {item.document_name}"]
             if item.citation.page is not None:
                 lines.append(f"    Page: {item.citation.page}")
+            # Phase W2.3 (Multimodal Image Understanding): make the
+            # reasoning model aware that this evidence is a DERIVED
+            # reading of an image, not the original source text, so it
+            # never presents a transcription or an AI-generated
+            # observation as if it were the primary evidence itself.
+            derivation_kind = item.metadata.get("derivation_kind")
+            if derivation_kind == "ocr_transcription":
+                lines.append("    Source: locally transcribed text (OCR) from a preserved image -- not the original image itself")
+            elif derivation_kind == "visual_description":
+                lines.append("    Source: AI-generated visual observation of a preserved image -- a derived interpretation, not an original fact")
             lines.append(f"    Confidence: {item.confidence:.2f}")
             lines.append(f'    Excerpt: "{item.excerpt}"')
             blocks.append("\n".join(lines))

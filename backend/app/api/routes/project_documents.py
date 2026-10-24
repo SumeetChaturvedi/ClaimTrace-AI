@@ -181,40 +181,42 @@ def _whatsapp_sources_for(db: Session, project_id: int, document_ids: list[int])
 
 
 def _image_sources_for(db: Session, project_id: int, document_ids: list[int]) -> dict[int, ImageSourceInfo]:
-    """Look up which of `document_ids` were derived from locally-OCR'd
-    image text (Phase W2.2), across all three image sources, keyed by
-    the DOCUMENT's own id. One query per source kind, each scoped to
-    this project the same way _email_sources_for/_whatsapp_sources_for
-    already are -- a document can only ever match one of the three
-    (ImageOcrResult's own exactly-one-parent constraint, see
-    app/db/models.py, makes this unambiguous), so no ordering between
-    the three loops below matters."""
+    """Look up which of `document_ids` were derived from an image, across
+    all three image sources, keyed by the DOCUMENT's own id. Checks BOTH
+    `document_id` (OCR, Phase W2.2) and `visual_document_id` (AI-generated
+    visual description, Phase W2.3) on each parent table -- a document can
+    only ever match one of these six (id, column) combinations, since a
+    parent's own document_id/visual_document_id point at two DIFFERENT
+    Document rows (see Document.derivation_kind's own docstring), so no
+    ordering between the loops below matters. One query per (source kind,
+    column) pair, each scoped to this project the same way
+    _email_sources_for/_whatsapp_sources_for already are."""
     if not document_ids:
         return {}
 
     sources: dict[int, ImageSourceInfo] = {}
 
-    for document_id, image_id in db.execute(
-        select(ProjectImageAsset.document_id, ProjectImageAsset.id).where(
-            ProjectImageAsset.document_id.in_(document_ids),
-            ProjectImageAsset.project_id == project_id,
-        )
-    ).all():
-        sources[document_id] = ImageSourceInfo(source_kind="project_image", image_id=image_id)
+    for column in (ProjectImageAsset.document_id, ProjectImageAsset.visual_document_id):
+        for document_id, image_id in db.execute(
+            select(column, ProjectImageAsset.id).where(column.in_(document_ids), ProjectImageAsset.project_id == project_id)
+        ).all():
+            sources[document_id] = ImageSourceInfo(source_kind="project_image", image_id=image_id)
 
-    for document_id, image_id in db.execute(
-        select(EmailAttachment.document_id, EmailAttachment.id)
-        .join(EmailMessage, EmailMessage.document_id == EmailAttachment.message_id)
-        .where(EmailAttachment.document_id.in_(document_ids), EmailMessage.project_id == project_id)
-    ).all():
-        sources[document_id] = ImageSourceInfo(source_kind="email_attachment", image_id=image_id)
+    for column in (EmailAttachment.document_id, EmailAttachment.visual_document_id):
+        for document_id, image_id in db.execute(
+            select(column, EmailAttachment.id)
+            .join(EmailMessage, EmailMessage.document_id == EmailAttachment.message_id)
+            .where(column.in_(document_ids), EmailMessage.project_id == project_id)
+        ).all():
+            sources[document_id] = ImageSourceInfo(source_kind="email_attachment", image_id=image_id)
 
-    for document_id, image_id in db.execute(
-        select(WhatsAppMediaAttachment.document_id, WhatsAppMediaAttachment.id)
-        .join(WhatsAppMessage, WhatsAppMessage.document_id == WhatsAppMediaAttachment.message_id)
-        .where(WhatsAppMediaAttachment.document_id.in_(document_ids), WhatsAppMessage.project_id == project_id)
-    ).all():
-        sources[document_id] = ImageSourceInfo(source_kind="whatsapp_attachment", image_id=image_id)
+    for column in (WhatsAppMediaAttachment.document_id, WhatsAppMediaAttachment.visual_document_id):
+        for document_id, image_id in db.execute(
+            select(column, WhatsAppMediaAttachment.id)
+            .join(WhatsAppMessage, WhatsAppMessage.document_id == WhatsAppMediaAttachment.message_id)
+            .where(column.in_(document_ids), WhatsAppMessage.project_id == project_id)
+        ).all():
+            sources[document_id] = ImageSourceInfo(source_kind="whatsapp_attachment", image_id=image_id)
 
     return sources
 
