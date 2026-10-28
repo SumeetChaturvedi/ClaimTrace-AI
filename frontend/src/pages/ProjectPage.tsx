@@ -9,6 +9,7 @@ import { ErrorState, LoadingState } from '../components/ui/StateViews'
 import { parseProjectId } from '../lib/projectDirectory'
 import { useProject } from '../lib/useProject'
 import { useRevealRefs } from '../lib/useRevealOnScroll'
+import { derivationBadgeLabel } from '../lib/documentFormat'
 import {
   ApiError,
   getProjectImageFileUrl,
@@ -316,19 +317,21 @@ export function ProjectPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/gif,image/webp"
             multiple
             className={styles.hiddenInput}
             onChange={(e) => void handleFileChange(e)}
             disabled={uploading}
           />
           <Button variant="primary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            {uploading ? 'Uploading…' : 'Add Documents'}
+            {uploading ? 'Uploading…' : 'Add Files'}
           </Button>
         </div>
         <p className={styles.sectionBody}>
-          Upload PDF or Word (.docx) documents to add them to this project's record. Once
-          processed, they become available to every investigation asked against this project.
+          Upload PDF, Word (.docx), or image (JPEG, PNG, GIF, or WEBP) files to add them to this
+          project's record. PDF and Word documents become available to every investigation once
+          processed; images are preserved as original evidence below and become available to
+          investigations once OCR'd or AI-described.
         </p>
         {uploadSummary && <p className={styles.uploadSummary}>{uploadSummary}</p>}
         {uploadError && <p className={styles.uploadError}>{uploadError}</p>}
@@ -463,9 +466,10 @@ export function ProjectPage() {
           <span className={styles.sectionRuleLine} aria-hidden="true" />
         </div>
         <p className={styles.sectionBody}>
-          Images uploaded above (JPEG, PNG, GIF, or WEBP) are preserved as original evidence here.
-          ClaimTrace does not yet extract text or describe their contents — each one is the
-          original file, available to open, not yet searchable or citable.
+          Images (JPEG, PNG, GIF, or WEBP) are uploaded through the same "Add Files" control above
+          and preserved here as original evidence. Once processed, an image's extracted text and
+          any AI-generated visual description become separate, citable documents in this project's
+          record — the original image itself always remains available to open below.
         </p>
 
         {projectImagesQuery.status === 'loading' && <LoadingState label="Loading images…" />}
@@ -577,6 +581,7 @@ function EvidenceMotif() {
 function DocumentRow({ doc, projectId, index }: { doc: ProjectDocumentSummary; projectId: number; index: number }) {
   const isOpenable = doc.status === 'ready'
   const ordinal = String(index + 1).padStart(3, '0')
+  const provenanceLabel = derivationBadgeLabel(doc.derivation_kind)
 
   const body = (
     <>
@@ -584,7 +589,13 @@ function DocumentRow({ doc, projectId, index }: { doc: ProjectDocumentSummary; p
       <div className={styles.docMain}>
         <span className={styles.docName}>{doc.filename}</span>
         <div className={styles.docMeta}>
-          {doc.doc_type ? <span className={styles.docMetaText}>{doc.doc_type}</span> : <Muted>Type not recorded</Muted>}
+          {doc.doc_type ? (
+            <span className={styles.docMetaText}>{doc.doc_type}</span>
+          ) : provenanceLabel ? (
+            <Badge tone="neutral">{provenanceLabel}</Badge>
+          ) : (
+            <Muted>Type not recorded</Muted>
+          )}
           <span className={styles.docMetaDot} aria-hidden="true" />
           <span className={styles.docMetaText}>{doc.doc_date ?? 'Date not recorded'}</span>
         </div>
@@ -689,8 +700,14 @@ function WhatsAppChatRow({ chat, projectId, index }: { chat: WhatsAppChatSummary
 
 /** One directly-uploaded project image (Phase W2.0: Shared Image
  * Preservation Foundation) -- opens the real, byte-exact original file
- * when preserved; a rejected/failed upload is shown as plain text with
- * its real reason, never a clickable link to nothing. */
+ * whenever a preserved original actually exists on disk, which the
+ * backend guarantees for BOTH 'stored_pending_processing' and
+ * 'processed' (see app/api/routes/project_images.py's own
+ * get_project_image_file — it serves by storage_key/detected_extension,
+ * not by status, and OCR/vision indexing never clears either). A
+ * rejected/failed upload is shown as plain text with its real reason,
+ * never a clickable link to nothing — 'processed' is a genuine success,
+ * never grouped with those two. */
 function ProjectImageRow({
   image,
   projectId,
@@ -701,11 +718,12 @@ function ProjectImageRow({
   index: number
 }) {
   const ordinal = String(index + 1).padStart(3, '0')
-  const isOpenable = image.status === 'stored_pending_processing' && image.id != null
+  const hasPreservedOriginal =
+    (image.status === 'stored_pending_processing' || image.status === 'processed') && image.id != null
 
   return (
     <li>
-      {isOpenable ? (
+      {hasPreservedOriginal ? (
         <a
           href={getProjectImageFileUrl(projectId, image.id as number)}
           target="_blank"
@@ -715,11 +733,14 @@ function ProjectImageRow({
           <span className={styles.registerOrdinal}>{ordinal}</span>
           <div className={styles.docMain}>
             <span className={styles.docName}>{image.filename}</span>
-            <div className={styles.docMeta}>
-              <span className={styles.docMetaText}>Preserved — not yet processed</span>
-            </div>
+            {image.status === 'stored_pending_processing' && (
+              <div className={styles.docMeta}>
+                <span className={styles.docMetaText}>Preserved — not yet processed</span>
+              </div>
+            )}
           </div>
           <div className={styles.docTrailing}>
+            {image.status === 'processed' && <Badge tone="green">Processed</Badge>}
             <span className={styles.registerArrow}>→</span>
           </div>
         </a>

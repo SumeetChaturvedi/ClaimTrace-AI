@@ -1,7 +1,8 @@
 import type { Citation, DocumentSummary } from '../../api/types'
 import { useInspector } from '../layout/InspectorContext'
 import { SectionLabel, Muted } from '../ui/Typography'
-import { citationLocationShort } from '../../lib/documentFormat'
+import { Badge } from '../ui/Badge'
+import { citationLocationShort, derivationBadgeLabel } from '../../lib/documentFormat'
 import styles from './CitationList.module.css'
 
 interface CitationListProps {
@@ -38,6 +39,7 @@ export function CitationList({ citations, documentNames, documents, projectId, i
         {citations.map((citation, i) => {
           const document = documents?.find((d) => d.id === citation.document_id)
           const documentName = document?.filename ?? documentNames?.[citation.document_id]
+          const provenanceLabel = derivationBadgeLabel(document?.derivation_kind)
           return (
             <li key={`${citation.document_id}-${citation.chunk_id}-${i}`}>
               <button
@@ -50,6 +52,7 @@ export function CitationList({ citations, documentNames, documents, projectId, i
                     documentName,
                     documentType: document?.doc_type,
                     documentDate: document?.doc_date,
+                    documentDerivationKind: document?.derivation_kind,
                     projectId,
                     investigationId,
                   })
@@ -61,6 +64,11 @@ export function CitationList({ citations, documentNames, documents, projectId, i
                     {documentName ?? `Document #${citation.document_id}`}
                     {citation.page != null && (
                       <span className={styles.page}> · {citationLocationShort(documentName, citation.page)}</span>
+                    )}
+                    {provenanceLabel && (
+                      <span className={styles.provenanceBadge}>
+                        <Badge tone="neutral">{provenanceLabel}</Badge>
+                      </span>
                     )}
                   </span>
                   {citation.chunk_text && <span className={styles.excerpt}>{citation.chunk_text}</span>}

@@ -5,7 +5,7 @@ import { SectionLabel, Muted } from '../../components/ui/Typography'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { EmptyState, LoadingState } from '../../components/ui/StateViews'
-import { citationLocationShort } from '../../lib/documentFormat'
+import { citationLocationShort, derivationBadgeLabel } from '../../lib/documentFormat'
 import styles from './EvidenceWorkbench.module.css'
 
 /**
@@ -118,6 +118,7 @@ export function EvidencePanel({
       documentName: item.document?.filename ?? documentNames[item.citation.document_id],
       documentType: item.document?.doc_type,
       documentDate: item.document?.doc_date,
+      documentDerivationKind: item.document?.derivation_kind,
       projectId,
       investigationId,
     })
@@ -239,6 +240,7 @@ function EvidenceRow({
   onOpen: () => void
 }) {
   const { citation, document, documentLabel } = item
+  const provenanceLabel = derivationBadgeLabel(document?.derivation_kind)
   return (
     <li>
       <button className={`${styles.row} ${active ? styles.rowActive : ''}`} onClick={onOpen} aria-pressed={active}>
@@ -258,6 +260,7 @@ function EvidenceRow({
             <span>Passage {citation.chunk_id}</span>
             <span>Relevance {citation.relevance_score.toFixed(2)}</span>
             {document?.doc_type && <Badge tone="neutral">{document.doc_type}</Badge>}
+            {provenanceLabel && <Badge tone="neutral">{provenanceLabel}</Badge>}
           </div>
         </div>
         <span className={styles.rowArrow} aria-hidden="true">→</span>

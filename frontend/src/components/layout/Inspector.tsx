@@ -2,7 +2,7 @@ import { useInspector, type InspectorContent } from './InspectorContext'
 import { LinkButton } from '../ui/LinkButton'
 import { SectionLabel, Prose, Muted, NotAvailable } from '../ui/Typography'
 import { Badge } from '../ui/Badge'
-import { citationLocationLabel } from '../../lib/documentFormat'
+import { citationLocationLabel, derivationBadgeLabel } from '../../lib/documentFormat'
 import { formatEnumLabel } from '../../lib/eventTimeline'
 import styles from './Inspector.module.css'
 
@@ -56,7 +56,8 @@ function CitationInspector({
   content: Extract<InspectorContent, { kind: 'citation' }>
   onNavigate: () => void
 }) {
-  const { citation, documentName, documentType, documentDate, projectId, investigationId } = content
+  const { citation, documentName, documentType, documentDate, documentDerivationKind, projectId, investigationId } = content
+  const provenanceLabel = derivationBadgeLabel(documentDerivationKind)
   return (
     <div className={styles.section}>
       <div>
@@ -64,7 +65,14 @@ function CitationInspector({
         <dl className={styles.metaList}>
           <div>
             <dt>Document</dt>
-            <dd>{documentName ?? `Document #${citation.document_id}`}</dd>
+            <dd>
+              {documentName ?? `Document #${citation.document_id}`}
+              {provenanceLabel && (
+                <span className={styles.provenanceBadge}>
+                  <Badge tone="neutral">{provenanceLabel}</Badge>
+                </span>
+              )}
+            </dd>
           </div>
           <div>
             <dt>Type</dt>

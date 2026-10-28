@@ -61,6 +61,12 @@
   color: var(--color-text-muted);
 }
 
+.provenanceBadge {
+  display: inline-flex;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+
 .excerpt {
   font-size: var(--text-sm);
   color: var(--color-text-secondary);

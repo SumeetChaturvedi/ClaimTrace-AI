@@ -43,3 +43,18 @@ export function citationLocationLabel(filename: string | null | undefined): stri
 export function citationLocationShort(filename: string | null | undefined, location: number): string {
   return isDocxFilename(filename) ? `¶${location}` : `p.${location}`
 }
+
+/**
+ * Phase W2.3 (Multimodal Image Understanding): the one, shared label for a
+ * Document's derivation_kind, reused everywhere a document's provenance is
+ * shown (CitationList, EvidencePanel, Inspector, ProjectPage's document
+ * register) instead of four separate copies of the same two strings.
+ * Returns null for an ordinary document (derivation_kind is null/undefined)
+ * — callers render nothing in that case, never a badge implying a document
+ * is image-derived when it isn't.
+ */
+export function derivationBadgeLabel(derivationKind: string | null | undefined): string | null {
+  if (derivationKind === 'ocr_transcription') return 'OCR'
+  if (derivationKind === 'visual_description') return 'AI description'
+  return null
+}

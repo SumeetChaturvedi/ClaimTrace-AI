@@ -321,6 +321,28 @@ class DirectImageUploadTests(unittest.TestCase):
         docs = self.client.get(f"/projects/{project_id}/documents").json()
         self.assertEqual([d for d in docs if d["filename"] == "site.jpg"], [])
 
+    def test_file_route_serves_the_original_image_inline_not_as_a_forced_download(self):
+        """Pre-commit review fix: FileResponse's own default
+        (content_disposition_type='attachment', triggered whenever
+        `filename` is passed -- confirmed directly against the installed
+        Starlette version) previously made this route force a download
+        instead of letting the browser display the image, even though
+        every frontend consumer opens it as a plain `<a target="_blank">`
+        link expecting to VIEW it (ProjectPage.tsx's ProjectImageRow, and
+        SourceViewPage/DocumentSourceViewPage's "Open original image"
+        action). The real, original filename must still be present for
+        an explicit "Save As" -- only the disposition type changes."""
+        project_id = self._create_project("Image Upload Test Inline Disposition")
+        image_bytes = _build_test_image(color=(8, 9, 10))
+        resp = self._upload(project_id, "evidence.jpg", image_bytes)
+        image_id = resp.json()["images"][0]["id"]
+
+        file_resp = self.client.get(f"/projects/{project_id}/images/{image_id}/file")
+        self.assertEqual(file_resp.status_code, 200)
+        self.assertEqual(file_resp.headers["content-disposition"], 'inline; filename="evidence.jpg"')
+        self.assertEqual(file_resp.content, image_bytes, "the byte-exact original must be unchanged by this fix")
+        self.assertEqual(file_resp.headers["content-type"], "image/jpeg")
+
     def test_pdf_upload_in_the_same_batch_is_unaffected_by_image_handling(self):
         """The existing PDF/DOCX path through this exact endpoint must be
         completely unchanged by this phase -- uploaded in the same batch

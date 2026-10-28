@@ -258,7 +258,22 @@ def get_project_image_file(
     and "no preserved original to serve" (a 'rejected' asset was never
     stored). Content-type is served from the asset's own server-detected
     `content_type` (see app/ingestion/image_validation.py), never guessed
-    from the filename at serve time."""
+    from the filename at serve time.
+
+    content_disposition_type="inline" (pre-commit review fix): Starlette's
+    FileResponse defaults to "attachment" whenever a `filename` is given,
+    which forces the browser to download the file instead of displaying
+    it -- confirmed directly against the installed Starlette version
+    (FileResponse.__init__'s own default `content_disposition_type:
+    str = "attachment"`) and by an actual request/response cycle showing
+    `content-disposition: attachment; filename="..."` before this fix.
+    Every consumer of this route opens it as a plain `<a target="_blank">`
+    link expecting to VIEW the original image (ProjectPage.tsx's
+    ProjectImageRow, and SourceViewPage/DocumentSourceViewPage's "Open
+    original image" action via getOcrSourceImageUrl) -- none of them
+    wants a forced download. `filename` is kept so the browser still
+    offers the real original filename if the user explicitly saves it
+    from the inline view; only the disposition type changes."""
     _get_project_or_404(db, project_id)
     asset = db.get(ProjectImageAsset, image_id)
     if asset is None or asset.project_id != project_id:
@@ -274,4 +289,5 @@ def get_project_image_file(
         path=file_path,
         media_type=asset.content_type or "application/octet-stream",
         filename=asset.filename,
+        content_disposition_type="inline",
     )

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
-import type { Citation, ContractClause, ExtractedEvent } from '../../api/types'
+import type { Citation, ContractClause, DocumentSummary, ExtractedEvent } from '../../api/types'
 
 /**
  * Reusable Inspector content model. 'citation' (Evidence tab, Timeline tab),
@@ -15,6 +15,13 @@ export type InspectorContent =
       documentName?: string
       documentType?: string | null
       documentDate?: string | null
+      /** Phase W2.3 (Multimodal Image Understanding): the cited document's
+       * own derivation_kind, when the caller already has it resolved (see
+       * DocumentSummary in api/types.ts) — threaded through exactly like
+       * documentType/documentDate above, never refetched separately. Typed
+       * directly from DocumentSummary's own field rather than a bare
+       * string, so a typo'd derivation value is a type error here too. */
+      documentDerivationKind?: DocumentSummary['derivation_kind']
       /** The investigation this citation came from, required so "Open
        * source" can link to a Source View nested under the same
        * project and investigation, never a bare /documents/:id lookup that
