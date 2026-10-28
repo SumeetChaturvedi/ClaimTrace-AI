@@ -102,6 +102,24 @@ describe('AttemptHistorySection (Phase 2a)', () => {
     expect(screen.getByText(/still running at the time this history was captured/i)).toBeInTheDocument()
   })
 
+  it('shows the collapsed-row preview without literal Markdown syntax (independent review fix)', async () => {
+    getInvestigationAttemptsMock.mockResolvedValue([
+      attempt({
+        attempt_number: 1,
+        is_current: true,
+        answer: '### Summary\n**Key finding:** the pier was affected.',
+      }),
+    ])
+    renderSection()
+    fireEvent.click(screen.getByText(/view previous attempts/i))
+    await waitFor(() => expect(screen.getByText('Attempt 1')).toBeInTheDocument())
+
+    // Collapsed (not yet expanded) -- only the preview is shown.
+    expect(screen.getByText(/Summary Key finding: the pier was affected\./)).toBeInTheDocument()
+    expect(screen.queryByText(/###/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument()
+  })
+
   it('shows the plain-language evidence_limitation message on an expanded attempt, never the raw reason', async () => {
     getInvestigationAttemptsMock.mockResolvedValue([
       attempt({

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { LoadingState, ErrorState } from '../components/ui/StateViews'
-import { Prose, Muted, SectionLabel } from '../components/ui/Typography'
+import { AnswerProse, Muted, SectionLabel } from '../components/ui/Typography'
 import { Badge } from '../components/ui/Badge'
 import { parseProjectId } from '../lib/projectDirectory'
 import { parseInvestigationId } from '../lib/investigationId'
@@ -174,7 +174,7 @@ export function InvestigationRecordPage() {
         {record.status === 'completed' && (
           <>
             <Section title="Finding">
-              <Prose>{record.answer}</Prose>
+              <AnswerProse>{record.answer ?? ''}</AnswerProse>
               {record.answer_truncated && (
                 <p className={styles.limitationText}>
                   This answer may be incomplete — it was cut off before the model finished

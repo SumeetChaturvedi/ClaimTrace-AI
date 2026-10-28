@@ -1,5 +1,5 @@
 import type { InvestigationResponse, DocumentSummary } from '../../api/types'
-import { Prose, Muted } from '../../components/ui/Typography'
+import { AnswerProse, Muted } from '../../components/ui/Typography'
 import { CitationList } from '../../components/evidence/CitationList'
 import styles from './panels.module.css'
 
@@ -32,7 +32,7 @@ export function FindingPanel({
           <h2 className={styles.findingHeading}>Finding</h2>
         </div>
         <div className={styles.findingText}>
-          <Prose>{response.answer}</Prose>
+          <AnswerProse>{response.answer}</AnswerProse>
         </div>
         {response.answer_truncated && (
           <div className={styles.limitationNotice} role="status">

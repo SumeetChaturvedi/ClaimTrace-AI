@@ -3,6 +3,25 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Pre-commit review fix: the shared fallback output-token budget for any
+# Gemini call that doesn't set its own Prompt.max_output_tokens override
+# (today: ReasoningEngine's main investigation answer, and
+# app/vision/gemini_vision.py's visual descriptions — NOT EventExtractor,
+# which already overrides this per-call via EVENT_EXTRACTION_MAX_OUTPUT_
+# TOKENS=4096, see app/agent/event_extraction.py). Previously a hardcoded
+# 1024 constant in app/llm/gemini_provider.py; a real, thorough,
+# multi-section investigative answer can exceed that and gets cut off
+# mid-sentence by Gemini's own finish_reason=MAX_TOKENS signal (still
+# correctly detected and surfaced via answer_truncated either way — this
+# constant changes how OFTEN that happens, not whether it's detected).
+# Doubled from 1024 and made configurable via GEMINI_MAX_OUTPUT_TOKENS so
+# a future adjustment needs no code change. Deliberately still well below
+# EventExtractor's own 4096 — a structured JSON array of discrete events
+# genuinely needs more room than prose, and this value is shared with
+# vision's own "2-4 sentences" descriptions, which never need anywhere
+# near this much headroom.
+DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 2048
+
 
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
@@ -23,6 +42,7 @@ class Settings(BaseSettings):
 
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-flash-lite-latest"
+    gemini_max_output_tokens: int = DEFAULT_GEMINI_MAX_OUTPUT_TOKENS
 
     # Phase 1: Gmail Integration. All optional/None by default so the app
     # keeps starting and running exactly as before for anyone who hasn't

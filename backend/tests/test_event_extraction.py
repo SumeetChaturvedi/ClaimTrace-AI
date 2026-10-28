@@ -192,9 +192,10 @@ class VocabularyNormalizationTests(unittest.TestCase):
 
 
 class TruncationToleranceTests(unittest.TestCase):
-    """Gemini's shared MAX_OUTPUT_TOKENS cap can truncate a long array
-    mid-object (observed against real investigation evidence during this
-    phase's own regression run). Complete leading objects must be kept."""
+    """Gemini's shared output-token cap (Settings.gemini_max_output_tokens)
+    can truncate a long array mid-object (observed against real
+    investigation evidence during this phase's own regression run).
+    Complete leading objects must be kept."""
 
     def test_truncated_array_salvages_complete_leading_objects(self):
         complete_object = (

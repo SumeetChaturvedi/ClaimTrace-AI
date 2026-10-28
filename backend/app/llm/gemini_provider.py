@@ -17,11 +17,6 @@ from google.genai.errors import APIError
 from app.config import get_settings
 from app.llm.provider import GenerationResult, LLMProvider, LLMProviderError, Prompt
 
-# Gemini's free API tier is Flash-model-friendly; kept configurable via
-# Settings.gemini_model since exact free-tier model availability/naming
-# changes over time — verify against current Google AI Studio pricing.
-MAX_OUTPUT_TOKENS = 1024
-
 
 class GeminiProvider(LLMProvider):
     """Generates text via the Gemini API. Lazily constructs and caches its
@@ -72,9 +67,10 @@ class GeminiProvider(LLMProvider):
                     # Per-call override (Phase 8B.2 Quality Remediation) if the
                     # caller set one (see Prompt.max_output_tokens's own
                     # docstring) — ReasoningEngine never sets this, so its
-                    # calls are completely unaffected and keep using the
-                    # shared MAX_OUTPUT_TOKENS exactly as before.
-                    max_output_tokens=prompt.max_output_tokens or MAX_OUTPUT_TOKENS,
+                    # calls fall through to the configurable shared default
+                    # (Settings.gemini_max_output_tokens, see config.py's own
+                    # docstring for why and its value).
+                    max_output_tokens=prompt.max_output_tokens or settings.gemini_max_output_tokens,
                 ),
             )
         except APIError as exc:

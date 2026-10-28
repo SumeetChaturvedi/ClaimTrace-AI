@@ -165,6 +165,23 @@ _STOPPING_REASON_MESSAGES: dict[str, str] = {
         "from this project's contract data. The finding below reflects only the evidence that "
         "was found; it does not confirm or rule out the referenced clause."
     ),
+    # Pre-commit review fix: this previously fell through to the fully
+    # generic message below, which is accurate but uninformative about
+    # WHY the search stopped. InvestigationLoop.run() (investigation_loop.py)
+    # sets this specific reason only when the same kind of follow-up
+    # action was tried twice in a row and added no new evidence either
+    # time -- a real, deliberate safety stop (never a crash, never an
+    # unsupported feature), so the message says exactly that much and no
+    # more. It does NOT name which follow-up action or which specific
+    # evidence gap was involved: that detail lives only in the loop's own
+    # in-memory search_history, which this application does not persist,
+    # so claiming more specificity here would not be honest.
+    "same_remediation_no_progress": (
+        "This investigation's evidence search tried the same kind of follow-up action twice in "
+        "a row without finding any new supporting evidence, so it stopped rather than repeat an "
+        "approach that wasn't making progress. The finding below reflects the evidence that was "
+        "gathered before that point, which may be incomplete."
+    ),
 }
 _GENERIC_EVIDENCE_LIMITATION_MESSAGE = (
     "This investigation's evidence search stopped before every available lead was followed. "

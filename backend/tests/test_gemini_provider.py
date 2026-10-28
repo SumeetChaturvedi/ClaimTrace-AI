@@ -25,7 +25,8 @@ from unittest.mock import MagicMock, patch
 
 from google.genai import types
 
-from app.llm.gemini_provider import MAX_OUTPUT_TOKENS, GeminiProvider
+from app.config import DEFAULT_GEMINI_MAX_OUTPUT_TOKENS
+from app.llm.gemini_provider import GeminiProvider
 from app.llm.provider import Prompt
 
 
@@ -47,31 +48,52 @@ def _provider_with_fake_client(response_text: str = "ok", finish_reason=None):
 
 class OutputBudgetReachesRequestConfigTests(unittest.TestCase):
     @patch("app.llm.gemini_provider.get_settings")
-    def test_default_prompt_uses_the_shared_max_output_tokens_constant(self, mock_get_settings):
-        mock_get_settings.return_value = MagicMock(gemini_api_key="fake-key", gemini_model="fake-model")
+    def test_default_prompt_uses_the_configured_shared_max_output_tokens(self, mock_get_settings):
+        mock_get_settings.return_value = MagicMock(
+            gemini_api_key="fake-key", gemini_model="fake-model", gemini_max_output_tokens=DEFAULT_GEMINI_MAX_OUTPUT_TOKENS
+        )
         provider, fake_client = _provider_with_fake_client()
 
         provider.generate(Prompt(system_prompt="sys", user_prompt="user"))
 
         _, kwargs = fake_client.models.generate_content.call_args
-        self.assertEqual(kwargs["config"].max_output_tokens, MAX_OUTPUT_TOKENS)
+        self.assertEqual(kwargs["config"].max_output_tokens, DEFAULT_GEMINI_MAX_OUTPUT_TOKENS)
+
+    @patch("app.llm.gemini_provider.get_settings")
+    def test_a_differently_configured_shared_default_reaches_the_request_config(self, mock_get_settings):
+        """Pre-commit review fix regression: the shared default is no
+        longer a hardcoded module constant -- it must come from Settings,
+        so changing Settings.gemini_max_output_tokens (e.g. via the
+        GEMINI_MAX_OUTPUT_TOKENS environment variable) actually changes
+        what every non-overriding caller sends, with no code change."""
+        mock_get_settings.return_value = MagicMock(gemini_api_key="fake-key", gemini_model="fake-model", gemini_max_output_tokens=777)
+        provider, fake_client = _provider_with_fake_client()
+
+        provider.generate(Prompt(system_prompt="sys", user_prompt="user"))
+
+        _, kwargs = fake_client.models.generate_content.call_args
+        self.assertEqual(kwargs["config"].max_output_tokens, 777)
 
     @patch("app.llm.gemini_provider.get_settings")
     def test_prompt_level_override_reaches_the_request_config(self, mock_get_settings):
-        mock_get_settings.return_value = MagicMock(gemini_api_key="fake-key", gemini_model="fake-model")
+        mock_get_settings.return_value = MagicMock(
+            gemini_api_key="fake-key", gemini_model="fake-model", gemini_max_output_tokens=DEFAULT_GEMINI_MAX_OUTPUT_TOKENS
+        )
         provider, fake_client = _provider_with_fake_client()
 
         provider.generate(Prompt(system_prompt="sys", user_prompt="user", max_output_tokens=4096))
 
         _, kwargs = fake_client.models.generate_content.call_args
         self.assertEqual(kwargs["config"].max_output_tokens, 4096)
-        self.assertNotEqual(4096, MAX_OUTPUT_TOKENS)  # the override is genuinely different from the default
+        self.assertNotEqual(4096, DEFAULT_GEMINI_MAX_OUTPUT_TOKENS)  # the override is genuinely different from the default
 
     @patch("app.llm.gemini_provider.get_settings")
     def test_override_does_not_change_system_or_user_prompt_forwarding(self, mock_get_settings):
         """The override must be additive — it should not disturb any other
         part of the request construction."""
-        mock_get_settings.return_value = MagicMock(gemini_api_key="fake-key", gemini_model="fake-model")
+        mock_get_settings.return_value = MagicMock(
+            gemini_api_key="fake-key", gemini_model="fake-model", gemini_max_output_tokens=DEFAULT_GEMINI_MAX_OUTPUT_TOKENS
+        )
         provider, fake_client = _provider_with_fake_client()
 
         provider.generate(Prompt(system_prompt="sys-text", user_prompt="user-text", max_output_tokens=4096))

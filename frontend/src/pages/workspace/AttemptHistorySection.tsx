@@ -4,7 +4,8 @@ import type { DocumentSummary, InvestigationAttempt } from '../../api/types'
 import { CitationList } from '../../components/evidence/CitationList'
 import { Badge } from '../../components/ui/Badge'
 import { ErrorState, LoadingState } from '../../components/ui/StateViews'
-import { Muted, Prose } from '../../components/ui/Typography'
+import { AnswerProse, Muted } from '../../components/ui/Typography'
+import { stripMarkdownToPlainText } from '../../lib/markdown'
 import styles from './AttemptHistorySection.module.css'
 
 type LoadState =
@@ -110,7 +111,7 @@ function AttemptRow({
   documentNames: Record<number, string>
   documents: DocumentSummary[] | null
 }) {
-  const preview = attempt.answer ? truncate(attempt.answer, 160) : null
+  const preview = attempt.answer ? truncate(stripMarkdownToPlainText(attempt.answer), 160) : null
 
   return (
     <li className={styles.row}>
@@ -134,7 +135,7 @@ function AttemptRow({
             <Muted>This attempt was still running at the time this history was captured.</Muted>
           )}
           {attempt.status === 'failed' && <p className={styles.rowPreviewError}>{attempt.error ?? 'This attempt failed.'}</p>}
-          {attempt.answer && <Prose>{attempt.answer}</Prose>}
+          {attempt.answer && <AnswerProse>{attempt.answer}</AnswerProse>}
           {attempt.answer_truncated && (
             <p className={styles.limitationText}>
               This answer may be incomplete — it was cut off before the model finished generating it.

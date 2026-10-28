@@ -35,9 +35,10 @@ class Prompt:
     max_output_tokens (Phase 8B.2 Quality Remediation): optional, per-call
     override of a provider's own default output budget. None (the default,
     and what ReasoningEngine's prompt always leaves it as) means "use the
-    provider's own default" — GeminiProvider's shared MAX_OUTPUT_TOKENS
-    constant, unchanged, so ReasoningEngine's behavior/cost is completely
-    unaffected by this field's existence. It exists so a caller with a
+    provider's own default" — GeminiProvider's shared, configurable
+    Settings.gemini_max_output_tokens, unchanged, so ReasoningEngine's
+    behavior/cost is completely unaffected by this field's existence. It
+    exists so a caller with a
     genuinely different, structured-output task (EventExtractor, whose
     response is a JSON array that can legitimately need more room than a
     prose answer) can ask for more room WITHOUT silently raising the

@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 # Extraction-specific output budget (Phase 8B.2 Quality Remediation),
 # threaded through Prompt.max_output_tokens (app/llm/provider.py) rather
-# than raising the shared GeminiProvider.MAX_OUTPUT_TOKENS constant
+# than raising the shared, configurable Settings.gemini_max_output_tokens
 # ReasoningEngine also relies on. A structured JSON array of several
 # events, each with a verbatim excerpt, legitimately needs more room than
 # a prose answer; this was sized against the production evaluation's own

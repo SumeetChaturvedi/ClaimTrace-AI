@@ -21,6 +21,53 @@
   font-size: var(--text-md);
 }
 
+.answerProse :global(p) {
+  margin: 0 0 var(--space-3);
+}
+
+.answerProse :global(h1),
+.answerProse :global(h2),
+.answerProse :global(h3),
+.answerProse :global(h4),
+.answerProse :global(h5),
+.answerProse :global(h6) {
+  margin: var(--space-4) 0 var(--space-2);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.answerProse :global(h1) {
+  font-size: var(--text-xl);
+}
+.answerProse :global(h2) {
+  font-size: var(--text-lg);
+}
+.answerProse :global(h3),
+.answerProse :global(h4),
+.answerProse :global(h5),
+.answerProse :global(h6) {
+  font-size: var(--text-md);
+}
+
+.answerProse :global(ul) {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-4);
+}
+
+.answerProse :global(li) {
+  margin-bottom: var(--space-1);
+}
+
+.answerProse :global(strong) {
+  font-weight: var(--weight-semibold);
+}
+
+.answerProse :global(hr) {
+  border: none;
+  border-top: var(--border-width) solid var(--border-color);
+  margin: var(--space-4) 0;
+}
+
 .notAvailable {
   font-style: italic;
   color: var(--color-text-muted);

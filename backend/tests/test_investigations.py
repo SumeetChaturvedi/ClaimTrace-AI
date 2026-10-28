@@ -601,8 +601,25 @@ class DescribeStoppingReasonTests(unittest.TestCase):
         # couldn't be retrieved.
         self.assertNotIn("does not exist", message.lower())
 
+    def test_same_remediation_no_progress_gets_its_own_specific_message(self):
+        """Pre-commit review fix: this previously fell through to the
+        fully generic message, which never explained WHY the search
+        stopped. It now gets a message specific to this one, real,
+        deliberate safety stop (the loop tried the same kind of
+        follow-up action twice with no new evidence) -- without naming
+        which follow-up action or evidence gap, since that detail isn't
+        persisted anywhere (search_history is in-memory only) and
+        claiming it would not be honest."""
+        message = _describe_stopping_reason("same_remediation_no_progress")
+        self.assertIsNotNone(message)
+        self.assertIn("same kind of follow-up action", message)
+        self.assertNotIn("same_remediation_no_progress", message)  # never the raw internal name verbatim
+        # Distinct from the fully generic message -- genuinely more
+        # specific, not a coincidental re-use of the same text.
+        self.assertNotEqual(message, _describe_stopping_reason("no_progress"))
+
     def test_other_non_sufficient_reasons_get_the_generic_message_not_the_raw_name(self):
-        for reason in ("max_iterations_reached", "budget_exhausted", "no_progress", "same_remediation_no_progress", "executor_failure"):
+        for reason in ("max_iterations_reached", "budget_exhausted", "no_progress", "executor_failure"):
             message = _describe_stopping_reason(reason)
             self.assertIsNotNone(message, reason)
             self.assertNotIn(reason, message)  # never the raw internal name verbatim
